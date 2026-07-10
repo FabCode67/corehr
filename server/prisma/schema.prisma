@@ -1,0 +1,257 @@
+// NCBA Rwanda PeopleSuite — Organizational Structure schema
+//
+// Hierarchy: Function -> Department -> Unit (optional) -> Position -> Employee
+//
+// Design notes:
+// - Reporting lines are NEVER hardcoded: Position.reportsToPositionId is a
+//   self-relation, so the org chart is generated dynamically at query time
+//   (see OrgChartService). Cycle prevention is enforced in PositionsService,
+//   not in the schema (Postgres/Prisma can't express "no cycles" declaratively).
+// - Position is modelled as a reusable ROLE/TEMPLATE (e.g. "Officer – Channels
+//   Analyst"), not a single seat — multiple employees can hold the same
+//   Position concurrently. This matches how the spec lists positions as fixed
+//   org-chart nodes rather than numbered seats. Revisit if per-seat headcount
+//   tracking is needed later.
+// - Band is independent of Position (an employee can change position without
+//   changing band), per the "Employee Band" requirement.
+// - Employee.departmentId/unitId are intentionally NOT stored directly —
+//   they're derived via Position -> Unit -> Department to avoid a second
+//   source of truth. PositionHistory captures point-in-time position + band
+//   for historical/audit purposes (transfers, promotions, reporting changes).
+// - Org entities are soft-deleted (isActive) rather than hard-deleted, since
+//   historical records (PositionHistory) must keep resolving to a real row.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Pooled connection (e.g. Neon's "-pooler" endpoint) — used at runtime.
+  url = env("DATABASE_URL")
+  // Direct/unpooled connection — used only for migrations. Connection
+  // poolers running in transaction mode (PgBouncer et al., which is what
+  // Neon's pooler endpoint uses) don't support the session-level advisory
+  // locks `prisma migrate` needs, so migrations must go through the direct
+  // endpoint even though the app itself talks to the pooled one.
+  directUrl = env("DIRECT_URL")
+}
+
+enum PositionTrack {
+  STANDARD // Intern -> Head of Department ladder, used by ordinary departments
+  EXECUTIVE // MD, CEO, COO, CTO, CFO, other executives — Executive Management only
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+  RETIRED
+}
+
+enum PositionChangeType {
+  INITIAL_HIRE
+  PROMOTION
+  DEMOTION
+  TRANSFER
+  REPORTING_LINE_CHANGE
+  BAND_CHANGE
+  RESTRUCTURE
+}
+
+/// Top-level business grouping (Executive Management, Technology Function, ...)
+model Function {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  code        String?  @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  departments Department[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("functions")
+}
+
+/// A Department belongs to exactly one Function. May or may not have Units.
+model Department {
+  id          String   @id @default(uuid()) @db.Uuid
+  functionId  String   @db.Uuid
+  name        String
+  code        String?  @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  function  Function   @relation(fields: [functionId], references: [id])
+  units     Unit[]
+  positions Position[] // positions attached directly (department has no units)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([functionId, name])
+  @@map("departments")
+}
+
+/// A Unit is an optional sub-grouping within a Department.
+model Unit {
+  id          String   @id @default(uuid()) @db.Uuid
+  departmentId String  @db.Uuid
+  name        String
+  code        String?  @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  department Department @relation(fields: [departmentId], references: [id])
+  positions  Position[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, name])
+  @@map("units")
+}
+
+/// Lookup table for position ranks (Intern..Head of Department, plus the
+/// separate Executive track). Kept data-driven so new levels/tracks don't
+/// require a code change.
+model PositionLevel {
+  id    String        @id @default(uuid()) @db.Uuid
+  name  String        @unique
+  /// Short badge shown on org-chart cards (e.g. "E1" for Managing
+  /// Director, "F2" for Senior Manager). Optional — purely presentational,
+  /// falls back to `name` in the UI when unset.
+  code  String?       @unique
+  rank  Int           @unique
+  track PositionTrack @default(STANDARD)
+
+  positions Position[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("position_levels")
+}
+
+/// A Position is a role/job template. It belongs to a Department, and
+/// optionally to a Unit within that department (unitId is null when the
+/// department has no units). Reporting lines are expressed purely through
+/// reportsToPositionId — a self-relation — so the tree is fully dynamic.
+model Position {
+  id           String  @id @default(uuid()) @db.Uuid
+  title        String
+  departmentId String  @db.Uuid
+  unitId       String? @db.Uuid
+  levelId      String  @db.Uuid
+
+  // Nullable only for the single root of the tree (e.g. Managing Director).
+  reportsToPositionId String? @db.Uuid
+
+  isActive Boolean @default(true)
+
+  department Department      @relation(fields: [departmentId], references: [id])
+  unit       Unit?           @relation(fields: [unitId], references: [id])
+  level      PositionLevel   @relation(fields: [levelId], references: [id])
+  reportsTo  Position?       @relation("PositionReportsTo", fields: [reportsToPositionId], references: [id])
+  directReports Position[]   @relation("PositionReportsTo")
+
+  employees       Employee[]
+  positionHistory PositionHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // NOTE: Postgres treats each NULL as distinct, so this constraint does not
+  // stop two department-level positions (unitId = NULL) from sharing a
+  // title. Department-level title uniqueness is enforced in
+  // PositionsService instead. See also: unit.departmentId must match
+  // department Id when unitId is set — enforced in the same service.
+  @@unique([departmentId, unitId, title])
+  @@index([reportsToPositionId])
+  @@map("positions")
+}
+
+/// Employee grade, independent of Position. Every employee (including
+/// executives) has exactly one current Band.
+model Band {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  rank        Int     @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  employees       Employee[]
+  positionHistory PositionHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bands")
+}
+
+/// Minimal Employee stub — enough to support org assignment, reporting-line
+/// resolution, and Band tracking. Full Employee Management (contracts,
+/// documents, family info, etc.) is a separate module built on top of this.
+model Employee {
+  id             String @id @default(uuid()) @db.Uuid
+  employeeNumber String @unique
+  firstName      String
+  lastName       String
+  email          String @unique
+
+  positionId String @db.Uuid
+  bandId     String @db.Uuid
+
+  // The reporting manager is derived automatically from
+  // position.reportsToPositionId wherever possible (see ReportingService).
+  // This override exists only for documented exceptions (e.g. dotted-line
+  // reporting, or a parent position that's temporarily vacant) — leave null
+  // to use automatic derivation.
+  reportingManagerOverrideId String? @db.Uuid
+
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  hireDate         DateTime
+  isActive         Boolean          @default(true)
+
+  position                 Position   @relation(fields: [positionId], references: [id])
+  band                     Band       @relation(fields: [bandId], references: [id])
+  reportingManagerOverride Employee?  @relation("ReportingOverride", fields: [reportingManagerOverrideId], references: [id])
+  managedOverrides         Employee[] @relation("ReportingOverride")
+
+  positionHistory PositionHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employees")
+}
+
+/// Point-in-time record of an employee's position + band, closed off by
+/// effectiveTo when superseded. This is the historical audit trail for
+/// transfers, promotions, demotions, band changes, and reporting-line
+/// changes required by the "Database Design Considerations" section.
+model PositionHistory {
+  id         String @id @default(uuid()) @db.Uuid
+  employeeId String @db.Uuid
+  positionId String @db.Uuid
+  bandId     String @db.Uuid
+
+  changeType   PositionChangeType
+  changeReason String?
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = current
+
+  createdByUserId String? @db.Uuid // audit — which admin user made the change
+  createdAt       DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  position Position @relation(fields: [positionId], references: [id])
+  band     Band     @relation(fields: [bandId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@map("position_history")
+}

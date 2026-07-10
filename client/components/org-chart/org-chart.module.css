@@ -1,0 +1,176 @@
+/*
+  Flexbox-based tree with dashed connector lines drawn via ::before/::after
+  borders. An earlier version used the classic display:table technique,
+  but table-layout:fixed forces equal-width columns regardless of content,
+  so a wide/tall subtree (e.g. a department with many officers) overflowed
+  its allotted column and visually collided with its neighbors. Flexbox
+  lays siblings out side by side with real, content-based sizing, so
+  overlap structurally can't happen — the tradeoff is the connector lines
+  are "good enough", not perfectly centered over asymmetric subtrees.
+
+  Every node is collapsed by default (see OrgChartNode) — the whole tree
+  is never forced to fit one screen; the outer .chart scrolls
+  horizontally instead of squeezing/overlapping content.
+*/
+
+.chart {
+  display: inline-block;
+  min-width: 100%;
+  padding: 2.5rem 2rem 3rem;
+  overflow-x: auto;
+}
+
+.tree {
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+}
+
+/*
+  IMPORTANT: no `gap` on this row. The before/after technique below draws
+  each sibling's horizontal half-segment starting exactly at that
+  sibling's own edge — it only forms one continuous line if adjacent <li>
+  boxes are touching (zero gap). Visual spacing between cards instead
+  comes from horizontal padding on .tree li.
+*/
+.tree ul {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+  position: relative;
+}
+
+.tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 2.5rem 1.25rem 0;
+}
+
+.tree > li {
+  padding-top: 0;
+}
+
+/* Each child li draws two things via its own before/after:
+   1) border-top — its half of the horizontal "bus" connecting it to the
+      adjacent sibling (::before = the half reaching toward the previous
+      sibling, ::after = the half reaching toward the next one).
+   2) border-left on ::after only, at the li's exact horizontal center —
+      the vertical drop from the bus down into this specific card. Only
+      one of the two pseudo-elements needs it, since ::before's right
+      edge and ::after's left edge meet at the same point (the center). */
+.tree ul > li::before,
+.tree ul > li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 2.5rem;
+  border-top: 2px dashed rgba(184, 134, 11, 0.45);
+}
+
+.tree ul > li::before {
+  right: 50%;
+}
+
+.tree ul > li::after {
+  left: 50%;
+  border-left: 2px dashed rgba(184, 134, 11, 0.45);
+}
+
+/* First/last child: no bus segment extending off the end of the row —
+   but they keep their own vertical drop (::after's border-left is
+   untouched by clearing ::before's border-top on the first child; the
+   last child only has its border-top cleared, not its border-left). A
+   lone-only child is simultaneously first and last, so both rules apply
+   and it's left with just its own straight vertical drop — no special
+   :only-child case needed. */
+.tree ul > li:first-child::before {
+  border-top: none;
+}
+
+.tree ul > li:last-child::after {
+  border-top: none;
+}
+
+/* Trunk line from the parent card down to the bus, centered on the row
+   as a whole (not on any individual sibling). */
+.tree ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px dashed rgba(184, 134, 11, 0.45);
+  width: 0;
+  height: 2.5rem;
+}
+
+/* Multiple disconnected org roots side by side (rare — most orgs have one). */
+.rootList {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+}
+
+.nodeWrap {
+  display: inline-block;
+  position: relative;
+}
+
+.toggle {
+  position: absolute;
+  left: 50%;
+  bottom: -0.65rem;
+  transform: translateX(-50%);
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+/* Executive-team cluster: groups childless EXECUTIVE-track siblings
+   (e.g. CEO/COO/CTO/CFO) into one compact unit instead of a flat row of
+   full-size cards, so they read as "the executive team" rather than
+   diluting the department-head siblings next to them. */
+.execCluster {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed rgba(184, 134, 11, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(184, 134, 11, 0.06);
+}
+
+.execLabel {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(224, 184, 74, 0.75);
+}
+
+.execCards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 22rem;
+}
