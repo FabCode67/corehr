@@ -3,40 +3,10 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
+import { loginRequest } from "@/lib/api/auth"
+import { ApiError } from "@/lib/api/client"
+import { formatEnumLabel } from "@/lib/api/employees"
 import { encodeSession, SESSION_COOKIE, type SessionUser } from "@/lib/session"
-
-/**
- * Demo credential store. Replace with a call to the NestJS auth service
- * (POST /auth/login, verified against PostgreSQL via Prisma) once the
- * backend exists. Keeping this in a server-action file only means the
- * passwords below are never sent to the client bundle.
- */
-const DEMO_USERS: Record<string, { password: string; user: SessionUser }> = {
-  "admin@ncbarwanda.com": {
-    password: "Admin@123",
-    user: {
-      id: "u-admin-1",
-      name: "Aline Uwase",
-      email: "admin@ncbarwanda.com",
-      role: "admin",
-      jobTitle: "HR Systems Administrator",
-      department: "Human Resources",
-      branch: "Head Office - Kigali",
-    },
-  },
-  "staff@ncbarwanda.com": {
-    password: "Staff@123",
-    user: {
-      id: "u-staff-1",
-      name: "Eric Niyonzima",
-      email: "staff@ncbarwanda.com",
-      role: "staff",
-      jobTitle: "Relationship Officer",
-      department: "Retail Banking",
-      branch: "Kigali City Branch",
-    },
-  },
-}
 
 export interface LoginState {
   error?: string
@@ -51,14 +21,35 @@ export async function login(
     .toLowerCase()
   const password = String(formData.get("password") ?? "")
 
-  const record = DEMO_USERS[email]
+  if (!email || !password) {
+    return { error: "Email and password are required." }
+  }
 
-  if (!record || record.password !== password) {
-    return { error: "Invalid email or password." }
+  let employee
+  try {
+    employee = await loginRequest(email, password)
+  } catch (error) {
+    return {
+      error:
+        error instanceof ApiError
+          ? error.message
+          : "Could not reach the server. Please try again.",
+    }
+  }
+
+  const sessionUser: SessionUser = {
+    id: employee.id,
+    employeeId: employee.id,
+    name: `${employee.firstName} ${employee.lastName}`,
+    email: employee.email,
+    role: employee.isAdmin ? "admin" : "staff",
+    jobTitle: employee.position?.title ?? "Not yet assigned",
+    department: employee.position?.department.name ?? "Not yet assigned",
+    branch: formatEnumLabel(employee.workLocation),
   }
 
   const cookieStore = await cookies()
-  cookieStore.set(SESSION_COOKIE, encodeSession(record.user), {
+  cookieStore.set(SESSION_COOKIE, encodeSession(sessionUser), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -66,7 +57,7 @@ export async function login(
     maxAge: 60 * 60 * 8, // 8 hours
   })
 
-  redirect(record.user.role === "admin" ? "/admin" : "/staff")
+  redirect(sessionUser.role === "admin" ? "/admin" : "/staff")
 }
 
 export async function logout() {

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Settings,
   Target,
+  User,
   Users,
 } from "lucide-react"
 
@@ -20,6 +21,7 @@ import { logout } from "../login/actions"
 
 const ADMIN_NAV: PortalNavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "My Profile", href: "/admin/profile", icon: User },
   { label: "Employees", href: "/admin/employees", icon: Users },
   { label: "Departments", href: "/admin/departments", icon: Building2 },
   { label: "Positions", href: "/admin/positions", icon: Briefcase },

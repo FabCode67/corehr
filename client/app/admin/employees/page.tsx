@@ -5,16 +5,15 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchEmployees } from "@/lib/api/employees"
 
-const STATUS_VARIANT: Record<string, "success" | "outline" | "destructive"> = {
+const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
   ACTIVE: "success",
-  ON_LEAVE: "outline",
-  SUSPENDED: "destructive",
-  TERMINATED: "destructive",
-  RETIRED: "outline",
+  EXIT: "destructive",
 }
 
 export default async function AdminEmployeesPage() {
-  const result = await fetchEmployees()
+  // Employee records are never deleted — exited employees stay visible
+  // (with a status badge) for historical reporting, per the spec.
+  const result = await fetchEmployees(true)
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,8 +81,8 @@ export default async function AdminEmployeesPage() {
                       {employee.band?.name ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "outline"}>
-                        {employee.employmentStatus.replaceAll("_", " ")}
+                      <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "destructive"}>
+                        {employee.employmentStatus === "ACTIVE" ? "Active" : "Exit"}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">

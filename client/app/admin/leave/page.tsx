@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/portal/coming-soon"
+import { redirect } from "next/navigation"
 
 export default function AdminLeavePage() {
-  return (
-    <ComingSoon
-      title="Leave Management"
-      description="Leave policies, balances, approval workflows, the leave calendar, and leave analytics for the whole bank."
-    />
-  )
+  redirect("/admin/leave/approvals")
 }

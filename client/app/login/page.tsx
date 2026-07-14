@@ -78,9 +78,10 @@ export default function LoginPage() {
             ) : null}
 
             <div className="rounded-md border border-dashed border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-              <p className="mb-1 font-medium text-foreground">Demo accounts</p>
-              <p>Staff: staff@ncbarwanda.com / Staff@123</p>
-              <p>Admin: admin@ncbarwanda.com / Admin@123</p>
+              <p className="mb-1 font-medium text-foreground">Sign in as any active employee</p>
+              <p>Default password for every account: Staff@123</p>
+              <p className="mt-1">Try an admin: jp.mugisha@ncbarwanda.com</p>
+              <p>Try staff: p.habimana@ncbarwanda.com</p>
             </div>
           </CardContent>
 

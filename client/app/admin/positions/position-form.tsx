@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,9 +33,30 @@ export function PositionForm({
     undefined
   )
 
+  const [departmentId, setDepartmentId] = useState(position?.departmentId ?? "")
+  const [unitId, setUnitId] = useState(position?.unitId ?? "")
+  const [reportsToPositionId, setReportsToPositionId] = useState(
+    position?.reportsToPositionId ?? ""
+  )
+
+  const allUnitsForDepartment =
+    departments.find((department) => department.id === departmentId)?.units ?? []
+  // Keep the currently-assigned unit selectable even if it's since been
+  // deactivated, so editing an existing position doesn't silently drop it.
+  const unitsForDepartment = allUnitsForDepartment.filter(
+    (unit) => unit.isActive || unit.id === position?.unitId
+  )
+
   // A position can't report to itself (and PositionsService rejects any
-  // change that would create a cycle further down the chain too).
-  const reportsToOptions = positions.filter((candidate) => candidate.id !== position?.id)
+  // change that would create a cycle further down the chain too). Restrict
+  // the list to people in the selected department, but keep the
+  // already-assigned manager selectable even if they sit elsewhere, so
+  // editing an existing position doesn't silently drop it.
+  const reportsToOptions = positions.filter(
+    (candidate) =>
+      candidate.id !== position?.id &&
+      (candidate.departmentId === departmentId || candidate.id === position?.reportsToPositionId)
+  )
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -50,7 +71,12 @@ export function PositionForm({
           <Select
             id="departmentId"
             name="departmentId"
-            defaultValue={position?.departmentId ?? ""}
+            value={departmentId}
+            onChange={(event) => {
+              setDepartmentId(event.target.value)
+              setUnitId("")
+              setReportsToPositionId("")
+            }}
             required
           >
             <option value="" disabled>
@@ -66,22 +92,22 @@ export function PositionForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="unitId">Unit (optional)</Label>
-          <Select id="unitId" name="unitId" defaultValue={position?.unitId ?? ""}>
+          <Select
+            id="unitId"
+            name="unitId"
+            value={unitId}
+            onChange={(event) => setUnitId(event.target.value)}
+            disabled={!departmentId}
+          >
             <option value="">No unit — attaches directly to department</option>
-            {departments.map((department) =>
-              department.units && department.units.length > 0 ? (
-                <optgroup key={department.id} label={department.name}>
-                  {department.units.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null
-            )}
+            {unitsForDepartment.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
+              </option>
+            ))}
           </Select>
           <p className="text-xs text-muted-foreground">
-            Must belong to the department selected above — the API validates this.
+            {departmentId ? "Only units in the selected department are shown." : "Select a department first."}
           </p>
         </div>
       </div>
@@ -106,7 +132,9 @@ export function PositionForm({
           <Select
             id="reportsToPositionId"
             name="reportsToPositionId"
-            defaultValue={position?.reportsToPositionId ?? ""}
+            value={reportsToPositionId}
+            onChange={(event) => setReportsToPositionId(event.target.value)}
+            disabled={!departmentId}
           >
             <option value="">No one — top of the org tree</option>
             {reportsToOptions.map((candidate) => (
@@ -118,6 +146,9 @@ export function PositionForm({
               </option>
             ))}
           </Select>
+          <p className="text-xs text-muted-foreground">
+            {departmentId ? "Only people in the selected department are shown." : "Select a department first."}
+          </p>
         </div>
       </div>
 

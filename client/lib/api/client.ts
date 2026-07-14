@@ -51,6 +51,37 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return (await response.json()) as T
 }
 
+/**
+ * Same as `apiFetch`, but for multipart file uploads (profile pictures,
+ * certificates) — `body` is a FormData containing the file, and unlike
+ * `apiFetch` no Content-Type header is set manually so fetch can generate
+ * the correct multipart boundary itself.
+ */
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`
+
+    try {
+      const body = (await response.json()) as { message?: string | string[] }
+      if (body?.message) {
+        message = Array.isArray(body.message) ? body.message.join(", ") : body.message
+      }
+    } catch {
+      // Response wasn't JSON — fall back to the status text above.
+    }
+
+    throw new ApiError(message, response.status)
+  }
+
+  return (await response.json()) as T
+}
+
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status?: number }
