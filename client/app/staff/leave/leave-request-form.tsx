@@ -210,8 +210,8 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="reason">Reason (optional)</Label>
-        <Textarea id="reason" name="reason" rows={2} />
+        <Label htmlFor="reason">Reason</Label>
+        <Textarea id="reason" name="reason" rows={2} minLength={3} required />
       </div>
 
       <div className="flex flex-col gap-1">

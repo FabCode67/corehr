@@ -27,7 +27,7 @@ function basicInfoPayload(formData: FormData) {
     maritalStatus: trimmedOrUndefined(formData.get("maritalStatus")),
     email: trimmedOrUndefined(formData.get("email")),
     phone: trimmedOrUndefined(formData.get("phone")),
-    workLocation: trimmedOrUndefined(formData.get("workLocation")),
+    branchId: trimmedOrUndefined(formData.get("branchId")),
     profilePictureUrl: trimmedOrUndefined(formData.get("profilePictureUrl")),
   }
 }
@@ -42,7 +42,7 @@ const REQUIRED_BASIC_FIELDS = [
   "maritalStatus",
   "email",
   "phone",
-  "workLocation",
+  "branchId",
 ] as const
 
 // ---- Step 1: Basic Information --------------------------------------------
@@ -60,11 +60,11 @@ export async function createEmployee(
 
   let employeeId: string
   try {
-    const employee = await apiFetch<{ id: string }>("/employees", {
+    const employee = await apiFetch<{ employeeNumber: string }>("/employees", {
       method: "POST",
       body: JSON.stringify(payload),
     })
-    employeeId = employee.id
+    employeeId = employee.employeeNumber
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to create employee." }
   }

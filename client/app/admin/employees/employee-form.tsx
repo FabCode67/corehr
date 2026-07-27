@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import type { Branch } from "@/lib/api/branches"
 import type { Employee } from "@/lib/api/employees"
-import { formatEnumLabel, WORK_LOCATIONS } from "@/lib/api/employees"
 import { uploadFile } from "@/lib/api/uploads"
 
 import type { ActionState } from "./actions"
 
 interface BasicInfoFormProps {
   employee?: Employee
+  branches: Branch[]
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
   submitLabel: string
 }
@@ -25,7 +26,7 @@ interface BasicInfoFormProps {
  * and the wizard's Basic Information tab (edit) via the optional `employee`
  * prop, same dual-use pattern as PositionForm/DepartmentForm.
  */
-export function BasicInfoForm({ employee, action, submitLabel }: BasicInfoFormProps) {
+export function BasicInfoForm({ employee, branches, action, submitLabel }: BasicInfoFormProps) {
   const [state, formAction, pending] = useActionState<ActionState | undefined, FormData>(
     action,
     undefined
@@ -180,19 +181,19 @@ export function BasicInfoForm({ employee, action, submitLabel }: BasicInfoFormPr
       </div>
 
       <div className="flex flex-col gap-1.5 sm:w-1/2">
-        <Label htmlFor="workLocation">Work location / Branch</Label>
+        <Label htmlFor="branchId">Work location / Branch</Label>
         <Select
-          id="workLocation"
-          name="workLocation"
-          defaultValue={employee?.workLocation ?? ""}
+          id="branchId"
+          name="branchId"
+          defaultValue={employee?.branchId ?? ""}
           required
         >
           <option value="" disabled>
             Select…
           </option>
-          {WORK_LOCATIONS.map((location) => (
-            <option key={location} value={location}>
-              {formatEnumLabel(location)}
+          {branches.map((branch) => (
+            <option key={branch.id} value={branch.id}>
+              {branch.name}
             </option>
           ))}
         </Select>

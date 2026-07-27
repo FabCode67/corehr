@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { Type } from "class-transformer"
-import { IsDate, IsOptional, IsUUID } from "class-validator"
+import { IsDate, IsOptional, IsString, IsUUID } from "class-validator"
 
 /**
  * Step 3 of the Employee Registration wizard — Position Assignment. Used
@@ -26,7 +26,7 @@ export class AssignPositionDto {
     description:
       "Only for documented exceptions. Leave unset to derive the reporting manager automatically from the position hierarchy.",
   })
-  @IsUUID()
+  @IsString()
   @IsOptional()
   reportingManagerOverrideId?: string
 }

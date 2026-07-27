@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchBands } from "@/lib/api/bands"
+import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
   fetchEmployee,
@@ -14,7 +15,9 @@ import {
   formatEnumLabel,
 } from "@/lib/api/employees"
 import { fetchPositions } from "@/lib/api/positions"
+import { getSession } from "@/lib/get-session"
 
+import { EmployeeRelationsHistory } from "./employee-relations-history"
 import {
   addChild,
   addEducation,
@@ -42,11 +45,13 @@ export default async function EmployeeDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const session = await getSession()
   const [
     employeeResult,
     departmentsResult,
     positionsResult,
     bandsResult,
+    branchesResult,
     employeesResult,
     historyResult,
     managerResult,
@@ -55,6 +60,7 @@ export default async function EmployeeDetailPage({
     fetchDepartments(),
     fetchPositions(),
     fetchBands(),
+    fetchBranches(),
     fetchEmployees(true),
     fetchEmployeeHistory(id),
     fetchReportingManager(id),
@@ -77,7 +83,13 @@ export default async function EmployeeDetailPage({
 
   const employee = employeeResult.data
 
-  if (!departmentsResult.ok || !positionsResult.ok || !bandsResult.ok || !employeesResult.ok) {
+  if (
+    !departmentsResult.ok ||
+    !positionsResult.ok ||
+    !bandsResult.ok ||
+    !branchesResult.ok ||
+    !employeesResult.ok
+  ) {
     return (
       <Card className="max-w-2xl border-dashed border-destructive/40">
         <CardHeader>
@@ -89,9 +101,11 @@ export default async function EmployeeDetailPage({
                 ? positionsResult.error
                 : !bandsResult.ok
                   ? bandsResult.error
-                  : !employeesResult.ok
-                    ? employeesResult.error
-                    : null}
+                  : !branchesResult.ok
+                    ? branchesResult.error
+                    : !employeesResult.ok
+                      ? employeesResult.error
+                      : null}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -123,7 +137,7 @@ export default async function EmployeeDetailPage({
 
       {employee.employmentStatus === "ACTIVE" ? (
         <div>
-          <ExitDialog employee={employee} action={processExit.bind(null, employee.id)} />
+          <ExitDialog employee={employee} action={processExit.bind(null, employee.employeeNumber)} />
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
@@ -146,8 +160,9 @@ export default async function EmployeeDetailPage({
         departments={departmentsResult.data.filter((department) => department.isActive)}
         positions={positionsResult.data.filter((position) => position.isActive)}
         bands={bandsResult.data.filter((band) => band.isActive)}
+        branches={branchesResult.data.filter((branch) => branch.isActive)}
         employeesForPreview={employeesResult.data.map((candidate) => ({
-          id: candidate.id,
+          employeeNumber: candidate.employeeNumber,
           firstName: candidate.firstName,
           lastName: candidate.lastName,
           positionId: candidate.positionId,
@@ -156,18 +171,20 @@ export default async function EmployeeDetailPage({
         history={historyResult.ok ? historyResult.data : []}
         reportingManager={managerResult.ok ? managerResult.data : null}
         actions={{
-          updateBasicInfo: updateBasicInfo.bind(null, employee.id),
-          updateEmploymentDetails: updateEmploymentDetails.bind(null, employee.id),
-          assignPosition: assignPosition.bind(null, employee.id),
-          transferEmployee: transferEmployee.bind(null, employee.id),
-          changeEmployeeBand: changeEmployeeBand.bind(null, employee.id),
-          updatePartner: updatePartner.bind(null, employee.id),
-          addChild: addChild.bind(null, employee.id),
-          removeChild: removeChild.bind(null, employee.id),
-          addEducation: addEducation.bind(null, employee.id),
-          removeEducation: removeEducation.bind(null, employee.id),
+          updateBasicInfo: updateBasicInfo.bind(null, employee.employeeNumber),
+          updateEmploymentDetails: updateEmploymentDetails.bind(null, employee.employeeNumber),
+          assignPosition: assignPosition.bind(null, employee.employeeNumber),
+          transferEmployee: transferEmployee.bind(null, employee.employeeNumber),
+          changeEmployeeBand: changeEmployeeBand.bind(null, employee.employeeNumber),
+          updatePartner: updatePartner.bind(null, employee.employeeNumber),
+          addChild: addChild.bind(null, employee.employeeNumber),
+          removeChild: removeChild.bind(null, employee.employeeNumber),
+          addEducation: addEducation.bind(null, employee.employeeNumber),
+          removeEducation: removeEducation.bind(null, employee.employeeNumber),
         }}
       />
+
+      <EmployeeRelationsHistory employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
     </div>
   )
 }

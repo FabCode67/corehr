@@ -10,6 +10,7 @@ const SALT_ROUNDS = 10
 
 const LOGIN_INCLUDE = {
   position: { include: { department: true } },
+  branch: true,
 } as const
 
 /**
@@ -49,7 +50,7 @@ export class AuthService {
 
   async changePassword(dto: ChangePasswordDto) {
     const employee = await this.prisma.employee.findUnique({
-      where: { id: dto.employeeId },
+      where: { employeeNumber: dto.employeeId },
       omit: { passwordHash: false },
     })
     if (!employee) {
@@ -66,7 +67,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS)
     await this.prisma.employee.update({
-      where: { id: dto.employeeId },
+      where: { employeeNumber: dto.employeeId },
       data: { passwordHash },
     })
 

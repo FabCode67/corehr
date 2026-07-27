@@ -45,7 +45,7 @@ export async function EmployeeProfile({ employeeId }: { employeeId: string }) {
             value={employee.position?.unit?.name ?? employee.position?.department.name ?? "Not yet assigned"}
           />
           <Field label="Band" value={employee.band?.name ?? "Not yet assigned"} />
-          <Field label="Branch" value={formatEnumLabel(employee.workLocation)} />
+          <Field label="Branch" value={employee.branch?.name ?? "Not yet assigned"} />
           <Field
             label="Contract type"
             value={employee.contractType ? formatEnumLabel(employee.contractType) : "Not set"}
@@ -62,7 +62,7 @@ export async function EmployeeProfile({ employeeId }: { employeeId: string }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChangePasswordForm employeeId={employee.id} />
+          <ChangePasswordForm employeeId={employee.employeeNumber} />
         </CardContent>
       </Card>
     </div>

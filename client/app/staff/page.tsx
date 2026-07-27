@@ -1,6 +1,7 @@
 import { CalendarDays, CheckCircle2, Clock3, Target } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
 import { getSession } from "@/lib/get-session"
 
 const STATS = [
@@ -41,6 +42,8 @@ export default async function StaffDashboardPage() {
           A quick overview of your employment, leave, and performance status.
         </p>
       </div>
+
+      <MandatoryTrainingBanner actingEmployeeId={session?.employeeId ?? ""} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {STATS.map((stat) => {

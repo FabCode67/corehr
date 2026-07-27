@@ -10,7 +10,7 @@ export class NotificationsController {
 
   @Get("employee/:employeeId")
   findForEmployee(
-    @Param("employeeId", ParseUUIDPipe) employeeId: string,
+    @Param("employeeId") employeeId: string,
     @Query("unreadOnly") unreadOnly?: string
   ) {
     return this.notificationsService.findForEmployee(employeeId, unreadOnly === "true")
@@ -22,7 +22,7 @@ export class NotificationsController {
   }
 
   @Post("employee/:employeeId/read-all")
-  markAllRead(@Param("employeeId", ParseUUIDPipe) employeeId: string) {
+  markAllRead(@Param("employeeId") employeeId: string) {
     return this.notificationsService.markAllRead(employeeId)
   }
 }

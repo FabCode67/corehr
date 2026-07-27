@@ -6,15 +6,33 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Pagination } from "@/components/ui/pagination"
 import { createHoliday, removeHoliday, type LeaveActionState } from "@/lib/api/leave-actions"
 import type { PublicHoliday } from "@/lib/api/leave"
 
-export function HolidaysPanel({ holidays }: { holidays: PublicHoliday[] }) {
+interface HolidaysPagination {
+  page: number
+  totalPages: number
+  total: number
+  pageSize: number
+}
+
+export function HolidaysPanel({
+  holidays,
+  pagination,
+  searchParams = {},
+}: {
+  holidays: PublicHoliday[]
+  pagination?: HolidaysPagination
+  searchParams?: Record<string, string | undefined>
+}) {
   const [state, formAction, pending] = useActionState<LeaveActionState | undefined, FormData>(
     createHoliday,
     undefined
   )
 
+  // Server already returns this page's rows ordered by date — re-sorting
+  // here would only reorder within the current page, which is harmless.
   const sorted = [...holidays].sort((a, b) => a.date.localeCompare(b.date))
 
   return (
@@ -42,6 +60,18 @@ export function HolidaysPanel({ holidays }: { holidays: PublicHoliday[] }) {
           </table>
         </div>
       )}
+
+      {pagination ? (
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          pageSize={pagination.pageSize}
+          basePath="/admin/leave/settings"
+          searchParams={searchParams}
+          paramName="holidaysPage"
+        />
+      ) : null}
 
       <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
         <div className="flex flex-col gap-1">

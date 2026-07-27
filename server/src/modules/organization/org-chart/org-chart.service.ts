@@ -8,7 +8,7 @@ export interface OrgChartNode {
   department: { id: string; name: string }
   unit: { id: string; name: string } | null
   level: { id: string; name: string; code: string | null; rank: number; track: string }
-  employees: { id: string; firstName: string; lastName: string }[]
+  employees: { employeeNumber: string; firstName: string; lastName: string }[]
   directReports: OrgChartNode[]
 }
 
@@ -34,7 +34,7 @@ export class OrgChartService {
         level: { select: { id: true, name: true, code: true, rank: true, track: true } },
         employees: {
           where: { isActive: true },
-          select: { id: true, firstName: true, lastName: true },
+          select: { employeeNumber: true, firstName: true, lastName: true },
         },
       },
       orderBy: { title: "asc" },

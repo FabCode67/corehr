@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
-import { LeaveRequestStatus, WorkLocation } from "@prisma/client"
+import { LeaveRequestStatus } from "@prisma/client"
 
 import { CreateLeaveRequestDto, DecideApprovalDto, PreviewLeaveDaysDto } from "./dto/leave-request.dto"
 import { LeaveRequestsService } from "./leave-requests.service"
@@ -14,21 +14,31 @@ export class LeaveRequestsController {
   findAll(
     @Query("employeeId") employeeId?: string,
     @Query("departmentId") departmentId?: string,
-    @Query("workLocation") workLocation?: WorkLocation,
+    @Query("branchId") branchId?: string,
     @Query("status") status?: LeaveRequestStatus,
     @Query("leaveTypeId") leaveTypeId?: string,
     @Query("from") from?: string,
-    @Query("to") to?: string
+    @Query("to") to?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
   ) {
-    return this.leaveRequestsService.findAll({
+    const filters = {
       employeeId,
       departmentId,
-      workLocation,
+      branchId,
       status,
       leaveTypeId,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
-    })
+    }
+    if (page) {
+      return this.leaveRequestsService.findAllPaginated(
+        filters,
+        Number(page),
+        pageSize ? Number(pageSize) : undefined
+      )
+    }
+    return this.leaveRequestsService.findAll(filters)
   }
 
   @Get("calendar")
@@ -36,16 +46,16 @@ export class LeaveRequestsController {
     @Query("year") year: string,
     @Query("month") month: string,
     @Query("departmentId") departmentId?: string,
-    @Query("workLocation") workLocation?: WorkLocation
+    @Query("branchId") branchId?: string
   ) {
     return this.leaveRequestsService.getCalendarData(Number(year), Number(month), {
       departmentId,
-      workLocation,
+      branchId,
     })
   }
 
   @Get("pending-for-manager/:employeeId")
-  findPendingForManager(@Param("employeeId", ParseUUIDPipe) employeeId: string) {
+  findPendingForManager(@Param("employeeId") employeeId: string) {
     return this.leaveRequestsService.findPendingForManager(employeeId)
   }
 

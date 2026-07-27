@@ -2,11 +2,13 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
-import { WORK_LOCATIONS, formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employees"
+import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
-  fetchLeaveRequests,
+  fetchLeaveRequestsPaginated,
   fetchLeaveTypes,
   formatLeaveStatusLabel,
   type LeaveRequestStatus,
@@ -36,10 +38,13 @@ const ALL_STATUSES: LeaveRequestStatus[] = [
 ]
 
 interface SearchParams {
+  [key: string]: string | undefined
   departmentId?: string
-  workLocation?: string
+  branchId?: string
   leaveTypeId?: string
   status?: string
+  pendingPage?: string
+  allPage?: string
 }
 
 export default async function AdminLeaveApprovalsPage({
@@ -50,27 +55,35 @@ export default async function AdminLeaveApprovalsPage({
   const filters = await searchParams
   const session = await getSession()
 
-  const [pendingResult, allResult, departmentsResult, leaveTypesResult] = await Promise.all([
-    fetchLeaveRequests({
-      status: "PENDING_APPROVAL",
-      departmentId: filters.departmentId,
-      workLocation: filters.workLocation,
-      leaveTypeId: filters.leaveTypeId,
-    }),
-    fetchLeaveRequests({
-      departmentId: filters.departmentId,
-      workLocation: filters.workLocation,
-      leaveTypeId: filters.leaveTypeId,
-      status: filters.status as LeaveRequestStatus | undefined,
-    }),
+  const [pendingResult, allResult, departmentsResult, branchesResult, leaveTypesResult] = await Promise.all([
+    fetchLeaveRequestsPaginated(
+      {
+        status: "PENDING_APPROVAL",
+        departmentId: filters.departmentId,
+        branchId: filters.branchId,
+        leaveTypeId: filters.leaveTypeId,
+      },
+      filters.pendingPage ? Number(filters.pendingPage) : 1
+    ),
+    fetchLeaveRequestsPaginated(
+      {
+        departmentId: filters.departmentId,
+        branchId: filters.branchId,
+        leaveTypeId: filters.leaveTypeId,
+        status: filters.status as LeaveRequestStatus | undefined,
+      },
+      filters.allPage ? Number(filters.allPage) : 1
+    ),
     fetchDepartments(),
+    fetchBranches(),
     fetchLeaveTypes(),
   ])
 
   const departments = departmentsResult.ok ? departmentsResult.data : []
+  const branches = branchesResult.ok ? branchesResult.data : []
   const leaveTypes = leaveTypesResult.ok ? leaveTypesResult.data : []
-  const pending = pendingResult.ok ? pendingResult.data : []
-  const all = allResult.ok ? allResult.data : []
+  const pending = pendingResult.ok ? pendingResult.data.data : []
+  const all = allResult.ok ? allResult.data.data : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,11 +115,11 @@ export default async function AdminLeaveApprovalsPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="workLocation" defaultValue={filters.workLocation ?? ""} className="w-44">
+              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-44">
                 <option value="">All branches</option>
-                {WORK_LOCATIONS.map((location) => (
-                  <option key={location} value={location}>
-                    {formatEnumLabel(location)}
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
                   </option>
                 ))}
               </Select>
@@ -166,6 +179,7 @@ export default async function AdminLeaveApprovalsPage({
                   <th className="px-4 py-3 font-medium">Leave type</th>
                   <th className="px-4 py-3 font-medium">Dates</th>
                   <th className="px-4 py-3 font-medium">Days</th>
+                  <th className="px-4 py-3 font-medium">Reason</th>
                   <th className="px-4 py-3 font-medium">Current step</th>
                   <th className="px-4 py-3 font-medium">Decision</th>
                 </tr>
@@ -190,6 +204,11 @@ export default async function AdminLeaveApprovalsPage({
                         {request.startDate.slice(0, 10)} → {request.endDate.slice(0, 10)}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{request.numberOfDays}</td>
+                      <td className="max-w-56 px-4 py-3 text-muted-foreground">
+                        <p className="truncate" title={request.reason ?? ""}>
+                          {request.reason || "—"}
+                        </p>
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant="outline">
                           {currentApproval ? formatEnumLabel(currentApproval.role) : "—"}
@@ -205,6 +224,17 @@ export default async function AdminLeaveApprovalsPage({
             </table>
           </div>
         )}
+        {pendingResult.ok ? (
+          <Pagination
+            page={pendingResult.data.page}
+            totalPages={pendingResult.data.totalPages}
+            total={pendingResult.data.total}
+            pageSize={pendingResult.data.pageSize}
+            basePath="/admin/leave/approvals"
+            searchParams={filters}
+            paramName="pendingPage"
+          />
+        ) : null}
       </Card>
 
       <Card className="overflow-hidden p-0">
@@ -226,6 +256,7 @@ export default async function AdminLeaveApprovalsPage({
                   <th className="px-4 py-3 font-medium">Leave type</th>
                   <th className="px-4 py-3 font-medium">Dates</th>
                   <th className="px-4 py-3 font-medium">Days</th>
+                  <th className="px-4 py-3 font-medium">Reason</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
@@ -243,6 +274,11 @@ export default async function AdminLeaveApprovalsPage({
                       {request.startDate.slice(0, 10)} → {request.endDate.slice(0, 10)}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{request.numberOfDays}</td>
+                    <td className="max-w-56 px-4 py-3 text-muted-foreground">
+                      <p className="truncate" title={request.reason ?? ""}>
+                        {request.reason || "—"}
+                      </p>
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_VARIANT[request.status]}>
                         {formatLeaveStatusLabel(request.status)}
@@ -254,6 +290,17 @@ export default async function AdminLeaveApprovalsPage({
             </table>
           </div>
         )}
+        {allResult.ok ? (
+          <Pagination
+            page={allResult.data.page}
+            totalPages={allResult.data.totalPages}
+            total={allResult.data.total}
+            pageSize={allResult.data.pageSize}
+            basePath="/admin/leave/approvals"
+            searchParams={filters}
+            paramName="allPage"
+          />
+        ) : null}
       </Card>
     </div>
   )

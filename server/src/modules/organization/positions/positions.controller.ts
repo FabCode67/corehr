@@ -25,14 +25,24 @@ export class PositionsController {
     @Query("departmentId") departmentId?: string,
     @Query("unitId") unitId?: string,
     @Query("reportsToPositionId") reportsToPositionId?: string,
-    @Query("includeInactive") includeInactive?: string
+    @Query("includeInactive") includeInactive?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
   ) {
-    return this.positionsService.findAll({
+    const filters = {
       departmentId,
       unitId,
       reportsToPositionId,
       includeInactive: includeInactive === "true",
-    })
+    }
+    if (page) {
+      return this.positionsService.findAllPaginated(
+        filters,
+        Number(page),
+        pageSize ? Number(pageSize) : undefined
+      )
+    }
+    return this.positionsService.findAll(filters)
   }
 
   @Get(":id")

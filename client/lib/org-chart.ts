@@ -6,7 +6,7 @@
  * both sides together.
  */
 export interface OrgChartEmployee {
-  id: string
+  employeeNumber: string
   firstName: string
   lastName: string
 }

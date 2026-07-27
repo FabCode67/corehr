@@ -6,7 +6,7 @@ import { PrismaService } from "../../../prisma/prisma.service"
 export interface AnalyticsFilters {
   departmentId?: string
   functionId?: string
-  workLocation?: string
+  branchId?: string
   employeeId?: string
   year?: number
 }
@@ -27,8 +27,8 @@ export class LeaveAnalyticsService {
 
   private employeeWhere(filters: AnalyticsFilters): Prisma.EmployeeWhereInput {
     return {
-      ...(filters.employeeId ? { id: filters.employeeId } : {}),
-      ...(filters.workLocation ? { workLocation: filters.workLocation as never } : {}),
+      ...(filters.employeeId ? { employeeNumber: filters.employeeId } : {}),
+      ...(filters.branchId ? { branchId: filters.branchId } : {}),
       ...(filters.departmentId || filters.functionId
         ? {
             position: {
@@ -54,11 +54,11 @@ export class LeaveAnalyticsService {
         leaveType: { select: { id: true, name: true } },
         employee: {
           select: {
-            id: true,
+            employeeNumber: true,
             firstName: true,
             lastName: true,
             gender: true,
-            workLocation: true,
+            branch: { select: { id: true, name: true } },
             position: { select: { department: { select: { id: true, name: true } } } },
           },
         },
@@ -89,11 +89,17 @@ export class LeaveAnalyticsService {
 
   async utilizationByBranch(filters: AnalyticsFilters) {
     const requests = await this.approvedRequests(filters)
-    const totals = new Map<string, { workLocation: string; days: number; requests: number }>()
+    const totals = new Map<string, { branchId: string; branchName: string; days: number; requests: number }>()
 
     for (const request of requests) {
-      const key = request.employee.workLocation
-      const entry = totals.get(key) ?? { workLocation: key, days: 0, requests: 0 }
+      const branch = request.employee.branch
+      const key = branch?.id ?? "unassigned"
+      const entry = totals.get(key) ?? {
+        branchId: key,
+        branchName: branch?.name ?? "Unassigned",
+        days: 0,
+        requests: 0,
+      }
       entry.days += request.numberOfDays
       entry.requests += 1
       totals.set(key, entry)
@@ -163,13 +169,13 @@ export class LeaveAnalyticsService {
         employee: this.employeeWhere(filters),
       },
       include: {
-        employee: { select: { id: true, firstName: true, lastName: true } },
+        employee: { select: { employeeNumber: true, firstName: true, lastName: true } },
         leaveType: { select: { name: true } },
       },
     })
 
     const withRemaining = balances.map((balance) => ({
-      employeeId: balance.employee.id,
+      employeeId: balance.employee.employeeNumber,
       employeeName: `${balance.employee.firstName} ${balance.employee.lastName}`,
       leaveTypeName: balance.leaveType.name,
       remainingDays:
@@ -197,7 +203,7 @@ export class LeaveAnalyticsService {
         employee: this.employeeWhere(filters),
       },
       include: {
-        employee: { select: { id: true, firstName: true, lastName: true } },
+        employee: { select: { employeeNumber: true, firstName: true, lastName: true } },
         leaveType: { select: { name: true } },
       },
       orderBy: { startDate: "asc" },
@@ -218,7 +224,7 @@ export class LeaveAnalyticsService {
       include: {
         employee: {
           select: {
-            id: true,
+            employeeNumber: true,
             firstName: true,
             lastName: true,
             position: { select: { title: true, department: { select: { name: true } } } },

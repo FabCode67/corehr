@@ -1,4 +1,6 @@
+import type { Branch } from "./branches"
 import { apiFetchSafe } from "./client"
+import type { PaginatedResult } from "./pagination"
 
 export type Gender = "MALE" | "FEMALE"
 export type MaritalStatus = "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED"
@@ -14,20 +16,6 @@ export type EducationType =
   | "TRAINING"
   | "COURSE"
   | "WORKSHOP"
-
-export const WORK_LOCATIONS = [
-  "HEADQUARTERS",
-  "KIGALI_HEIGHTS_BRANCH",
-  "DOWNTOWN_BRANCH",
-  "REMERA_BRANCH",
-  "NYABUGOGO_BRANCH",
-  "GISOZI_BRANCH",
-  "RUSIZI_BRANCH",
-  "MUSANZE_BRANCH",
-  "KAYONZA_BRANCH",
-  "RUBAVU_BRANCH",
-] as const
-export type WorkLocation = (typeof WORK_LOCATIONS)[number]
 
 export function formatEnumLabel(value: string) {
   return value
@@ -72,7 +60,8 @@ export interface EmployeeEducation {
 }
 
 export interface Employee {
-  id: string
+  /** The Staff ID (e.g. "EMP-0001") — Employee's primary key everywhere,
+   *  used as the identifier in every route/link/foreign-key reference. */
   employeeNumber: string
 
   // Step 1: Basic Information
@@ -87,7 +76,8 @@ export interface Employee {
   maritalStatus: MaritalStatus
   email: string
   phone: string
-  workLocation: WorkLocation
+  branchId: string | null
+  branch?: Branch | null
   profilePictureUrl: string | null
 
   // Auth (passwordHash is never returned by the API)
@@ -150,6 +140,19 @@ export interface ReportingManagerResult {
 
 export function fetchEmployees(includeInactive = false) {
   return apiFetchSafe<Employee[]>(`/employees${includeInactive ? "?includeInactive=true" : ""}`)
+}
+
+/** Paginated version for the Employees admin table — see lib/api/pagination.ts. */
+export function fetchEmployeesPaginated(params: {
+  includeInactive?: boolean
+  page?: number
+  pageSize?: number
+}) {
+  const search = new URLSearchParams()
+  if (params.includeInactive) search.set("includeInactive", "true")
+  search.set("page", String(params.page ?? 1))
+  if (params.pageSize) search.set("pageSize", String(params.pageSize))
+  return apiFetchSafe<PaginatedResult<Employee>>(`/employees?${search.toString()}`)
 }
 
 export function fetchEmployee(id: string) {

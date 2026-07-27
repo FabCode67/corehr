@@ -2,9 +2,11 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { EmploymentStatus, Prisma, PositionChangeType } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
+import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
 import { PrismaService } from "../../prisma/prisma.service"
 import { DEFAULT_EMPLOYEE_PASSWORD } from "../auth/default-password.constant"
 import { LeaveBalancesService } from "../leave/leave-balances/leave-balances.service"
+import { AssignmentsService } from "../learning/assignments/assignments.service"
 
 import { AssignPositionDto } from "./dto/assign-position.dto"
 import { ChangeBandDto } from "./dto/change-band.dto"
@@ -19,7 +21,13 @@ import { UpdateEmploymentDetailsDto } from "./dto/update-employment-details.dto"
 const EMPLOYEE_LIST_INCLUDE = {
   position: { include: { department: true, unit: true, level: true } },
   band: true,
+  branch: true,
 } as const
+
+// See the identical constant in leave-requests.service.ts — Prisma's 5s
+// default interactive-transaction timeout is too tight for a pooled Neon
+// connection under cold-start latency.
+const TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 }
 
 const EMPLOYEE_DETAIL_INCLUDE = {
   ...EMPLOYEE_LIST_INCLUDE,
@@ -40,38 +48,83 @@ export interface ReportingManagerResult {
 export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly leaveBalancesService: LeaveBalancesService
+    private readonly leaveBalancesService: LeaveBalancesService,
+    private readonly assignmentsService: AssignmentsService
   ) {}
 
+  private buildFindAllWhere(params: {
+    departmentId?: string
+    unitId?: string
+    positionId?: string
+    includeInactive?: boolean
+  }): Prisma.EmployeeWhereInput {
+    const { departmentId, unitId, positionId, includeInactive } = params
+
+    return {
+      ...(includeInactive ? {} : { isActive: true }),
+      ...(positionId ? { positionId } : {}),
+      ...(departmentId || unitId
+        ? {
+            position: {
+              ...(departmentId ? { departmentId } : {}),
+              ...(unitId ? { unitId } : {}),
+            },
+          }
+        : {}),
+    }
+  }
+
+  /** Full, unpaginated list — used by dropdowns/cascading selects
+   *  throughout the app (e.g. delegate pickers) that need every match, not
+   *  just a page of them. See findAllPaginated() for the admin table view. */
   findAll(params: {
     departmentId?: string
     unitId?: string
     positionId?: string
     includeInactive?: boolean
   } = {}) {
-    const { departmentId, unitId, positionId, includeInactive } = params
-
     return this.prisma.employee.findMany({
-      where: {
-        ...(includeInactive ? {} : { isActive: true }),
-        ...(positionId ? { positionId } : {}),
-        ...(departmentId || unitId
-          ? {
-              position: {
-                ...(departmentId ? { departmentId } : {}),
-                ...(unitId ? { unitId } : {}),
-              },
-            }
-          : {}),
-      },
+      where: this.buildFindAllWhere(params),
       include: EMPLOYEE_LIST_INCLUDE,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     })
   }
 
+  /** Paginated version for the Employees admin table (20 rows/page by
+   *  default) — see server/src/common/pagination.ts. */
+  async findAllPaginated(
+    params: {
+      departmentId?: string
+      unitId?: string
+      positionId?: string
+      includeInactive?: boolean
+    } = {},
+    page?: number,
+    pageSize?: number
+  ): Promise<PaginatedResult<Prisma.EmployeeGetPayload<{ include: typeof EMPLOYEE_LIST_INCLUDE }>>> {
+    const where = this.buildFindAllWhere(params)
+    const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
+      page,
+      pageSize
+    )
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.employee.findMany({
+        where,
+        include: EMPLOYEE_LIST_INCLUDE,
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        skip,
+        take,
+      }),
+      this.prisma.employee.count({ where }),
+    ])
+
+    return buildPaginatedResult(data, total, normalizedPage, normalizedPageSize)
+  }
+
   async findOne(id: string) {
     const employee = await this.prisma.employee.findUnique({
-      where: { id },
+      where: { employeeNumber: id },
       include: EMPLOYEE_DETAIL_INCLUDE,
     })
 
@@ -117,12 +170,12 @@ export class EmployeesService {
             data: { ...dto, employeeNumber, passwordHash },
             include: EMPLOYEE_DETAIL_INCLUDE,
           })
-        })
+        }, TRANSACTION_OPTIONS)
         // Sick/Compassionate/Maternity/Paternity balances don't depend on
         // contract type, so they can be allocated from day one — Annual
         // Leave follows once a contract type is set (see
         // updateEmploymentDetails below).
-        await this.leaveBalancesService.ensureBalancesForEmployee(employee.id)
+        await this.leaveBalancesService.ensureBalancesForEmployee(employee.employeeNumber)
         return employee
       } catch (error) {
         if (this.isUniqueConflict(error, "employeeNumber")) {
@@ -138,7 +191,7 @@ export class EmployeesService {
     await this.findOne(id)
     try {
       return await this.prisma.employee.update({
-        where: { id },
+        where: { employeeNumber: id },
         data: dto,
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
@@ -172,7 +225,7 @@ export class EmployeesService {
       effectiveStartDate !== null
 
     const updated = await this.prisma.employee.update({
-      where: { id },
+      where: { employeeNumber: id },
       data: {
         ...dto,
         ...(shouldDefaultProbation
@@ -186,6 +239,13 @@ export class EmployeesService {
       // Contract type just became known (or changed) — (re)allocate Annual
       // Leave entitlement for it.
       await this.leaveBalancesService.ensureBalancesForEmployee(id)
+    }
+
+    if (dto.employmentStartDate && updated.employmentStartDate) {
+      // Employment start date just became known (or changed) — auto-assign
+      // any mandatory onboarding training (e.g. AML) due within N months of
+      // it. Idempotent, so safe even if this fires again on a later edit.
+      await this.assignmentsService.assignAutoHireCourses(id, updated.employmentStartDate)
     }
 
     return updated
@@ -235,7 +295,7 @@ export class EmployeesService {
       }
 
       return tx.employee.update({
-        where: { id },
+        where: { employeeNumber: id },
         data: {
           positionId: dto.positionId,
           bandId: dto.bandId,
@@ -245,7 +305,7 @@ export class EmployeesService {
         },
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
-    }).then(async (employee) => {
+    }, TRANSACTION_OPTIONS).then(async (employee) => {
       // Being placed in the Managing Director position changes the Annual
       // Leave entitlement category, so re-resolve it here too.
       await this.leaveBalancesService.ensureBalancesForEmployee(id)
@@ -256,7 +316,7 @@ export class EmployeesService {
   async deactivate(id: string) {
     await this.findOne(id)
     return this.prisma.employee.update({
-      where: { id },
+      where: { employeeNumber: id },
       data: { isActive: false, employmentStatus: EmploymentStatus.EXIT },
     })
   }
@@ -283,7 +343,7 @@ export class EmployeesService {
       }
 
       return tx.employee.update({
-        where: { id },
+        where: { employeeNumber: id },
         data: {
           employmentStatus: EmploymentStatus.EXIT,
           isActive: false,
@@ -296,7 +356,7 @@ export class EmployeesService {
         },
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
-    })
+    }, TRANSACTION_OPTIONS)
   }
 
   /**
@@ -333,11 +393,11 @@ export class EmployeesService {
       })
 
       return tx.employee.update({
-        where: { id },
+        where: { employeeNumber: id },
         data: { positionId: dto.positionId },
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
-    })
+    }, TRANSACTION_OPTIONS)
   }
 
   /** Changes only the Band, independent of Position, per the spec. Requires
@@ -369,11 +429,11 @@ export class EmployeesService {
       })
 
       return tx.employee.update({
-        where: { id },
+        where: { employeeNumber: id },
         data: { bandId: dto.bandId },
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
-    })
+    }, TRANSACTION_OPTIONS)
   }
 
   getHistory(id: string) {
@@ -389,7 +449,7 @@ export class EmployeesService {
   async updatePartner(id: string, dto: UpdatePartnerDto) {
     await this.findOne(id)
     return this.prisma.employee.update({
-      where: { id },
+      where: { employeeNumber: id },
       data: dto,
       include: EMPLOYEE_DETAIL_INCLUDE,
     })
@@ -436,7 +496,7 @@ export class EmployeesService {
    */
   async getReportingManager(id: string): Promise<ReportingManagerResult> {
     const employee = await this.prisma.employee.findUnique({
-      where: { id },
+      where: { employeeNumber: id },
       include: { reportingManagerOverride: true, position: true },
     })
 
@@ -451,7 +511,7 @@ export class EmployeesService {
       }
       return {
         manager: {
-          id: override.id,
+          id: override.employeeNumber,
           firstName: override.firstName,
           lastName: override.lastName,
           positionId: override.positionId,
@@ -467,13 +527,20 @@ export class EmployeesService {
 
     const candidates = await this.prisma.employee.findMany({
       where: { positionId: employee.position.reportsToPositionId, isActive: true },
-      select: { id: true, firstName: true, lastName: true, positionId: true },
+      select: { employeeNumber: true, firstName: true, lastName: true, positionId: true },
     })
 
-    const resolvable = candidates.filter(
-      (candidate): candidate is typeof candidate & { positionId: string } =>
-        candidate.positionId !== null
-    )
+    const resolvable = candidates
+      .filter(
+        (candidate): candidate is typeof candidate & { positionId: string } =>
+          candidate.positionId !== null
+      )
+      .map((candidate) => ({
+        id: candidate.employeeNumber,
+        firstName: candidate.firstName,
+        lastName: candidate.lastName,
+        positionId: candidate.positionId,
+      }))
 
     if (resolvable.length === 0) {
       return { manager: null, source: "NONE" }

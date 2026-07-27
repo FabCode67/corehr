@@ -1,0 +1,14 @@
+import { Module } from "@nestjs/common"
+
+import { RecruitmentAccessModule } from "../access/recruitment-access.module"
+
+import { AssessmentsController } from "./assessments.controller"
+import { AssessmentsService } from "./assessments.service"
+
+@Module({
+  imports: [RecruitmentAccessModule],
+  controllers: [AssessmentsController],
+  providers: [AssessmentsService],
+  exports: [AssessmentsService],
+})
+export class AssessmentsModule {}

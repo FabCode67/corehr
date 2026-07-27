@@ -23,12 +23,19 @@ export class DepartmentsController {
   @Get()
   findAll(
     @Query("functionId") functionId?: string,
-    @Query("includeInactive") includeInactive?: string
+    @Query("includeInactive") includeInactive?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
   ) {
-    return this.departmentsService.findAll({
-      functionId,
-      includeInactive: includeInactive === "true",
-    })
+    const filters = { functionId, includeInactive: includeInactive === "true" }
+    if (page) {
+      return this.departmentsService.findAllPaginated(
+        filters,
+        Number(page),
+        pageSize ? Number(pageSize) : undefined
+      )
+    }
+    return this.departmentsService.findAll(filters)
   }
 
   @Get(":id")

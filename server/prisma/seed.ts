@@ -12,16 +12,52 @@
 import {
   ApprovalDecision,
   ApprovalRole,
+  ApplicationStatus,
+  AssessmentResult,
+  AssessmentType,
+  BackgroundCheckStatus,
+  BackgroundCheckType,
+  AppealOutcome,
+  AppealStatus,
   ContractType,
+  CourseAssignmentPriority,
+  CourseAssignmentStatus,
+  CourseDeliveryMethod,
+  DisciplinaryCaseCategory,
+  DisciplinaryCaseStatus,
+  FieldType,
+  FormInstanceStatus,
+  FormPriority,
+  FormStatus,
   Gender,
+  GrievanceCategory,
+  GrievanceStatus,
+  HiringReason,
+  InterviewRecommendation,
+  InterviewStatus,
+  InterviewType,
+  JobPostingStatus,
   LeaveCategory,
   LeaveEntitlementCategory,
   LeaveRequestStatus,
   MaritalStatus,
+  OfferStatus,
+  OnboardingTaskType,
+  PerformanceReviewStatus,
+  PerformanceReviewType,
   PositionChangeType,
   PositionTrack,
+  Prisma,
   PrismaClient,
-  WorkLocation,
+  RecruitmentEmploymentType,
+  RecruitmentPriority,
+  RecruitmentStageName,
+  RequisitionStatus,
+  ScreeningDecision,
+  SignatureStatus,
+  SignerRole,
+  StageStatus,
+  WorkforcePlanStatus,
 } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
@@ -96,6 +132,43 @@ async function upsertBand(name: string, rank: number) {
   })
 }
 
+/** `code` doubles as the migration key from the old WorkLocation enum — see
+ *  backfillBranchesFromLegacyWorkLocation() below. */
+async function upsertBranch(name: string, code: string, isHeadquarters = false) {
+  return prisma.branch.upsert({
+    where: { name },
+    update: { code, isHeadquarters },
+    create: { name, code, isHeadquarters },
+  })
+}
+
+/**
+ * Picks up any employee (demo or created later through the app's own UI)
+ * that still only has the deprecated `workLocation` enum value set and no
+ * `branchId` yet, and assigns them the newly-seeded Branch row with the
+ * matching `code`. Safe to re-run — only touches rows where branchId is
+ * still null. See the Branch model's doc comment in schema.prisma.
+ */
+async function backfillBranchesFromLegacyWorkLocation(branchesByCode: Map<string, { id: string }>) {
+  const orphaned = await prisma.employee.findMany({
+    where: { branchId: null, workLocation: { not: null } },
+    select: { employeeNumber: true, workLocation: true },
+  })
+
+  let backfilled = 0
+  for (const employee of orphaned) {
+    const branch = employee.workLocation ? branchesByCode.get(employee.workLocation) : undefined
+    if (!branch) continue
+    await prisma.employee.update({ where: { employeeNumber: employee.employeeNumber }, data: { branchId: branch.id } })
+    backfilled += 1
+  }
+
+  if (backfilled > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`Backfilled branchId for ${backfilled} existing employee(s) from their legacy work location.`)
+  }
+}
+
 async function upsertPosition(params: {
   title: string
   departmentId: string
@@ -138,13 +211,13 @@ async function upsertEmployee(params: {
   nationality: string
   maritalStatus: MaritalStatus
   phone: string
-  workLocation: WorkLocation
+  branchId: string
   positionId: string
   bandId: string
   employmentStartDate: Date
   isAdmin?: boolean
 }) {
-  const { positionId, bandId, employmentStartDate, isAdmin = false, ...basics } = params
+  const { positionId, bandId, branchId, employmentStartDate, isAdmin = false, ...basics } = params
 
   // Re-running the seed resets every demo employee's password back to the
   // default and re-applies isAdmin — convenient for getting back into a
@@ -153,20 +226,20 @@ async function upsertEmployee(params: {
 
   const employee = await prisma.employee.upsert({
     where: { employeeNumber: params.employeeNumber },
-    update: { positionId, bandId, employmentStartDate, passwordHash, isAdmin },
-    create: { ...basics, positionId, bandId, employmentStartDate, passwordHash, isAdmin },
+    update: { positionId, bandId, branchId, employmentStartDate, passwordHash, isAdmin },
+    create: { ...basics, positionId, bandId, branchId, employmentStartDate, passwordHash, isAdmin },
   })
 
   // The seed calls Prisma directly (not EmployeesService), so — same as the
   // service's own assign-position step — make sure the first assignment
   // leaves behind an INITIAL_HIRE PositionHistory row.
   const hasHistory = await prisma.positionHistory.findFirst({
-    where: { employeeId: employee.id },
+    where: { employeeId: employee.employeeNumber },
   })
   if (!hasHistory) {
     await prisma.positionHistory.create({
       data: {
-        employeeId: employee.id,
+        employeeId: employee.employeeNumber,
         positionId,
         bandId,
         changeType: PositionChangeType.INITIAL_HIRE,
@@ -357,6 +430,26 @@ async function main() {
     reportsToPositionId: hrManager.id,
   })
 
+  // ---- Branches (work locations) ------------------------------------------
+  const branchDefs: Array<[name: string, code: string, isHeadquarters?: boolean]> = [
+    ["Headquarters", "HEADQUARTERS", true],
+    ["Kigali Heights Branch", "KIGALI_HEIGHTS_BRANCH"],
+    ["Downtown Branch", "DOWNTOWN_BRANCH"],
+    ["Remera Branch", "REMERA_BRANCH"],
+    ["Nyabugogo Branch", "NYABUGOGO_BRANCH"],
+    ["Gisozi Branch", "GISOZI_BRANCH"],
+    ["Rusizi Branch", "RUSIZI_BRANCH"],
+    ["Musanze Branch", "MUSANZE_BRANCH"],
+    ["Kayonza Branch", "KAYONZA_BRANCH"],
+    ["Rubavu Branch", "RUBAVU_BRANCH"],
+  ]
+  const branchesByCode = new Map<string, Awaited<ReturnType<typeof upsertBranch>>>()
+  for (const [name, code, isHeadquarters] of branchDefs) {
+    branchesByCode.set(code, await upsertBranch(name, code, isHeadquarters ?? false))
+  }
+  const headquartersBranch = branchesByCode.get("HEADQUARTERS")!
+  const kigaliHeightsBranch = branchesByCode.get("KIGALI_HEIGHTS_BRANCH")!
+
   // ---- A handful of employees, to prove reporting-manager derivation ------
   const employmentStartDate = new Date("2020-01-06")
 
@@ -371,7 +464,7 @@ async function main() {
     nationality: "Rwandan",
     maritalStatus: MaritalStatus.MARRIED,
     phone: "+250788123001",
-    workLocation: WorkLocation.HEADQUARTERS,
+    branchId: headquartersBranch.id,
     positionId: md.id,
     bandId: bands.get(10)!.id,
     employmentStartDate,
@@ -388,7 +481,7 @@ async function main() {
     nationality: "Rwandan",
     maritalStatus: MaritalStatus.MARRIED,
     phone: "+250788123002",
-    workLocation: WorkLocation.HEADQUARTERS,
+    branchId: headquartersBranch.id,
     positionId: itHoD.id,
     bandId: bands.get(8)!.id,
     employmentStartDate,
@@ -405,7 +498,7 @@ async function main() {
     nationality: "Rwandan",
     maritalStatus: MaritalStatus.SINGLE,
     phone: "+250788123003",
-    workLocation: WorkLocation.HEADQUARTERS,
+    branchId: headquartersBranch.id,
     positionId: itChannelsSrMgr.id,
     bandId: bands.get(6)!.id,
     employmentStartDate,
@@ -421,7 +514,7 @@ async function main() {
     nationality: "Rwandan",
     maritalStatus: MaritalStatus.SINGLE,
     phone: "+250788123004",
-    workLocation: WorkLocation.KIGALI_HEIGHTS_BRANCH,
+    branchId: kigaliHeightsBranch.id,
     positionId: amChannels.id,
     bandId: bands.get(5)!.id,
     employmentStartDate,
@@ -437,7 +530,7 @@ async function main() {
     nationality: "Rwandan",
     maritalStatus: MaritalStatus.SINGLE,
     phone: "+250788123005",
-    workLocation: WorkLocation.KIGALI_HEIGHTS_BRANCH,
+    branchId: kigaliHeightsBranch.id,
     positionId: officerChannelsAnalyst.id,
     bandId: bands.get(3)!.id,
     employmentStartDate,
@@ -447,7 +540,7 @@ async function main() {
   // contract type to resolve entitlement categories from.
   for (const employee of [md_employee, itHoD_employee, claudine_employee, solange_employee, patrick_employee]) {
     await prisma.employee.update({
-      where: { id: employee.id },
+      where: { employeeNumber: employee.employeeNumber },
       data: {
         contractType: ContractType.PERMANENT,
         probationEndDate: new Date("2020-04-06"), // 3 months after employmentStartDate, long past
@@ -463,11 +556,66 @@ async function main() {
     patrick: patrick_employee,
   })
 
-  // eslint-disable-next-line no-console
-  console.log("Seed complete: org structure + 5 demo employees + Leave Management config & demo data.")
+  await seedPerformanceManagement({
+    md: md_employee,
+    itHoD: itHoD_employee,
+    claudine: claudine_employee,
+    solange: solange_employee,
+    patrick: patrick_employee,
+  })
+
+  await seedLearningManagement({
+    md: md_employee,
+    itHoD: itHoD_employee,
+    claudine: claudine_employee,
+    solange: solange_employee,
+    patrick: patrick_employee,
+    techFunction,
+    levelManager,
+  })
+
+  await seedRecruitment({
+    md: md_employee,
+    itHoD: itHoD_employee,
+    claudine: claudine_employee,
+    itDept,
+    itChannels,
+    techFunction,
+    levelOfficer,
+    amApis,
+    bands,
+    headquartersBranch,
+  })
+
+  await seedFormsManagement({
+    md: md_employee,
+    itHoD: itHoD_employee,
+    claudine: claudine_employee,
+    solange: solange_employee,
+    patrick: patrick_employee,
+  })
+
+  await seedEmployeeRelations({
+    md: md_employee,
+    itHoD: itHoD_employee,
+    claudine: claudine_employee,
+    solange: solange_employee,
+    patrick: patrick_employee,
+  })
+
+  // Picks up employees created through the app's own UI before this branch
+  // migration — the 5 demo employees above are already covered directly by
+  // upsertEmployee(), so this only ever touches real, previously-existing
+  // records.
+  await backfillBranchesFromLegacyWorkLocation(branchesByCode)
+
   // eslint-disable-next-line no-console
   console.log(
-    "Try: GET /api/organization/org-chart, GET /api/employees/{Patrick's id}/reporting-manager, GET /api/leave/balances/employee/{Patrick's id}"
+    "Seed complete: org structure + 6 employees (5 demo + 1 hired via Recruitment) + Leave Management, Performance Management, Learning and Development, Recruitment Management, Forms Management & Employee Relations config/demo data."
+  )
+  // eslint-disable-next-line no-console
+  console.log(
+    "Try: GET /api/organization/org-chart, GET /api/employees/{Patrick's id}/reporting-manager, GET /api/leave/balances/employee/{Patrick's id}, GET /api/learning/analytics/overview, GET /api/recruitment/analytics/overview, GET /api/forms/analytics/overview, GET /api/employee-relations/analytics/overview"
   )
   // eslint-disable-next-line no-console
   console.log(
@@ -663,9 +811,11 @@ async function seedLeaveManagement(employees: {
 
   async function ensureBalance(employee: SeedEmployee, leaveType: { id: string }, entitledDays: number) {
     return prisma.leaveBalance.upsert({
-      where: { employeeId_leaveTypeId_year: { employeeId: employee.id, leaveTypeId: leaveType.id, year } },
+      where: {
+        employeeId_leaveTypeId_year: { employeeId: employee.employeeNumber, leaveTypeId: leaveType.id, year },
+      },
       update: { entitledDays },
-      create: { employeeId: employee.id, leaveTypeId: leaveType.id, year, entitledDays },
+      create: { employeeId: employee.employeeNumber, leaveTypeId: leaveType.id, year, entitledDays },
     })
   }
 
@@ -702,7 +852,7 @@ async function seedLeaveManagement(employees: {
     const steps = approvalStepsByType.get(leaveType.id) ?? []
 
     const existing = await prisma.leaveRequest.findFirst({
-      where: { employeeId: employee.id, leaveTypeId: leaveType.id, startDate: start },
+      where: { employeeId: employee.employeeNumber, leaveTypeId: leaveType.id, startDate: start },
     })
     if (existing) return existing
 
@@ -713,7 +863,7 @@ async function seedLeaveManagement(employees: {
 
     const request = await prisma.leaveRequest.create({
       data: {
-        employeeId: employee.id,
+        employeeId: employee.employeeNumber,
         leaveTypeId: leaveType.id,
         startDate: start,
         endDate: end,
@@ -728,7 +878,7 @@ async function seedLeaveManagement(employees: {
             order: step.order,
             role: step.role,
             decision: index < stepsApproved ? ApprovalDecision.APPROVED : null,
-            approverEmployeeId: index < stepsApproved ? employee.id : null, // demo data only
+            approverEmployeeId: index < stepsApproved ? employee.employeeNumber : null, // demo data only
             decidedAt: index < stepsApproved ? new Date() : null,
           })),
         },
@@ -738,7 +888,7 @@ async function seedLeaveManagement(employees: {
     // Reflect the request on the balance: APPROVED books takenDays,
     // anything still open reserves pendingDays.
     const balanceWhere = {
-      employeeId_leaveTypeId_year: { employeeId: employee.id, leaveTypeId: leaveType.id, year },
+      employeeId_leaveTypeId_year: { employeeId: employee.employeeNumber, leaveTypeId: leaveType.id, year },
     }
     if (status === "APPROVED") {
       await prisma.leaveBalance.update({ where: balanceWhere, data: { takenDays: { increment: numberOfDays } } })
@@ -792,6 +942,1816 @@ async function seedLeaveManagement(employees: {
     reason: "Family bereavement",
     stepsApproved: 0,
   })
+}
+
+/**
+ * Seeds the Performance Management rating scale, two review periods (FY2025
+ * fully closed for history, FY2026 with its Mid-Year cycle open — "today"
+ * in this demo dataset is July 2026), and a spread of reviews across
+ * statuses (FINALIZED/SUBMITTED/DRAFT) and ratings so the dashboards and
+ * history views have something real to show immediately. Reviewer chains
+ * mirror the actual position hierarchy built above (each employee's
+ * reviewer is their real reporting manager), not an arbitrary pick.
+ */
+async function seedPerformanceManagement(employees: {
+  md: SeedEmployee
+  itHoD: SeedEmployee
+  claudine: SeedEmployee
+  solange: SeedEmployee
+  patrick: SeedEmployee
+}) {
+  const { md, itHoD, claudine, solange, patrick } = employees
+
+  // ---- Rating scale (1-5) -------------------------------------------------
+  const scaleDefs: Array<[rank: number, label: string, description: string]> = [
+    [5, "Outstanding", "Performance far exceeds expectations across all objectives."],
+    [4, "Exceeded Expectations", "Performance consistently surpasses expectations."],
+    [3, "Succeeded", "Performance fully meets all expectations."],
+    [2, "Meets Some Expectations", "Performance meets some, but not all, expectations."],
+    [1, "Unsatisfactory", "Performance falls significantly short of expectations."],
+  ]
+  for (const [rank, label, description] of scaleDefs) {
+    await prisma.performanceRatingScale.upsert({
+      where: { rank },
+      update: { label, description },
+      create: { rank, label, description },
+    })
+  }
+
+  // ---- Review periods -------------------------------------------------------
+  const periodFY2025 = await prisma.performanceReviewPeriod.upsert({
+    where: { name: "FY2025" },
+    update: {
+      midYearStatus: "CLOSED",
+      midYearOpensAt: new Date("2025-06-01"),
+      midYearClosesAt: new Date("2025-07-15"),
+      annualStatus: "CLOSED",
+      annualOpensAt: new Date("2025-12-01"),
+      annualClosesAt: new Date("2026-01-15"),
+    },
+    create: {
+      name: "FY2025",
+      year: 2025,
+      midYearStatus: "CLOSED",
+      midYearOpensAt: new Date("2025-06-01"),
+      midYearClosesAt: new Date("2025-07-15"),
+      annualStatus: "CLOSED",
+      annualOpensAt: new Date("2025-12-01"),
+      annualClosesAt: new Date("2026-01-15"),
+    },
+  })
+
+  const periodFY2026 = await prisma.performanceReviewPeriod.upsert({
+    where: { name: "FY2026" },
+    update: {
+      midYearStatus: "OPEN",
+      midYearOpensAt: new Date("2026-06-01"),
+    },
+    create: {
+      name: "FY2026",
+      year: 2026,
+      midYearStatus: "OPEN",
+      midYearOpensAt: new Date("2026-06-01"),
+      annualStatus: "DRAFT",
+    },
+  })
+
+  // ---- Reviews --------------------------------------------------------------
+  // Reviewer chain matches the real position hierarchy: Patrick -> Solange ->
+  // Claudine -> Eric (IT HoD) -> Jean-Paul (MD) -> nobody.
+  const reviewerOf = new Map<string, string | null>([
+    [md.employeeNumber, null],
+    [itHoD.employeeNumber, md.employeeNumber],
+    [claudine.employeeNumber, itHoD.employeeNumber],
+    [solange.employeeNumber, claudine.employeeNumber],
+    [patrick.employeeNumber, solange.employeeNumber],
+  ])
+
+  async function seedReview(params: {
+    period: typeof periodFY2025
+    employee: SeedEmployee
+    reviewType: PerformanceReviewType
+    status: PerformanceReviewStatus
+    overallRating: number
+    strengths: string
+    achievements: string
+    areasForImprovement: string
+    goalsAchieved: string
+    goalsNotAchieved: string
+    behaviourCompetencies: string
+    recommendedTraining: string
+    developmentPlan: string
+    managerComments: string
+    employeeComments?: string
+    hrComments?: string
+  }) {
+    const existing = await prisma.performanceReview.findUnique({
+      where: {
+        periodId_employeeId_reviewType: {
+          periodId: params.period.id,
+          employeeId: params.employee.employeeNumber,
+          reviewType: params.reviewType,
+        },
+      },
+    })
+    if (existing) return existing
+
+    const full = await prisma.employee.findUniqueOrThrow({
+      where: { employeeNumber: params.employee.employeeNumber },
+      include: { position: true },
+    })
+
+    const now = new Date()
+    const submittedAt = params.status !== "DRAFT" ? now : null
+    const acknowledgedAt = params.status === "ACKNOWLEDGED" || params.status === "FINALIZED" ? now : null
+    const finalizedAt = params.status === "FINALIZED" ? now : null
+
+    const review = await prisma.performanceReview.create({
+      data: {
+        periodId: params.period.id,
+        employeeId: params.employee.employeeNumber,
+        reviewType: params.reviewType,
+        reviewerId: reviewerOf.get(params.employee.employeeNumber) ?? null,
+        departmentId: full.position?.departmentId ?? null,
+        unitId: full.position?.unitId ?? null,
+        positionId: full.positionId,
+        levelId: full.position?.levelId ?? null,
+        bandId: full.bandId,
+        branchId: full.branchId,
+        contractType: full.contractType,
+        gender: full.gender,
+        status: params.status,
+        overallRating: params.overallRating,
+        strengths: params.strengths,
+        achievements: params.achievements,
+        areasForImprovement: params.areasForImprovement,
+        goalsAchieved: params.goalsAchieved,
+        goalsNotAchieved: params.goalsNotAchieved,
+        behaviourCompetencies: params.behaviourCompetencies,
+        recommendedTraining: params.recommendedTraining,
+        developmentPlan: params.developmentPlan,
+        managerComments: params.managerComments,
+        employeeComments: params.employeeComments ?? null,
+        hrComments: params.hrComments ?? null,
+        submittedAt,
+        acknowledgedAt,
+        finalizedAt,
+      },
+    })
+
+    const actions = ["CREATED"]
+    if (submittedAt) actions.push("SUBMITTED")
+    if (acknowledgedAt) actions.push("ACKNOWLEDGED")
+    if (finalizedAt) actions.push("FINALIZED")
+    for (const action of actions) {
+      await prisma.performanceAuditLog.create({
+        data: {
+          reviewId: review.id,
+          action,
+          actorId: reviewerOf.get(params.employee.employeeNumber) ?? params.employee.employeeNumber,
+          notes: "Seeded demo data",
+        },
+      })
+    }
+
+    return review
+  }
+
+  // FY2025 — fully closed history for everyone (both cycles).
+  await seedReview({
+    period: periodFY2025,
+    employee: itHoD,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "FINALIZED",
+    overallRating: 4,
+    strengths: "Strong technical leadership across the IT department.",
+    achievements: "Delivered the core banking channels upgrade on schedule.",
+    areasForImprovement: "Delegate more of the day-to-day incident triage.",
+    goalsAchieved: "Channels platform stability, API uptime targets.",
+    goalsNotAchieved: "Cross-department automation initiative delayed.",
+    behaviourCompetencies: "Decisive, collaborative, strong stakeholder management.",
+    recommendedTraining: "Executive leadership programme.",
+    developmentPlan: "Shadow the CTO on the technology roadmap for two quarters.",
+    managerComments: "Consistently exceeds expectations; ready for broader scope.",
+  })
+  await seedReview({
+    period: periodFY2025,
+    employee: itHoD,
+    reviewType: PerformanceReviewType.ANNUAL,
+    status: "FINALIZED",
+    overallRating: 5,
+    strengths: "Exceptional delivery record for the year.",
+    achievements: "Zero major outages; channels uptime at 99.98%.",
+    areasForImprovement: "Continue building the succession bench.",
+    goalsAchieved: "All annual OKRs met or exceeded.",
+    goalsNotAchieved: "None.",
+    behaviourCompetencies: "Outstanding leadership and technical judgement.",
+    recommendedTraining: "None required this cycle.",
+    developmentPlan: "Prepare for an expanded regional technology role.",
+    managerComments: "Outstanding year — recommended for the technology leadership track.",
+    hrComments: "Concur with the outstanding rating; flagged for succession planning.",
+  })
+  await seedReview({
+    period: periodFY2025,
+    employee: claudine,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "FINALIZED",
+    overallRating: 3,
+    strengths: "Reliable delivery on the Channels roadmap.",
+    achievements: "Shipped the mobile banking API v2.",
+    areasForImprovement: "Improve cross-team communication on delays.",
+    goalsAchieved: "API v2 launch, team onboarding of two officers.",
+    goalsNotAchieved: "Documentation backlog not cleared.",
+    behaviourCompetencies: "Solid technical management, still building executive presence.",
+    recommendedTraining: "Stakeholder communication workshop.",
+    developmentPlan: "Own a cross-departmental initiative next cycle.",
+    managerComments: "Solid, dependable mid-year performance.",
+  })
+  await seedReview({
+    period: periodFY2025,
+    employee: claudine,
+    reviewType: PerformanceReviewType.ANNUAL,
+    status: "FINALIZED",
+    overallRating: 4,
+    strengths: "Grew significantly in stakeholder management this year.",
+    achievements: "Delivered API v2 and cleared the documentation backlog.",
+    areasForImprovement: "Take on more strategic, less operational work.",
+    goalsAchieved: "All annual goals met.",
+    goalsNotAchieved: "None.",
+    behaviourCompetencies: "Strong technical and people leadership.",
+    recommendedTraining: "Senior management development programme.",
+    developmentPlan: "Being considered for the Head of Department track.",
+    managerComments: "Marked improvement over the year — exceeded expectations.",
+  })
+  await seedReview({
+    period: periodFY2025,
+    employee: solange,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "FINALIZED",
+    overallRating: 2,
+    strengths: "Good technical fundamentals.",
+    achievements: "Completed onboarding of the new Channels officers.",
+    areasForImprovement: "Missed two sprint deadlines; needs closer project tracking.",
+    goalsAchieved: "Onboarding plan delivered.",
+    goalsNotAchieved: "Sprint velocity targets.",
+    behaviourCompetencies: "Needs to build more consistent follow-through.",
+    recommendedTraining: "Project management fundamentals.",
+    developmentPlan: "Weekly check-ins with manager for the next quarter.",
+    managerComments: "Below expectations on delivery consistency — following up mid-cycle.",
+  })
+  await seedReview({
+    period: periodFY2025,
+    employee: solange,
+    reviewType: PerformanceReviewType.ANNUAL,
+    status: "FINALIZED",
+    overallRating: 3,
+    strengths: "Responded well to the mid-year feedback.",
+    achievements: "Sprint delivery consistency improved markedly in H2.",
+    areasForImprovement: "Continue strengthening estimation accuracy.",
+    goalsAchieved: "Recovered delivery track record after mid-year.",
+    goalsNotAchieved: "None outstanding.",
+    behaviourCompetencies: "Improved follow-through and ownership.",
+    recommendedTraining: "Advanced estimation & planning workshop.",
+    developmentPlan: "Take ownership of the next platform migration workstream.",
+    managerComments: "Good recovery — now fully meeting expectations.",
+  })
+
+  // FY2026 Mid-Year — open cycle, mixed statuses to show the workflow states.
+  await seedReview({
+    period: periodFY2026,
+    employee: itHoD,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "FINALIZED",
+    overallRating: 5,
+    strengths: "Leading the branch-management platform rollout flawlessly.",
+    achievements: "Zero-downtime migration to the new branch model.",
+    areasForImprovement: "None significant this cycle.",
+    goalsAchieved: "Branch management platform live on schedule.",
+    goalsNotAchieved: "None.",
+    behaviourCompetencies: "Exceptional execution and team leadership.",
+    recommendedTraining: "None required.",
+    developmentPlan: "Continue mentoring the senior manager bench.",
+    managerComments: "Outstanding mid-year performance, on track for another strong annual review.",
+    hrComments: "Reviewed and concur.",
+  })
+  await seedReview({
+    period: periodFY2026,
+    employee: claudine,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "SUBMITTED",
+    overallRating: 4,
+    strengths: "Owned the branch-model migration for the Channels unit end to end.",
+    achievements: "Migrated 10 branches to the new Branch admin module with zero incidents.",
+    areasForImprovement: "Keep building visibility with peer departments.",
+    goalsAchieved: "Branch migration, officer team expansion.",
+    goalsNotAchieved: "None yet — cycle in progress.",
+    behaviourCompetencies: "Strong technical ownership, growing executive presence.",
+    recommendedTraining: "Cross-functional leadership programme.",
+    developmentPlan: "Lead the next org-wide platform initiative.",
+    managerComments: "Excellent first half — submitted for HR review.",
+  })
+  await seedReview({
+    period: periodFY2026,
+    employee: solange,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "DRAFT",
+    overallRating: 3,
+    strengths: "Consistent delivery since the FY2025 annual review.",
+    achievements: "On track with all H1 sprint commitments.",
+    areasForImprovement: "Still finalizing this section.",
+    goalsAchieved: "H1 sprint commitments met.",
+    goalsNotAchieved: "TBD — cycle still in progress.",
+    behaviourCompetencies: "Good ownership, improving estimation accuracy.",
+    recommendedTraining: "TBD.",
+    developmentPlan: "TBD.",
+    managerComments: "Draft in progress — will finalize before the cycle closes.",
+  })
+  await seedReview({
+    period: periodFY2026,
+    employee: patrick,
+    reviewType: PerformanceReviewType.MID_YEAR,
+    status: "FINALIZED",
+    overallRating: 1,
+    strengths: "Enthusiastic and eager to learn.",
+    achievements: "Completed the required onboarding certifications.",
+    areasForImprovement: "Significant gaps in analysis accuracy and missed deadlines.",
+    goalsAchieved: "Onboarding certifications only.",
+    goalsNotAchieved: "Core analyst deliverables for the quarter.",
+    behaviourCompetencies: "Needs closer supervision and a structured improvement plan.",
+    recommendedTraining: "Data analysis fundamentals, time management workshop.",
+    developmentPlan: "30-60-90 day performance improvement plan with weekly manager check-ins.",
+    managerComments: "Performance is below the expected bar for this role — improvement plan initiated.",
+    hrComments: "HR is tracking this employee's improvement plan closely.",
+  })
+}
+
+async function seedLearningManagement(params: {
+  md: SeedEmployee
+  itHoD: SeedEmployee
+  claudine: SeedEmployee
+  solange: SeedEmployee
+  patrick: SeedEmployee
+  techFunction: { id: string }
+  levelManager: { id: string }
+}) {
+  const { md, itHoD, claudine, solange, patrick, techFunction, levelManager } = params
+
+  async function upsertInstitution(name: string) {
+    return prisma.institution.upsert({ where: { name }, update: {}, create: { name } })
+  }
+
+  async function upsertCategory(name: string, isMandatory: boolean) {
+    return prisma.trainingCategory.upsert({
+      where: { name },
+      update: { isMandatory },
+      create: { name, isMandatory },
+    })
+  }
+
+  async function upsertCourse(params: {
+    courseCode: string
+    name: string
+    categoryId: string
+    institutionId?: string
+    cost?: number
+    durationHours?: number
+    deliveryMethod: CourseDeliveryMethod
+    requiredFunctionId?: string
+    requiredLevelId?: string
+    autoAssignOnHire?: boolean
+    autoAssignDueMonths?: number
+  }) {
+    const { courseCode, ...data } = params
+    return prisma.course.upsert({ where: { courseCode }, update: data, create: { courseCode, ...data } })
+  }
+
+  /** Snapshot of an employee's org context, for CourseAssignment's
+   *  point-in-time fields — same shape seedReview() reads for
+   *  PerformanceReview. */
+  async function snapshotOf(employee: SeedEmployee) {
+    return prisma.employee.findUniqueOrThrow({
+      where: { employeeNumber: employee.employeeNumber },
+      include: { position: true },
+    })
+  }
+
+  async function upsertAssignment(assignParams: {
+    course: Awaited<ReturnType<typeof upsertCourse>>
+    employee: SeedEmployee
+    assignedBy?: SeedEmployee
+    dueDate?: Date
+    priority?: CourseAssignmentPriority
+    recommendationComment?: string
+    reasonForAssignment?: string
+    status: CourseAssignmentStatus
+    certificateUrl?: string
+    hrVerificationComment?: string
+    verifiedBy?: SeedEmployee
+  }) {
+    const { course, employee, assignedBy, status } = assignParams
+    const full = await snapshotOf(employee)
+    const category = await prisma.trainingCategory.findUniqueOrThrow({ where: { id: course.categoryId } })
+
+    const now = new Date()
+    const acceptedStatuses: CourseAssignmentStatus[] = [
+      "ACCEPTED",
+      "IN_PROGRESS",
+      "COMPLETED_BY_EMPLOYEE",
+      "PENDING_VERIFICATION",
+      "VERIFIED",
+      "REJECTED",
+      "CLOSED",
+    ]
+    const startedStatuses: CourseAssignmentStatus[] = [
+      "IN_PROGRESS",
+      "COMPLETED_BY_EMPLOYEE",
+      "PENDING_VERIFICATION",
+      "VERIFIED",
+      "REJECTED",
+      "CLOSED",
+    ]
+    const completedStatuses: CourseAssignmentStatus[] = ["COMPLETED_BY_EMPLOYEE", "PENDING_VERIFICATION", "VERIFIED", "REJECTED", "CLOSED"]
+    const certificateStatuses: CourseAssignmentStatus[] = ["PENDING_VERIFICATION", "VERIFIED", "REJECTED", "CLOSED"]
+    const verifiedStatuses: CourseAssignmentStatus[] = ["VERIFIED", "CLOSED"]
+
+    const data = {
+      courseId: course.id,
+      employeeId: employee.employeeNumber,
+      assignedById: assignedBy?.employeeNumber ?? null,
+      categoryName: category.name,
+      isMandatory: category.isMandatory,
+      departmentId: full.position?.departmentId ?? null,
+      unitId: full.position?.unitId ?? null,
+      positionId: full.positionId,
+      levelId: full.position?.levelId ?? null,
+      bandId: full.bandId,
+      branchId: full.branchId,
+      contractType: full.contractType,
+      dueDate: assignParams.dueDate ?? null,
+      priority: assignParams.priority ?? CourseAssignmentPriority.MEDIUM,
+      recommendationComment: assignParams.recommendationComment ?? null,
+      reasonForAssignment: assignParams.reasonForAssignment ?? null,
+      status,
+      acceptedAt: acceptedStatuses.includes(status) ? now : null,
+      startedAt: startedStatuses.includes(status) ? now : null,
+      completedAt: completedStatuses.includes(status) ? now : null,
+      certificateUploadedAt: certificateStatuses.includes(status) ? now : null,
+      certificateUrl: certificateStatuses.includes(status) ? assignParams.certificateUrl ?? "https://res.cloudinary.com/demo/certificate.pdf" : null,
+      verifiedAt: verifiedStatuses.includes(status) || status === "REJECTED" ? now : null,
+      verifiedById: assignParams.verifiedBy?.employeeNumber ?? (verifiedStatuses.includes(status) || status === "REJECTED" ? itHoD.employeeNumber : null),
+      hrVerificationComment: assignParams.hrVerificationComment ?? null,
+      rejectedAt: status === "REJECTED" ? now : null,
+      closedAt: status === "CLOSED" ? now : null,
+    }
+
+    const assignment = await prisma.courseAssignment.upsert({
+      where: { courseId_employeeId: { courseId: course.id, employeeId: employee.employeeNumber } },
+      update: data,
+      create: data,
+    })
+
+    const existingLog = await prisma.courseAuditLog.findFirst({ where: { assignmentId: assignment.id } })
+    if (!existingLog) {
+      await prisma.courseAuditLog.create({
+        data: { assignmentId: assignment.id, action: "ASSIGNED", actorId: assignedBy?.employeeNumber ?? null, notes: "Seeded demo data" },
+      })
+    }
+
+    return assignment
+  }
+
+  // ---- Institutions -----------------------------------------------------
+  const ncbaAcademy = await upsertInstitution("NCBA Learning Academy")
+  const rwandaInstitute = await upsertInstitution("Rwanda Institute of Management")
+  await upsertInstitution("LinkedIn Learning")
+
+  // ---- Training categories -----------------------------------------------
+  // Mandatory / regulatory + internal.
+  const amlCategory = await upsertCategory("AML (Anti-Money Laundering)", true)
+  const kycCategory = await upsertCategory("KYC", true)
+  await upsertCategory("BNR Compliance", true)
+  const dataPrivacyCategory = await upsertCategory("Data Privacy", true)
+  await upsertCategory("Fraud Prevention", true)
+  const codeOfConductCategory = await upsertCategory("Code of Conduct", true)
+  const infoSecCategory = await upsertCategory("Information Security", true)
+  await upsertCategory("Customer Experience", true)
+  const workplaceEthicsCategory = await upsertCategory("Workplace Ethics", true)
+  await upsertCategory("Occupational Health & Safety", true)
+
+  // Non-mandatory / professional development.
+  const leadershipCategory = await upsertCategory("Leadership", false)
+  await upsertCategory("Project Management", false)
+  const dataAnalyticsCategory = await upsertCategory("Data Analytics", false)
+  await upsertCategory("Artificial Intelligence", false)
+  await upsertCategory("Communication Skills", false)
+  await upsertCategory("Banking Products", false)
+  await upsertCategory("Microsoft Office", false)
+  await upsertCategory("Cloud Computing", false)
+  await upsertCategory("Programming", false)
+
+  // ---- Courses -------------------------------------------------------------
+  const amlFundamentals = await upsertCourse({
+    courseCode: "CRS-0001",
+    name: "AML Fundamentals",
+    categoryId: amlCategory.id,
+    institutionId: ncbaAcademy.id,
+    cost: 0,
+    durationHours: 8,
+    deliveryMethod: CourseDeliveryMethod.ONLINE,
+    autoAssignOnHire: true,
+    autoAssignDueMonths: 12,
+  })
+  const kycEssentials = await upsertCourse({
+    courseCode: "CRS-0002",
+    name: "KYC Essentials",
+    categoryId: kycCategory.id,
+    institutionId: ncbaAcademy.id,
+    cost: 0,
+    durationHours: 6,
+    deliveryMethod: CourseDeliveryMethod.ONLINE,
+  })
+  const dataPrivacyCourse = await upsertCourse({
+    courseCode: "CRS-0003",
+    name: "Data Privacy & Protection",
+    categoryId: dataPrivacyCategory.id,
+    institutionId: ncbaAcademy.id,
+    durationHours: 4,
+    deliveryMethod: CourseDeliveryMethod.ONLINE,
+  })
+  const codeOfConductCourse = await upsertCourse({
+    courseCode: "CRS-0004",
+    name: "Code of Conduct Training",
+    categoryId: codeOfConductCategory.id,
+    institutionId: ncbaAcademy.id,
+    durationHours: 3,
+    deliveryMethod: CourseDeliveryMethod.CLASSROOM,
+  })
+  const cyberSecurityCourse = await upsertCourse({
+    courseCode: "CRS-0005",
+    name: "Cyber Security Awareness",
+    categoryId: infoSecCategory.id,
+    institutionId: ncbaAcademy.id,
+    durationHours: 5,
+    deliveryMethod: CourseDeliveryMethod.ONLINE,
+    requiredFunctionId: techFunction.id, // per spec: "Cyber Security Awareness -> Technology Function"
+  })
+  const workplaceEthicsCourse = await upsertCourse({
+    courseCode: "CRS-0006",
+    name: "Workplace Ethics",
+    categoryId: workplaceEthicsCategory.id,
+    institutionId: ncbaAcademy.id,
+    durationHours: 2,
+    deliveryMethod: CourseDeliveryMethod.CLASSROOM,
+  })
+  const leadershipProgramme = await upsertCourse({
+    courseCode: "CRS-0007",
+    name: "Leadership Programme",
+    categoryId: leadershipCategory.id,
+    institutionId: rwandaInstitute.id,
+    cost: 450000,
+    durationHours: 40,
+    deliveryMethod: CourseDeliveryMethod.HYBRID,
+    // Per spec: "Leadership Programme -> Managers and above". This demo's
+    // eligibility model only supports an exact level match rather than a
+    // "this rank or more senior" comparison, so Manager is used as a
+    // representative restriction — see Course.requiredLevelId in
+    // schema.prisma for the limitation.
+    requiredLevelId: levelManager.id,
+  })
+  const dataAnalyticsCourse = await upsertCourse({
+    courseCode: "CRS-0008",
+    name: "Data Analytics Fundamentals",
+    categoryId: dataAnalyticsCategory.id,
+    institutionId: rwandaInstitute.id,
+    cost: 120000,
+    durationHours: 16,
+    deliveryMethod: CourseDeliveryMethod.ONLINE,
+  })
+
+  // ---- Demo assignments across the full lifecycle --------------------------
+
+  // Patrick — auto-hire AML course, long overdue (employmentStartDate was
+  // 2020-01-06 + 12 months = 2021-01-06) — demonstrates the mandatory
+  // training overdue banner on both the employee and manager/HR dashboards.
+  const amlDueDate = new Date("2021-01-06")
+  await upsertAssignment({
+    course: amlFundamentals,
+    employee: patrick,
+    dueDate: amlDueDate,
+    priority: CourseAssignmentPriority.CRITICAL,
+    reasonForAssignment: "Automatically assigned as mandatory onboarding training.",
+    status: CourseAssignmentStatus.ASSIGNED,
+  })
+
+  // Patrick — in progress, due in the future.
+  await upsertAssignment({
+    course: kycEssentials,
+    employee: patrick,
+    assignedBy: itHoD,
+    dueDate: new Date("2026-09-01"),
+    priority: CourseAssignmentPriority.HIGH,
+    status: CourseAssignmentStatus.IN_PROGRESS,
+  })
+
+  // Patrick — mandatory, upcoming (not yet started, not overdue).
+  await upsertAssignment({
+    course: workplaceEthicsCourse,
+    employee: patrick,
+    assignedBy: itHoD,
+    dueDate: new Date("2026-10-01"),
+    status: CourseAssignmentStatus.ASSIGNED,
+  })
+
+  // Solange — verified and closed (fully complete, in permanent history).
+  await upsertAssignment({
+    course: codeOfConductCourse,
+    employee: solange,
+    assignedBy: itHoD,
+    dueDate: new Date("2025-03-01"),
+    status: CourseAssignmentStatus.CLOSED,
+    hrVerificationComment: "Completed on schedule.",
+  })
+
+  // Solange — accepted, with a recommendation comment (the "Recommended"
+  // bucket) — the exact example from the spec.
+  await upsertAssignment({
+    course: dataAnalyticsCourse,
+    employee: solange,
+    assignedBy: itHoD,
+    priority: CourseAssignmentPriority.LOW,
+    recommendationComment: "Complete this course before taking ownership of the Digital Channels platform.",
+    status: CourseAssignmentStatus.ACCEPTED,
+  })
+
+  // Claudine — awaiting HR verification (certificate uploaded, not yet reviewed).
+  await upsertAssignment({
+    course: cyberSecurityCourse,
+    employee: claudine,
+    assignedBy: itHoD,
+    dueDate: new Date("2026-08-01"),
+    status: CourseAssignmentStatus.PENDING_VERIFICATION,
+  })
+
+  // Claudine — certificate rejected, needs resubmission.
+  await upsertAssignment({
+    course: leadershipProgramme,
+    employee: claudine,
+    assignedBy: itHoD,
+    status: CourseAssignmentStatus.REJECTED,
+    hrVerificationComment: "The uploaded file was illegible — please re-scan and resubmit.",
+  })
+
+  // IT HoD — confirmed completion, certificate not uploaded yet.
+  await upsertAssignment({
+    course: dataPrivacyCourse,
+    employee: itHoD,
+    assignedBy: md,
+    status: CourseAssignmentStatus.COMPLETED_BY_EMPLOYEE,
+  })
+
+  // Managing Director — verified.
+  await upsertAssignment({
+    course: leadershipProgramme,
+    employee: md,
+    status: CourseAssignmentStatus.VERIFIED,
+    hrVerificationComment: "Executive Leadership track — verified by HR.",
+  })
+
+  // eslint-disable-next-line no-console
+  console.log("Seeded Learning & Development: institutions, categories, courses, and demo assignments.")
+}
+
+/**
+ * Seeds one Recruitment Management pipeline end-to-end: an approved
+ * Workforce Plan, a Job Requisition (against a brand-new Position), a
+ * reusable Job Description, a published Job Posting, and two Applications —
+ * one (Alice) carried all the way through Screening, Assessment, Interview,
+ * Background Check, Offer (accepted) and a fully-completed Onboarding
+ * checklist that creates her as a real Employee (EMP-0006); the other
+ * (Bosco) left mid-pipeline with an interview still scheduled, so the
+ * Kanban/pipeline views have more than one stage represented. Idempotent —
+ * safe to re-run, same as the rest of this script.
+ */
+async function seedRecruitment(params: {
+  md: SeedEmployee
+  itHoD: SeedEmployee
+  claudine: SeedEmployee
+  itDept: { id: string }
+  itChannels: { id: string }
+  techFunction: { id: string }
+  levelOfficer: { id: string }
+  amApis: { id: string }
+  bands: Map<number, Awaited<ReturnType<typeof upsertBand>>>
+  headquartersBranch: { id: string }
+}) {
+  const { md, itHoD, claudine, itDept, itChannels, techFunction, levelOfficer, amApis, bands, headquartersBranch } = params
+  const band3 = bands.get(3)!.id
+
+  async function upsertWorkforcePlan(
+    title: string,
+    data: {
+      departmentId: string
+      unitId?: string
+      branchId: string
+      hiringManagerId: string
+      recruiterId: string
+      numberOfPositions: number
+      employmentType: RecruitmentEmploymentType
+      priority: RecruitmentPriority
+      expectedHiringDate?: Date
+      businessJustification: string
+      budget?: number
+      status: WorkforcePlanStatus
+      approvedById?: string
+      approvedAt?: Date
+    }
+  ) {
+    const existing = await prisma.workforcePlan.findFirst({ where: { title } })
+    if (existing) return prisma.workforcePlan.update({ where: { id: existing.id }, data })
+    return prisma.workforcePlan.create({ data: { title, ...data } })
+  }
+
+  async function upsertRequisition(
+    workforcePlanId: string,
+    positionId: string,
+    data: {
+      departmentId: string
+      unitId?: string
+      functionId: string
+      bandId: string
+      reportsToPositionId?: string
+      numberOfVacancies: number
+      contractType: ContractType
+      branchId: string
+      employmentType: RecruitmentEmploymentType
+      hiringReason: HiringReason
+      requestedById: string
+      hiringManagerId: string
+      recruiterId: string
+      priority: RecruitmentPriority
+      targetStartDate?: Date
+      status: RequisitionStatus
+      approvedById?: string
+      approvedAt?: Date
+    }
+  ) {
+    const existing = await prisma.jobRequisition.findFirst({ where: { workforcePlanId, positionId } })
+    if (existing) return prisma.jobRequisition.update({ where: { id: existing.id }, data })
+    return prisma.jobRequisition.create({ data: { workforcePlanId, positionId, ...data } })
+  }
+
+  async function upsertStage(
+    requisitionId: string,
+    stage: RecruitmentStageName,
+    data: { plannedStart?: Date; plannedEnd?: Date; actualStart?: Date; actualEnd?: Date; ownerId?: string; status: StageStatus }
+  ) {
+    return prisma.recruitmentStageInstance.upsert({
+      where: { requisitionId_stage: { requisitionId, stage } },
+      update: data,
+      create: { requisitionId, stage, ...data },
+    })
+  }
+
+  async function upsertJobDescription(
+    jobTitle: string,
+    data: {
+      jobSummary: string
+      keyResponsibilities: string
+      requiredQualifications: string
+      requiredCertifications?: string | null
+      requiredExperience?: string
+      requiredSkills?: string
+      technicalCompetencies?: string
+      behaviouralCompetencies?: string
+      requiredLevelId?: string
+      requiredBandId?: string
+      reportingManagerId?: string
+      workLocation?: string
+      isActive?: boolean
+    }
+  ) {
+    const existing = await prisma.jobDescription.findFirst({ where: { jobTitle } })
+    if (existing) return prisma.jobDescription.update({ where: { id: existing.id }, data })
+    return prisma.jobDescription.create({ data: { jobTitle, ...data } })
+  }
+
+  async function upsertJobPosting(
+    requisitionId: string,
+    data: {
+      postingTitle: string
+      isInternal?: boolean
+      isExternal?: boolean
+      closingDate: Date
+      description: string
+      responsibilities: string
+      qualifications: string
+      branchId: string
+      employmentType: RecruitmentEmploymentType
+      requiredExperience?: string
+      status: JobPostingStatus
+      publishedAt?: Date
+    }
+  ) {
+    const existing = await prisma.jobPosting.findFirst({ where: { requisitionId } })
+    if (existing) return prisma.jobPosting.update({ where: { id: existing.id }, data })
+    return prisma.jobPosting.create({ data: { requisitionId, ...data } })
+  }
+
+  async function upsertCandidate(
+    email: string,
+    data: {
+      firstName: string
+      lastName: string
+      phone: string
+      nationality: string
+      cvUrl?: string
+      coverLetterUrl?: string
+      education?: string
+      experience?: string
+      certifications?: string
+      skills?: string
+      references?: string
+    }
+  ) {
+    return prisma.candidate.upsert({ where: { email }, update: data, create: { email, ...data } })
+  }
+
+  async function upsertApplication(candidateId: string, jobPostingId: string, data: { status: ApplicationStatus; appliedAt: Date }) {
+    return prisma.application.upsert({
+      where: { candidateId_jobPostingId: { candidateId, jobPostingId } },
+      update: data,
+      create: { candidateId, jobPostingId, ...data },
+    })
+  }
+
+  async function upsertScreening(applicationId: string, data: { decision: ScreeningDecision; comments?: string; screenedById: string }) {
+    return prisma.screening.upsert({
+      where: { applicationId },
+      update: data,
+      create: { applicationId, ...data },
+    })
+  }
+
+  async function upsertAssessment(
+    applicationId: string,
+    assessmentType: AssessmentType,
+    data: {
+      scheduledDate?: Date
+      score?: number
+      maxScore?: number
+      result: AssessmentResult
+      evaluatorId?: string
+      comments?: string
+    }
+  ) {
+    const existing = await prisma.assessment.findFirst({ where: { applicationId, assessmentType } })
+    if (existing) return prisma.assessment.update({ where: { id: existing.id }, data })
+    return prisma.assessment.create({ data: { applicationId, assessmentType, ...data } })
+  }
+
+  async function upsertInterview(
+    applicationId: string,
+    interviewType: InterviewType,
+    panelistIds: string[],
+    data: {
+      interviewDate: Date
+      location?: string
+      notes?: string
+      recommendation?: InterviewRecommendation
+      status: InterviewStatus
+    }
+  ) {
+    const existing = await prisma.interview.findFirst({ where: { applicationId, interviewType } })
+    const interview = existing
+      ? await prisma.interview.update({ where: { id: existing.id }, data })
+      : await prisma.interview.create({ data: { applicationId, interviewType, ...data } })
+
+    await prisma.interviewPanelist.deleteMany({ where: { interviewId: interview.id } })
+    await prisma.interviewPanelist.createMany({
+      data: panelistIds.map((employeeId) => ({ interviewId: interview.id, employeeId })),
+    })
+    return interview
+  }
+
+  async function upsertBackgroundCheck(
+    applicationId: string,
+    checkType: BackgroundCheckType,
+    data: { status: BackgroundCheckStatus; comments?: string; completedAt?: Date }
+  ) {
+    const existing = await prisma.backgroundCheck.findFirst({ where: { applicationId, checkType } })
+    if (existing) return prisma.backgroundCheck.update({ where: { id: existing.id }, data })
+    return prisma.backgroundCheck.create({ data: { applicationId, checkType, ...data } })
+  }
+
+  async function upsertOffer(
+    applicationId: string,
+    data: {
+      positionId: string
+      departmentId: string
+      branchId: string
+      contractType: ContractType
+      bandId: string
+      proposedStartDate: Date
+      expiryDate: Date
+      offerLetterUrl?: string
+      status: OfferStatus
+      sentAt?: Date
+      respondedAt?: Date
+      createdById: string
+    }
+  ) {
+    const existing = await prisma.offer.findFirst({ where: { applicationId } })
+    if (existing) return prisma.offer.update({ where: { id: existing.id }, data })
+    return prisma.offer.create({ data: { applicationId, ...data } })
+  }
+
+  async function upsertOnboardingTask(
+    applicationId: string,
+    taskType: OnboardingTaskType,
+    data: { isCompleted: boolean; completedAt?: Date; completedById?: string; notes?: string }
+  ) {
+    return prisma.onboardingTask.upsert({
+      where: { applicationId_taskType: { applicationId, taskType } },
+      update: data,
+      create: { applicationId, taskType, ...data },
+    })
+  }
+
+  // ---- Workforce Plan & Requisition -----------------------------------
+  const plan = await upsertWorkforcePlan("Backend Developer Expansion — IT Channels", {
+    departmentId: itDept.id,
+    unitId: itChannels.id,
+    branchId: headquartersBranch.id,
+    hiringManagerId: claudine.employeeNumber,
+    recruiterId: itHoD.employeeNumber,
+    numberOfPositions: 2,
+    employmentType: RecruitmentEmploymentType.FULL_TIME,
+    priority: RecruitmentPriority.HIGH,
+    expectedHiringDate: new Date("2026-08-15"),
+    businessJustification: "IT Channels is expanding API capacity to support the new mobile banking rollout.",
+    budget: 18_000_000,
+    status: WorkforcePlanStatus.APPROVED,
+    approvedById: md.employeeNumber,
+    approvedAt: new Date("2026-06-02"),
+  })
+
+  const backendDevPosition = await upsertPosition({
+    title: "Officer – Backend Developer",
+    departmentId: itDept.id,
+    unitId: itChannels.id,
+    levelId: levelOfficer.id,
+    reportsToPositionId: amApis.id,
+  })
+
+  const requisition = await upsertRequisition(plan.id, backendDevPosition.id, {
+    departmentId: itDept.id,
+    unitId: itChannels.id,
+    functionId: techFunction.id,
+    bandId: band3,
+    reportsToPositionId: amApis.id,
+    numberOfVacancies: 2,
+    contractType: ContractType.PERMANENT,
+    branchId: headquartersBranch.id,
+    employmentType: RecruitmentEmploymentType.FULL_TIME,
+    hiringReason: HiringReason.EXPANSION,
+    requestedById: claudine.employeeNumber,
+    hiringManagerId: claudine.employeeNumber,
+    recruiterId: itHoD.employeeNumber,
+    priority: RecruitmentPriority.HIGH,
+    targetStartDate: new Date("2026-08-15"),
+    status: RequisitionStatus.APPROVED,
+    approvedById: md.employeeNumber,
+    approvedAt: new Date("2026-06-10"),
+  })
+
+  const jobDescription = await upsertJobDescription("Backend Developer", {
+    jobSummary: "Design, build and maintain the APIs and services behind NCBA Rwanda's digital channels.",
+    keyResponsibilities:
+      "Develop and maintain backend services; design APIs consumed by mobile/web channels; participate in code reviews; troubleshoot production issues.",
+    requiredQualifications: "Bachelor's degree in Computer Science, Software Engineering or a related field.",
+    requiredCertifications: null,
+    requiredExperience: "2+ years building production backend services.",
+    requiredSkills: "Node.js/TypeScript, SQL, REST API design, Git.",
+    technicalCompetencies: "API design, relational databases, automated testing.",
+    behaviouralCompetencies: "Ownership, attention to detail, collaborative.",
+    requiredLevelId: levelOfficer.id,
+    requiredBandId: band3,
+    reportingManagerId: claudine.employeeNumber,
+    workLocation: "Headquarters",
+    isActive: true,
+  })
+  await prisma.jobRequisition.update({ where: { id: requisition.id }, data: { jobDescriptionId: jobDescription.id } })
+
+  await upsertStage(requisition.id, RecruitmentStageName.WORKFORCE_PLANNING, {
+    plannedStart: new Date("2026-05-20"),
+    plannedEnd: new Date("2026-06-02"),
+    actualStart: new Date("2026-05-20"),
+    actualEnd: new Date("2026-06-02"),
+    ownerId: itHoD.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.JOB_REQUISITION, {
+    plannedStart: new Date("2026-06-02"),
+    plannedEnd: new Date("2026-06-08"),
+    actualStart: new Date("2026-06-02"),
+    actualEnd: new Date("2026-06-08"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.JOB_DESCRIPTION, {
+    plannedStart: new Date("2026-06-08"),
+    plannedEnd: new Date("2026-06-10"),
+    actualStart: new Date("2026-06-08"),
+    actualEnd: new Date("2026-06-10"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.APPROVAL, {
+    plannedStart: new Date("2026-06-10"),
+    plannedEnd: new Date("2026-06-12"),
+    actualStart: new Date("2026-06-10"),
+    actualEnd: new Date("2026-06-10"),
+    ownerId: md.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.JOB_POSTING, {
+    plannedStart: new Date("2026-06-12"),
+    plannedEnd: new Date("2026-06-14"),
+    actualStart: new Date("2026-06-12"),
+    actualEnd: new Date("2026-06-13"),
+    ownerId: itHoD.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.APPLICATIONS, {
+    plannedStart: new Date("2026-06-13"),
+    plannedEnd: new Date("2026-06-27"),
+    actualStart: new Date("2026-06-13"),
+    actualEnd: new Date("2026-06-27"),
+    ownerId: itHoD.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.SCREENING, {
+    plannedStart: new Date("2026-06-27"),
+    plannedEnd: new Date("2026-07-01"),
+    actualStart: new Date("2026-06-27"),
+    actualEnd: new Date("2026-07-01"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.ASSESSMENT, {
+    plannedStart: new Date("2026-07-01"),
+    plannedEnd: new Date("2026-07-05"),
+    actualStart: new Date("2026-07-01"),
+    actualEnd: new Date("2026-07-05"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.INTERVIEWS, {
+    plannedStart: new Date("2026-07-05"),
+    plannedEnd: new Date("2026-07-15"),
+    actualStart: new Date("2026-07-05"),
+    ownerId: itHoD.employeeNumber,
+    status: StageStatus.IN_PROGRESS, // Bosco's interview is still scheduled
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.BACKGROUND_CHECK, {
+    plannedStart: new Date("2026-07-15"),
+    plannedEnd: new Date("2026-07-20"),
+    actualStart: new Date("2026-07-15"),
+    actualEnd: new Date("2026-07-19"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.OFFER, {
+    plannedStart: new Date("2026-07-20"),
+    plannedEnd: new Date("2026-07-25"),
+    actualStart: new Date("2026-07-20"),
+    actualEnd: new Date("2026-07-24"),
+    ownerId: itHoD.employeeNumber,
+    status: StageStatus.COMPLETED,
+  })
+  await upsertStage(requisition.id, RecruitmentStageName.ONBOARDING, {
+    plannedStart: new Date("2026-07-24"),
+    plannedEnd: new Date("2026-08-15"),
+    actualStart: new Date("2026-07-24"),
+    ownerId: claudine.employeeNumber,
+    status: StageStatus.IN_PROGRESS, // one of the two vacancies is still open
+  })
+
+  // ---- Job Posting -------------------------------------------------------
+  const posting = await upsertJobPosting(requisition.id, {
+    postingTitle: "Backend Developer – IT Channels",
+    isInternal: true,
+    isExternal: true,
+    closingDate: new Date("2026-08-10"),
+    description: "NCBA Rwanda is looking for a Backend Developer to join the IT Channels team.",
+    responsibilities: "Build and maintain the APIs behind our digital banking channels.",
+    qualifications: "Bachelor's in Computer Science or related field, 2+ years of backend experience.",
+    branchId: headquartersBranch.id,
+    employmentType: RecruitmentEmploymentType.FULL_TIME,
+    requiredExperience: "2+ years",
+    status: JobPostingStatus.PUBLISHED,
+    publishedAt: new Date("2026-06-13"),
+  })
+
+  // ---- Candidates & Applications ------------------------------------------
+  const alice = await upsertCandidate("alice.uwase@example.com", {
+    firstName: "Alice",
+    lastName: "Uwase",
+    phone: "+250788900001",
+    nationality: "Rwandan",
+    cvUrl: "https://res.cloudinary.com/demo/alice-uwase-cv.pdf",
+    education: "BSc Software Engineering, University of Rwanda",
+    experience: "3 years as a backend developer at a fintech startup.",
+    skills: "Node.js, TypeScript, PostgreSQL, REST APIs",
+  })
+  const bosco = await upsertCandidate("bosco.niyonzima@example.com", {
+    firstName: "Bosco",
+    lastName: "Niyonzima",
+    phone: "+250788900002",
+    nationality: "Rwandan",
+    cvUrl: "https://res.cloudinary.com/demo/bosco-niyonzima-cv.pdf",
+    education: "BSc Computer Science, University of Rwanda",
+    experience: "2 years as a junior backend developer.",
+    skills: "Node.js, SQL, Git",
+  })
+
+  const aliceApplication = await upsertApplication(alice.id, posting.id, {
+    status: ApplicationStatus.HIRED,
+    appliedAt: new Date("2026-06-15"),
+  })
+  const boscoApplication = await upsertApplication(bosco.id, posting.id, {
+    status: ApplicationStatus.INTERVIEW,
+    appliedAt: new Date("2026-06-18"),
+  })
+
+  await upsertScreening(aliceApplication.id, {
+    decision: ScreeningDecision.SHORTLIST,
+    comments: "Strong CV, relevant fintech backend experience.",
+    screenedById: claudine.employeeNumber,
+  })
+  await upsertScreening(boscoApplication.id, {
+    decision: ScreeningDecision.SHORTLIST,
+    comments: "Good fundamentals, less production experience than Alice.",
+    screenedById: claudine.employeeNumber,
+  })
+
+  await upsertAssessment(aliceApplication.id, AssessmentType.TECHNICAL_TEST, {
+    scheduledDate: new Date("2026-07-02"),
+    score: 88,
+    maxScore: 100,
+    result: AssessmentResult.PASS,
+    evaluatorId: claudine.employeeNumber,
+    comments: "Excellent grasp of API design and database fundamentals.",
+  })
+  await upsertAssessment(boscoApplication.id, AssessmentType.TECHNICAL_TEST, {
+    scheduledDate: new Date("2026-07-03"),
+    score: 71,
+    maxScore: 100,
+    result: AssessmentResult.PASS,
+    evaluatorId: claudine.employeeNumber,
+    comments: "Passed, some gaps in database design.",
+  })
+
+  await upsertInterview(
+    aliceApplication.id,
+    InterviewType.HR_INTERVIEW,
+    [itHoD.employeeNumber],
+    {
+      interviewDate: new Date("2026-07-06"),
+      location: "Headquarters — 3rd floor",
+      notes: "Confident, strong communicator, culturally a good fit.",
+      recommendation: InterviewRecommendation.HIRE,
+      status: InterviewStatus.COMPLETED,
+    }
+  )
+  await upsertInterview(
+    aliceApplication.id,
+    InterviewType.TECHNICAL_INTERVIEW,
+    [itHoD.employeeNumber, claudine.employeeNumber],
+    {
+      interviewDate: new Date("2026-07-08"),
+      location: "Headquarters — 3rd floor",
+      notes: "Handled the system-design exercise very well.",
+      recommendation: InterviewRecommendation.STRONG_HIRE,
+      status: InterviewStatus.COMPLETED,
+    }
+  )
+  await upsertInterview(
+    boscoApplication.id,
+    InterviewType.TECHNICAL_INTERVIEW,
+    [claudine.employeeNumber],
+    {
+      interviewDate: new Date("2026-08-05"),
+      location: "Headquarters — 3rd floor",
+      status: InterviewStatus.SCHEDULED,
+    }
+  )
+
+  await upsertBackgroundCheck(aliceApplication.id, BackgroundCheckType.EMPLOYMENT_VERIFICATION, {
+    status: BackgroundCheckStatus.PASSED,
+    comments: "Previous employer confirmed dates and role.",
+    completedAt: new Date("2026-07-16"),
+  })
+  await upsertBackgroundCheck(aliceApplication.id, BackgroundCheckType.CRIMINAL_RECORD_CHECK, {
+    status: BackgroundCheckStatus.PASSED,
+    completedAt: new Date("2026-07-19"),
+  })
+
+  const aliceOffer = await upsertOffer(aliceApplication.id, {
+    positionId: backendDevPosition.id,
+    departmentId: itDept.id,
+    branchId: headquartersBranch.id,
+    contractType: ContractType.PERMANENT,
+    bandId: band3,
+    proposedStartDate: new Date("2026-08-15"),
+    expiryDate: new Date("2026-07-30"),
+    offerLetterUrl: "https://res.cloudinary.com/demo/alice-uwase-offer.pdf",
+    status: OfferStatus.ACCEPTED,
+    sentAt: new Date("2026-07-20"),
+    respondedAt: new Date("2026-07-24"),
+    createdById: itHoD.employeeNumber,
+  })
+  void aliceOffer
+
+  // ---- Onboarding checklist — 8 of 9 items complete; the 9th
+  // (EMPLOYEE_NUMBER_CREATED) is only ever completed by actually creating
+  // the Employee record below. ---------------------------------------------
+  const onboardingDoneBy = claudine.employeeNumber
+  const onboardingDoneAt = new Date("2026-07-28")
+  for (const taskType of [
+    OnboardingTaskType.SYSTEM_ACCOUNTS_CREATED,
+    OnboardingTaskType.ID_CARD_ISSUED,
+    OnboardingTaskType.LAPTOP_ASSIGNED,
+    OnboardingTaskType.WORKSPACE_ASSIGNED,
+    OnboardingTaskType.MANDATORY_AML_TRAINING_ASSIGNED,
+    OnboardingTaskType.HR_ORIENTATION_SCHEDULED,
+    OnboardingTaskType.MANAGER_ORIENTATION_SCHEDULED,
+    OnboardingTaskType.DOCUMENTS_SIGNED,
+  ]) {
+    await upsertOnboardingTask(aliceApplication.id, taskType, {
+      isCompleted: true,
+      completedAt: onboardingDoneAt,
+      completedById: onboardingDoneBy,
+    })
+  }
+  await upsertOnboardingTask(aliceApplication.id, OnboardingTaskType.EMPLOYEE_NUMBER_CREATED, {
+    isCompleted: false,
+  })
+
+  // Bosco is still mid-pipeline — no offer, no onboarding tasks yet.
+
+  // ---- Complete onboarding: create Alice as a real Employee ---------------
+  const aliceEmployee = await upsertEmployee({
+    employeeNumber: "EMP-0006",
+    firstName: alice.firstName,
+    lastName: alice.lastName,
+    email: alice.email,
+    gender: Gender.FEMALE,
+    dateOfBirth: new Date("1996-04-14"),
+    nationalIdNumber: "1199680012345676",
+    nationality: alice.nationality,
+    maritalStatus: MaritalStatus.SINGLE,
+    phone: alice.phone,
+    branchId: headquartersBranch.id,
+    positionId: backendDevPosition.id,
+    bandId: band3,
+    employmentStartDate: new Date("2026-08-15"),
+  })
+  await prisma.employee.update({
+    where: { employeeNumber: aliceEmployee.employeeNumber },
+    data: { contractType: ContractType.PERMANENT, probationEndDate: new Date("2026-11-15") },
+  })
+
+  await prisma.application.update({
+    where: { id: aliceApplication.id },
+    data: { status: ApplicationStatus.HIRED, hiredEmployeeNumber: aliceEmployee.employeeNumber },
+  })
+  await upsertOnboardingTask(aliceApplication.id, OnboardingTaskType.EMPLOYEE_NUMBER_CREATED, {
+    isCompleted: true,
+    completedAt: onboardingDoneAt,
+    completedById: onboardingDoneBy,
+  })
+
+  // eslint-disable-next-line no-console
+  console.log(
+    "Seeded Recruitment Management: workforce plan, requisition + timeline, job description, job posting, 2 candidates/applications spanning the full pipeline, and 1 completed hire (EMP-0006)."
+  )
+}
+
+/**
+ * Seeds 3 Form Categories (Employee/Recruitment/Compliance Forms, matching
+ * the spec's own examples), 3 published Form Templates spanning single,
+ * sequential-multi-stage and self-acknowledgement signature routing, and 4
+ * Form Instances in different lifecycle states — ASSIGNED (not started),
+ * IN_PROGRESS (draft responses, HR signer stage still unresolved),
+ * PENDING_SIGNATURES (employee stage signed, manager stage waiting — proves
+ * the sequential-stage gate), and COMPLETED (single-stage self-sign, fully
+ * done). Signatures/responses are created directly via Prisma rather than
+ * through FormInstancesService/FormSignaturesService, same as every other
+ * seedX() function in this file. Idempotent — safe to re-run.
+ */
+async function seedFormsManagement(employees: {
+  md: SeedEmployee
+  itHoD: SeedEmployee
+  claudine: SeedEmployee
+  solange: SeedEmployee
+  patrick: SeedEmployee
+}) {
+  const { md, itHoD, claudine, solange, patrick } = employees
+
+  async function upsertFormCategory(name: string, description: string) {
+    return prisma.formCategory.upsert({ where: { name }, update: { description }, create: { name, description } })
+  }
+
+  const employeeFormsCategory = await upsertFormCategory("Employee Forms", "General employee lifecycle and records forms.")
+  const recruitmentFormsCategory = await upsertFormCategory("Recruitment Forms", "Forms used during hiring and onboarding.")
+  const complianceFormsCategory = await upsertFormCategory("Compliance Forms", "Mandatory regulatory and policy acknowledgement forms.")
+
+  /** Only creates fields/stages on first insert — matches
+   *  FormTemplatesService.assertStructurallyEditable's rule that a
+   *  template's structure is frozen once instances exist, so a reseed must
+   *  never try to touch fields/stages on an already-existing template. */
+  async function upsertFormTemplate(
+    formCode: string,
+    data: {
+      title: string
+      description: string
+      purpose?: string
+      categoryId: string
+      createdById: string
+      fields: { fieldType: FieldType; label: string; helpText?: string; isRequired: boolean; order: number }[]
+      stages: { stageOrder: number; role: SignerRole; label?: string }[]
+    }
+  ) {
+    const templateInclude = { fields: { orderBy: { order: "asc" as const } }, signatureStages: { orderBy: { stageOrder: "asc" as const } } }
+
+    const existing = await prisma.formTemplate.findUnique({ where: { formCode }, include: templateInclude })
+    if (existing) return existing
+
+    return prisma.formTemplate.create({
+      data: {
+        formCode,
+        title: data.title,
+        description: data.description,
+        purpose: data.purpose,
+        categoryId: data.categoryId,
+        createdById: data.createdById,
+        status: FormStatus.ACTIVE,
+        fields: { create: data.fields },
+        signatureStages: { create: data.stages },
+      },
+      include: templateInclude,
+    })
+  }
+
+  // ---- Template 1: single MANAGER sign-off ------------------------------
+  const infoUpdateTemplate = await upsertFormTemplate("FORM-0001", {
+    title: "Employee Information Update Form",
+    description: "Update your personal and contact information on file with HR.",
+    purpose: "Keep employee records accurate and current.",
+    categoryId: employeeFormsCategory.id,
+    createdById: itHoD.employeeNumber,
+    fields: [
+      { fieldType: FieldType.SHORT_TEXT, label: "Current Phone Number", isRequired: true, order: 1 },
+      { fieldType: FieldType.SHORT_TEXT, label: "Current Address", isRequired: true, order: 2 },
+      { fieldType: FieldType.SHORT_TEXT, label: "Emergency Contact Name", isRequired: true, order: 3 },
+      { fieldType: FieldType.SHORT_TEXT, label: "Emergency Contact Phone", isRequired: true, order: 4 },
+    ],
+    stages: [{ stageOrder: 1, role: SignerRole.MANAGER, label: "Manager Verification" }],
+  })
+
+  // ---- Template 2: sequential EMPLOYEE -> MANAGER -> HR -------------------
+  const onboardingChecklistTemplate = await upsertFormTemplate("FORM-0002", {
+    title: "New Hire Onboarding Checklist",
+    description: "Confirms completion of onboarding requirements for new hires.",
+    purpose: "Track and sign off each onboarding step.",
+    categoryId: recruitmentFormsCategory.id,
+    createdById: itHoD.employeeNumber,
+    fields: [
+      { fieldType: FieldType.CHECKBOX, label: "System Accounts Created", isRequired: true, order: 1 },
+      { fieldType: FieldType.CHECKBOX, label: "ID Card Issued", isRequired: true, order: 2 },
+      { fieldType: FieldType.CHECKBOX, label: "Workspace Assigned", isRequired: true, order: 3 },
+      { fieldType: FieldType.COMMENTS, label: "Additional Notes", isRequired: false, order: 4 },
+    ],
+    stages: [
+      { stageOrder: 1, role: SignerRole.EMPLOYEE, label: "Employee Confirmation" },
+      { stageOrder: 2, role: SignerRole.MANAGER, label: "Manager Sign-off" },
+      { stageOrder: 3, role: SignerRole.HR, label: "HR Final Approval" },
+    ],
+  })
+
+  // ---- Template 3: single self-acknowledgement -----------------------------
+  const codeOfConductTemplate = await upsertFormTemplate("FORM-0003", {
+    title: "Code of Conduct Acknowledgement",
+    description: "Annual acknowledgement of NCBA Rwanda's Code of Conduct policy.",
+    purpose: "Confirm every employee has read and agrees to the Code of Conduct.",
+    categoryId: complianceFormsCategory.id,
+    createdById: itHoD.employeeNumber,
+    fields: [
+      { fieldType: FieldType.CHECKBOX, label: "I acknowledge and agree to comply with the Code of Conduct", isRequired: true, order: 1 },
+    ],
+    stages: [{ stageOrder: 1, role: SignerRole.EMPLOYEE, label: "Employee Acknowledgement" }],
+  })
+
+  async function upsertFormInstance(params: {
+    formTemplate: Awaited<ReturnType<typeof upsertFormTemplate>>
+    employee: SeedEmployee
+    assignedBy: SeedEmployee
+    status: FormInstanceStatus
+    dueDate?: Date
+    priority?: FormPriority
+    responses?: { fieldLabel: string; value: unknown }[]
+    signatures: { stageOrder: number; signer: SeedEmployee | null; status: SignatureStatus; signedAt?: Date }[]
+    submittedAt?: Date
+    completedAt?: Date
+  }) {
+    const existing = await prisma.formInstance.findFirst({
+      where: { formTemplateId: params.formTemplate.id, employeeId: params.employee.employeeNumber },
+    })
+    if (existing) return existing
+
+    const instance = await prisma.formInstance.create({
+      data: {
+        formTemplateId: params.formTemplate.id,
+        formVersion: params.formTemplate.version,
+        employeeId: params.employee.employeeNumber,
+        assignedById: params.assignedBy.employeeNumber,
+        status: params.status,
+        dueDate: params.dueDate,
+        priority: params.priority ?? FormPriority.MEDIUM,
+        submittedAt: params.submittedAt,
+        completedAt: params.completedAt,
+      },
+    })
+
+    for (const response of params.responses ?? []) {
+      const field = params.formTemplate.fields.find((item) => item.label === response.fieldLabel)
+      if (!field) continue
+      await prisma.formFieldResponse.create({
+        data: { formInstanceId: instance.id, formFieldId: field.id, value: response.value as Prisma.InputJsonValue },
+      })
+    }
+
+    for (const signature of params.signatures) {
+      const stage = params.formTemplate.signatureStages.find((item) => item.stageOrder === signature.stageOrder)
+      if (!stage) continue
+      await prisma.formSignature.create({
+        data: {
+          formInstanceId: instance.id,
+          formSignatureStageId: stage.id,
+          signerId: signature.signer?.employeeNumber ?? null,
+          status: signature.status,
+          signedAt: signature.signedAt,
+        },
+      })
+    }
+
+    await prisma.formAuditLog.create({
+      data: { entityType: "FormInstance", entityId: instance.id, action: "ASSIGNED", actorId: params.assignedBy.employeeNumber, notes: "Seeded demo data" },
+    })
+
+    return instance
+  }
+
+  // Patrick — just assigned, hasn't started yet. Manager (Solange) auto-
+  // resolved from the org chart, matching FormInstancesService.resolveSigner.
+  await upsertFormInstance({
+    formTemplate: infoUpdateTemplate,
+    employee: patrick,
+    assignedBy: itHoD,
+    status: FormInstanceStatus.ASSIGNED,
+    dueDate: new Date("2026-08-15"),
+    signatures: [{ stageOrder: 1, signer: solange, status: SignatureStatus.PENDING }],
+  })
+
+  // Solange — in progress with draft responses saved; the HR stage's
+  // signer is still null (unresolved) until she picks one before
+  // submitting, per the "select required signatories" completion step.
+  await upsertFormInstance({
+    formTemplate: onboardingChecklistTemplate,
+    employee: solange,
+    assignedBy: itHoD,
+    status: FormInstanceStatus.IN_PROGRESS,
+    dueDate: new Date("2026-08-20"),
+    responses: [
+      { fieldLabel: "System Accounts Created", value: true },
+      { fieldLabel: "ID Card Issued", value: true },
+      { fieldLabel: "Workspace Assigned", value: false },
+    ],
+    signatures: [
+      { stageOrder: 1, signer: solange, status: SignatureStatus.PENDING },
+      { stageOrder: 2, signer: claudine, status: SignatureStatus.PENDING },
+      { stageOrder: 3, signer: null, status: SignatureStatus.PENDING },
+    ],
+  })
+
+  // Claudine — fully completed single-stage self-acknowledgement.
+  const codeOfConductSignedAt = new Date("2026-07-15")
+  await upsertFormInstance({
+    formTemplate: codeOfConductTemplate,
+    employee: claudine,
+    assignedBy: itHoD,
+    status: FormInstanceStatus.COMPLETED,
+    submittedAt: codeOfConductSignedAt,
+    completedAt: codeOfConductSignedAt,
+    responses: [{ fieldLabel: "I acknowledge and agree to comply with the Code of Conduct", value: true }],
+    signatures: [{ stageOrder: 1, signer: claudine, status: SignatureStatus.SIGNED, signedAt: codeOfConductSignedAt }],
+  })
+
+  // Eric (IT HoD) — submitted and awaiting his manager (the MD)'s
+  // signature; HR stage still unresolved. Demonstrates the sequential-
+  // stage gate: stage 2 only becomes actionable once stage 1 is SIGNED.
+  const ericSubmittedAt = new Date("2026-07-22")
+  await upsertFormInstance({
+    formTemplate: onboardingChecklistTemplate,
+    employee: itHoD,
+    assignedBy: md,
+    status: FormInstanceStatus.PENDING_SIGNATURES,
+    submittedAt: ericSubmittedAt,
+    responses: [
+      { fieldLabel: "System Accounts Created", value: true },
+      { fieldLabel: "ID Card Issued", value: true },
+      { fieldLabel: "Workspace Assigned", value: true },
+      { fieldLabel: "Additional Notes", value: "All onboarding steps completed ahead of schedule." },
+    ],
+    signatures: [
+      { stageOrder: 1, signer: itHoD, status: SignatureStatus.SIGNED, signedAt: ericSubmittedAt },
+      { stageOrder: 2, signer: md, status: SignatureStatus.PENDING },
+      { stageOrder: 3, signer: null, status: SignatureStatus.PENDING },
+    ],
+  })
+
+  // eslint-disable-next-line no-console
+  console.log("Seeded Forms Management: 3 categories, 3 templates (single/sequential/self-sign routing), and 4 instances across ASSIGNED/IN_PROGRESS/PENDING_SIGNATURES/COMPLETED states.")
+}
+
+/**
+ * Seeds the 7 default Sanction Types, then 5 disciplinary cases spanning
+ * every lifecycle status (DRAFT, UNDER_INVESTIGATION with an open
+ * investigation and a scheduled meeting, PENDING_DECISION confidential with
+ * a completed investigation, SANCTION_ISSUED, and APPEALED with a pending
+ * appeal), plus one fully CLOSED case with its sanction, and 2 grievances
+ * in different states. Idempotent — safe to re-run, same as the rest of
+ * this script.
+ */
+async function seedEmployeeRelations(employees: {
+  md: SeedEmployee
+  itHoD: SeedEmployee
+  claudine: SeedEmployee
+  solange: SeedEmployee
+  patrick: SeedEmployee
+}) {
+  const { md, itHoD, claudine, solange, patrick } = employees
+
+  // ---- Sanction types (HR-configurable) ------------------------------------
+  const sanctionTypeDefs = [
+    "Verbal Warning",
+    "Written Warning",
+    "Final Written Warning",
+    "Suspension",
+    "Demotion",
+    "Salary Reduction",
+    "Termination",
+  ]
+  const sanctionTypes = new Map<string, Awaited<ReturnType<typeof prisma.sanctionType.upsert>>>()
+  for (const name of sanctionTypeDefs) {
+    sanctionTypes.set(name, await prisma.sanctionType.upsert({ where: { name }, update: {}, create: { name } }))
+  }
+  const verbalWarning = sanctionTypes.get("Verbal Warning")!
+  const writtenWarning = sanctionTypes.get("Written Warning")!
+
+  async function upsertCase(
+    caseNumber: string,
+    data: {
+      employeeId: string
+      reportedById: string
+      dateReported: Date
+      incidentDate: Date
+      incidentLocation?: string
+      category: DisciplinaryCaseCategory
+      subject: string
+      description: string
+      witnesses?: string[]
+      investigationRequired: boolean
+      status: DisciplinaryCaseStatus
+      isConfidential?: boolean
+      closedAt?: Date
+    }
+  ) {
+    const existing = await prisma.disciplinaryCase.findUnique({ where: { caseNumber } })
+    if (existing) return existing
+    return prisma.disciplinaryCase.create({ data: { caseNumber, ...data } })
+  }
+
+  // ---- Case 1: Patrick — attendance, no investigation needed, closed with
+  // a Verbal Warning. Demonstrates the full DRAFT -> ... -> CLOSED path. ----
+  const patrickAttendanceCase = await upsertCase("ERC-2026-0001", {
+    employeeId: patrick.employeeNumber,
+    reportedById: solange.employeeNumber,
+    dateReported: new Date("2026-06-02"),
+    incidentDate: new Date("2026-05-28"),
+    incidentLocation: "IT Channels — Headquarters",
+    category: DisciplinaryCaseCategory.ATTENDANCE,
+    subject: "Repeated late arrivals",
+    description: "Patrick arrived more than 30 minutes late on 4 occasions over 2 weeks without prior notice.",
+    investigationRequired: false,
+    status: DisciplinaryCaseStatus.CLOSED,
+    closedAt: new Date("2026-06-10"),
+  })
+  const existingSanction1 = await prisma.sanction.findFirst({ where: { disciplinaryCaseId: patrickAttendanceCase.id } })
+  if (!existingSanction1) {
+    await prisma.sanction.create({
+      data: {
+        disciplinaryCaseId: patrickAttendanceCase.id,
+        employeeId: patrick.employeeNumber,
+        sanctionTypeId: verbalWarning.id,
+        dateOfSanction: new Date("2026-06-09"),
+        reason: "Repeated unexcused late arrivals despite verbal reminders.",
+        effectiveDate: new Date("2026-06-09"),
+        issuedById: solange.employeeNumber,
+        approvalAuthorityId: itHoD.employeeNumber,
+        comments: "First-instance sanction — will escalate to Written Warning if the pattern continues.",
+      },
+    })
+  }
+
+  // ---- Case 2: Solange — misconduct, currently under investigation, with
+  // a scheduled meeting. Demonstrates the active-investigation state and
+  // the ERC_MEETING_SCHEDULED notification trigger. -------------------------
+  const solangeMisconductCase = await upsertCase("ERC-2026-0002", {
+    employeeId: solange.employeeNumber,
+    reportedById: claudine.employeeNumber,
+    dateReported: new Date("2026-07-05"),
+    incidentDate: new Date("2026-07-02"),
+    incidentLocation: "Kigali Heights Branch",
+    category: DisciplinaryCaseCategory.MISCONDUCT,
+    subject: "Unauthorized access to a colleague's workstation",
+    description: "Solange was reported to have accessed a colleague's unlocked workstation without authorization.",
+    witnesses: ["Officer – Channels Analyst (on shift)"],
+    investigationRequired: true,
+    status: DisciplinaryCaseStatus.UNDER_INVESTIGATION,
+  })
+  const existingInvestigation2 = await prisma.investigation.findFirst({ where: { disciplinaryCaseId: solangeMisconductCase.id } })
+  if (!existingInvestigation2) {
+    await prisma.investigation.create({
+      data: {
+        disciplinaryCaseId: solangeMisconductCase.id,
+        investigatorId: claudine.employeeNumber,
+        startDate: new Date("2026-07-06"),
+        dueDate: new Date("2026-07-20"),
+        status: "IN_PROGRESS",
+      },
+    })
+  }
+  const existingMeeting2 = await prisma.disciplinaryMeeting.findFirst({ where: { disciplinaryCaseId: solangeMisconductCase.id } })
+  if (!existingMeeting2) {
+    await prisma.disciplinaryMeeting.create({
+      data: {
+        disciplinaryCaseId: solangeMisconductCase.id,
+        scheduledAt: new Date("2026-07-15T10:00:00Z"),
+        location: "Headquarters — HR Conference Room",
+        notes: "Initial disciplinary hearing.",
+        createdById: claudine.employeeNumber,
+      },
+    })
+  }
+
+  // ---- Case 3: Claudine — confidential harassment case, investigation
+  // completed, pending HR's decision. Demonstrates the confidentiality flag
+  // (invisible to Claudine's own line manager, Eric/itHoD, despite him
+  // being the investigator here — access is case-visibility, not
+  // investigator-assignment, so this is intentionally still valid demo
+  // data: the investigator role doesn't grant ongoing case visibility once
+  // the case is marked confidential). ---------------------------------------
+  const claudineHarassmentCase = await upsertCase("ERC-2026-0003", {
+    employeeId: claudine.employeeNumber,
+    reportedById: md.employeeNumber,
+    dateReported: new Date("2026-06-20"),
+    incidentDate: new Date("2026-06-18"),
+    incidentLocation: "Headquarters",
+    category: DisciplinaryCaseCategory.HARASSMENT,
+    subject: "Workplace conduct complaint",
+    description: "A confidential complaint was raised regarding Claudine's conduct towards a team member.",
+    investigationRequired: true,
+    status: DisciplinaryCaseStatus.PENDING_DECISION,
+    isConfidential: true,
+  })
+  const existingInvestigation3 = await prisma.investigation.findFirst({ where: { disciplinaryCaseId: claudineHarassmentCase.id } })
+  if (!existingInvestigation3) {
+    await prisma.investigation.create({
+      data: {
+        disciplinaryCaseId: claudineHarassmentCase.id,
+        investigatorId: itHoD.employeeNumber,
+        startDate: new Date("2026-06-21"),
+        endDate: new Date("2026-07-01"),
+        dueDate: new Date("2026-07-05"),
+        status: "COMPLETED",
+        summary: "Interviews conducted with the complainant and two witnesses.",
+        findings: "Findings support that the conduct occurred as described, though context was a factor.",
+        recommendation: "A formal written warning is recommended, with a documented conduct improvement plan.",
+      },
+    })
+  }
+
+  // ---- Case 4: Patrick — policy violation, sanction issued (Written
+  // Warning) and then appealed, appeal still pending review. ----------------
+  const patrickPolicyCase = await upsertCase("ERC-2026-0004", {
+    employeeId: patrick.employeeNumber,
+    reportedById: solange.employeeNumber,
+    dateReported: new Date("2026-05-10"),
+    incidentDate: new Date("2026-05-08"),
+    category: DisciplinaryCaseCategory.POLICY_VIOLATION,
+    subject: "Breach of clean-desk policy",
+    description: "Confidential customer documents were left unsecured on Patrick's desk overnight.",
+    investigationRequired: false,
+    status: DisciplinaryCaseStatus.APPEALED,
+  })
+  const existingSanction4 = await prisma.sanction.findFirst({ where: { disciplinaryCaseId: patrickPolicyCase.id } })
+  if (!existingSanction4) {
+    await prisma.sanction.create({
+      data: {
+        disciplinaryCaseId: patrickPolicyCase.id,
+        employeeId: patrick.employeeNumber,
+        sanctionTypeId: writtenWarning.id,
+        dateOfSanction: new Date("2026-05-16"),
+        reason: "Breach of the clean-desk policy involving confidential customer information.",
+        effectiveDate: new Date("2026-05-16"),
+        issuedById: solange.employeeNumber,
+        approvalAuthorityId: itHoD.employeeNumber,
+      },
+    })
+  }
+  const existingAppeal4 = await prisma.appeal.findFirst({ where: { disciplinaryCaseId: patrickPolicyCase.id } })
+  if (!existingAppeal4) {
+    await prisma.appeal.create({
+      data: {
+        disciplinaryCaseId: patrickPolicyCase.id,
+        employeeId: patrick.employeeNumber,
+        appealDate: new Date("2026-05-20"),
+        appealReason: "The documents were left briefly during an authorized client meeting, not overnight as stated.",
+        status: "UNDER_REVIEW",
+      },
+    })
+  }
+
+  // ---- Case 5: Eric (IT HoD) — draft case, not yet submitted. -------------
+  await upsertCase("ERC-2026-0005", {
+    employeeId: itHoD.employeeNumber,
+    reportedById: md.employeeNumber,
+    dateReported: new Date("2026-07-24"),
+    incidentDate: new Date("2026-07-22"),
+    category: DisciplinaryCaseCategory.INSUBORDINATION,
+    subject: "Disputed instruction from Executive Management",
+    description: "Draft note pending review before formal submission.",
+    investigationRequired: false,
+    status: DisciplinaryCaseStatus.DRAFT,
+  })
+
+  // ---- Grievances -----------------------------------------------------------
+  async function upsertGrievance(
+    grievanceNumber: string,
+    data: {
+      employeeId: string
+      dateSubmitted: Date
+      subject: string
+      description: string
+      category: GrievanceCategory
+      status: GrievanceStatus
+      assignedToId?: string
+      resolutionComments?: string
+      resolvedAt?: Date
+    }
+  ) {
+    const existing = await prisma.grievance.findUnique({ where: { grievanceNumber } })
+    if (existing) return existing
+    return prisma.grievance.create({ data: { grievanceNumber, ...data } })
+  }
+
+  await upsertGrievance("GRV-2026-0001", {
+    employeeId: patrick.employeeNumber,
+    dateSubmitted: new Date("2026-07-10"),
+    subject: "Disagreement over shift allocation",
+    description: "Patrick feels shift allocations have been unfairly distributed within the team.",
+    category: GrievanceCategory.WORKPLACE_CONFLICT,
+    status: GrievanceStatus.SUBMITTED,
+  })
+
+  await upsertGrievance("GRV-2026-0002", {
+    employeeId: solange.employeeNumber,
+    dateSubmitted: new Date("2026-06-01"),
+    subject: "Band review request",
+    description: "Solange requested a review of her band relative to peers with similar scope.",
+    category: GrievanceCategory.COMPENSATION,
+    status: GrievanceStatus.RESOLVED,
+    assignedToId: itHoD.employeeNumber,
+    resolutionComments: "Reviewed with HR — scheduled for the next band review cycle.",
+    resolvedAt: new Date("2026-06-20"),
+  })
+
+  // eslint-disable-next-line no-console
+  console.log(
+    "Seeded Employee Relations: 7 sanction types, 5 disciplinary cases across Draft/Under Investigation/Pending Decision (confidential)/Appealed/Closed states, 2 sanctions, 1 appeal, and 2 grievances."
+  )
 }
 
 main()

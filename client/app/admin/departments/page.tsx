@@ -3,12 +3,18 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchDepartments } from "@/lib/api/departments"
+import { Pagination } from "@/components/ui/pagination"
+import { fetchDepartmentsPaginated } from "@/lib/api/departments"
 
 import { deactivateDepartment } from "./actions"
 
-export default async function AdminDepartmentsPage() {
-  const result = await fetchDepartments()
+export default async function AdminDepartmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page } = await searchParams
+  const result = await fetchDepartmentsPaginated(page ? Number(page) : 1)
 
   return (
     <div className="flex flex-col gap-6">
@@ -31,7 +37,7 @@ export default async function AdminDepartmentsPage() {
             <CardDescription>{result.error}</CardDescription>
           </CardHeader>
         </Card>
-      ) : result.data.length === 0 ? (
+      ) : result.data.data.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No departments yet.{" "}
@@ -57,7 +63,7 @@ export default async function AdminDepartmentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {result.data.map((department) => (
+                {result.data.data.map((department) => (
                   <tr key={department.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">{department.name}</p>
@@ -101,6 +107,13 @@ export default async function AdminDepartmentsPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={result.data.page}
+            totalPages={result.data.totalPages}
+            total={result.data.total}
+            pageSize={result.data.pageSize}
+            basePath="/admin/departments"
+          />
         </Card>
       )}
     </div>

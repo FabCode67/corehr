@@ -1,10 +1,10 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { ApprovalDecision } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsBoolean, IsDate, IsEnum, IsOptional, IsString, IsUUID } from "class-validator"
+import { IsBoolean, IsDate, IsEnum, IsOptional, IsString, IsUUID, MinLength } from "class-validator"
 
 export class CreateLeaveRequestDto {
-  @IsUUID()
+  @IsString()
   employeeId!: string
 
   @IsUUID()
@@ -24,10 +24,9 @@ export class CreateLeaveRequestDto {
   @IsOptional()
   returnDate?: Date
 
-  @ApiPropertyOptional()
   @IsString()
-  @IsOptional()
-  reason?: string
+  @MinLength(3, { message: "Please provide a reason for this leave request." })
+  reason!: string
 
   @ApiPropertyOptional({ description: "Cloudinary URL, set via POST /uploads first." })
   @IsString()
@@ -35,7 +34,7 @@ export class CreateLeaveRequestDto {
   attachmentUrl?: string
 
   @ApiPropertyOptional({ description: "Employee acting in this employee's stead while away." })
-  @IsUUID()
+  @IsString()
   @IsOptional()
   delegateEmployeeId?: string
 
@@ -69,7 +68,7 @@ export class DecideApprovalDto {
   @ApiPropertyOptional({
     description: "The employee acting as approver, if known (e.g. the resolved line manager).",
   })
-  @IsUUID()
+  @IsString()
   @IsOptional()
   actingEmployeeId?: string
 }

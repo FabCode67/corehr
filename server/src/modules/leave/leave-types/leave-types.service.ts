@@ -89,14 +89,18 @@ export class LeaveTypesService {
   async replaceApprovalSteps(leaveTypeId: string, dto: ReplaceApprovalStepsDto) {
     await this.findOne(leaveTypeId)
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.leaveApprovalStep.deleteMany({ where: { leaveTypeId } })
-      if (dto.steps.length > 0) {
-        await tx.leaveApprovalStep.createMany({
-          data: dto.steps.map((step) => ({ leaveTypeId, order: step.order, role: step.role })),
-        })
-      }
-    })
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.leaveApprovalStep.deleteMany({ where: { leaveTypeId } })
+        if (dto.steps.length > 0) {
+          await tx.leaveApprovalStep.createMany({
+            data: dto.steps.map((step) => ({ leaveTypeId, order: step.order, role: step.role })),
+          })
+        }
+      },
+      // Same pooled-Neon-latency reasoning as leave-requests.service.ts.
+      { timeout: 15000, maxWait: 10000 }
+    )
 
     return this.findOne(leaveTypeId)
   }

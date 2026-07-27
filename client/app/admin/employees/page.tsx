@@ -3,17 +3,28 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployees } from "@/lib/api/employees"
+import { Pagination } from "@/components/ui/pagination"
+import { fetchEmployeesPaginated } from "@/lib/api/employees"
 
 const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
   ACTIVE: "success",
   EXIT: "destructive",
 }
 
-export default async function AdminEmployeesPage() {
+interface SearchParams {
+  page?: string
+}
+
+export default async function AdminEmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>
+}) {
+  const { page } = await searchParams
+
   // Employee records are never deleted — exited employees stay visible
   // (with a status badge) for historical reporting, per the spec.
-  const result = await fetchEmployees(true)
+  const result = await fetchEmployeesPaginated({ includeInactive: true, page: page ? Number(page) : 1 })
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +47,7 @@ export default async function AdminEmployeesPage() {
             <CardDescription>{result.error}</CardDescription>
           </CardHeader>
         </Card>
-      ) : result.data.length === 0 ? (
+      ) : result.data.data.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No employees yet.{" "}
@@ -63,8 +74,8 @@ export default async function AdminEmployeesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {result.data.map((employee) => (
-                  <tr key={employee.id} className="hover:bg-muted/30">
+                {result.data.data.map((employee) => (
+                  <tr key={employee.employeeNumber} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">
                         {employee.firstName} {employee.lastName}
@@ -87,7 +98,7 @@ export default async function AdminEmployeesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/employees/${employee.id}`}
+                        href={`/admin/employees/${employee.employeeNumber}`}
                         className="text-xs font-medium text-primary hover:underline"
                       >
                         Manage
@@ -98,6 +109,13 @@ export default async function AdminEmployeesPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={result.data.page}
+            totalPages={result.data.totalPages}
+            total={result.data.total}
+            pageSize={result.data.pageSize}
+            basePath="/admin/employees"
+          />
         </Card>
       )}
     </div>

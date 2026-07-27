@@ -21,13 +21,13 @@ export class LeaveBalancesController {
   }
 
   @Get("employee/:employeeId")
-  getSummary(@Param("employeeId", ParseUUIDPipe) employeeId: string, @Query("year") year?: string) {
+  getSummary(@Param("employeeId") employeeId: string, @Query("year") year?: string) {
     return this.leaveBalancesService.getSummary(employeeId, year ? Number(year) : undefined)
   }
 
   @Patch("employee/:employeeId/:leaveTypeId")
   adjust(
-    @Param("employeeId", ParseUUIDPipe) employeeId: string,
+    @Param("employeeId") employeeId: string,
     @Param("leaveTypeId", ParseUUIDPipe) leaveTypeId: string,
     @Query("year") year: string | undefined,
     @Body() dto: AdjustBalanceDto

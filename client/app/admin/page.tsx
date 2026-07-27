@@ -1,6 +1,8 @@
 import { Briefcase, CalendarClock, TrendingUp, Users } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
+import { getSession } from "@/lib/get-session"
 
 const STATS = [
   {
@@ -29,7 +31,9 @@ const STATS = [
   },
 ]
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  const session = await getSession()
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -38,6 +42,8 @@ export default function AdminDashboardPage() {
           Bank-wide HR metrics across employees, recruitment, and workforce trends.
         </p>
       </div>
+
+      <MandatoryTrainingBanner actingEmployeeId={session?.employeeId ?? ""} myLearningHref="/staff/learning" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {STATS.map((stat) => {

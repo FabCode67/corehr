@@ -1,7 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Pagination } from "@/components/ui/pagination"
 import { fetchEmployees } from "@/lib/api/employees"
-import { fetchLeaveBalances, fetchLeaveRequests, formatLeaveStatusLabel, type LeaveRequestStatus } from "@/lib/api/leave"
+import {
+  fetchLeaveBalances,
+  fetchLeaveRequestsPaginated,
+  formatLeaveStatusLabel,
+  type LeaveRequestStatus,
+} from "@/lib/api/leave"
 import { submitLeaveRequest } from "@/lib/api/leave-actions"
 import { getSession } from "@/lib/get-session"
 
@@ -28,7 +34,12 @@ function isCancellable(status: LeaveRequestStatus, startDate: string) {
   return new Date(startDate).getTime() > today.getTime()
 }
 
-export default async function StaffLeavePage() {
+export default async function StaffLeavePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page } = await searchParams
   const session = await getSession()
 
   if (!session?.employeeId) {
@@ -54,16 +65,16 @@ export default async function StaffLeavePage() {
 
   const [balancesResult, requestsResult, employeesResult] = await Promise.all([
     fetchLeaveBalances(employeeId),
-    fetchLeaveRequests({ employeeId }),
+    fetchLeaveRequestsPaginated({ employeeId }, page ? Number(page) : 1),
     fetchEmployees(),
   ])
 
   const balances = balancesResult.ok ? balancesResult.data : []
-  const requests = requestsResult.ok ? requestsResult.data : []
+  const requests = requestsResult.ok ? requestsResult.data.data : []
   const colleagues = (employeesResult.ok ? employeesResult.data : [])
-    .filter((employee) => employee.id !== employeeId)
+    .filter((employee) => employee.employeeNumber !== employeeId)
     .map((employee) => ({
-      id: employee.id,
+      id: employee.employeeNumber,
       firstName: employee.firstName,
       lastName: employee.lastName,
       positionTitle: employee.position?.title ?? null,
@@ -179,6 +190,15 @@ export default async function StaffLeavePage() {
             </table>
           </div>
         )}
+        {requestsResult.ok ? (
+          <Pagination
+            page={requestsResult.data.page}
+            totalPages={requestsResult.data.totalPages}
+            total={requestsResult.data.total}
+            pageSize={requestsResult.data.pageSize}
+            basePath="/staff/leave"
+          />
+        ) : null}
       </Card>
     </div>
   )

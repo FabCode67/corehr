@@ -1,15 +1,16 @@
-import type { WorkLocation } from "./employees"
+import type { Branch } from "./branches"
 import { apiFetch } from "./client"
 
 /** Shape of POST /auth/login's response — never includes passwordHash
  *  (PrismaService omits it globally server-side; see server/src/prisma). */
 export interface AuthEmployee {
-  id: string
+  /** The Staff ID (e.g. "EMP-0001") — Employee's primary key everywhere. */
+  employeeNumber: string
   firstName: string
   lastName: string
   email: string
   isAdmin: boolean
-  workLocation: WorkLocation
+  branch: Branch | null
   isActive: boolean
   position: {
     title: string

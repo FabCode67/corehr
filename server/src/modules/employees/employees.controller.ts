@@ -33,14 +33,27 @@ export class EmployeesController {
     @Query("departmentId") departmentId?: string,
     @Query("unitId") unitId?: string,
     @Query("positionId") positionId?: string,
-    @Query("includeInactive") includeInactive?: string
+    @Query("includeInactive") includeInactive?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
   ) {
-    return this.employeesService.findAll({
+    const filters = {
       departmentId,
       unitId,
       positionId,
       includeInactive: includeInactive === "true",
-    })
+    }
+    // `page` is opt-in: omit it and you get the full array exactly as
+    // before (dropdowns/cascading selects rely on this); pass it and you
+    // get the paginated envelope the admin table view uses.
+    if (page) {
+      return this.employeesService.findAllPaginated(
+        filters,
+        Number(page),
+        pageSize ? Number(pageSize) : undefined
+      )
+    }
+    return this.employeesService.findAll(filters)
   }
 
   @Get("by-number/:employeeNumber")
@@ -49,17 +62,17 @@ export class EmployeesController {
   }
 
   @Get(":id")
-  findOne(@Param("id", ParseUUIDPipe) id: string) {
+  findOne(@Param("id") id: string) {
     return this.employeesService.findOne(id)
   }
 
   @Get(":id/reporting-manager")
-  getReportingManager(@Param("id", ParseUUIDPipe) id: string) {
+  getReportingManager(@Param("id") id: string) {
     return this.employeesService.getReportingManager(id)
   }
 
   @Get(":id/history")
-  getHistory(@Param("id", ParseUUIDPipe) id: string) {
+  getHistory(@Param("id") id: string) {
     return this.employeesService.getHistory(id)
   }
 
@@ -71,7 +84,7 @@ export class EmployeesController {
   }
 
   @Patch(":id")
-  update(@Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateEmployeeDto) {
+  update(@Param("id") id: string, @Body() dto: UpdateEmployeeDto) {
     return this.employeesService.update(id, dto)
   }
 
@@ -79,7 +92,7 @@ export class EmployeesController {
 
   @Patch(":id/employment-details")
   updateEmploymentDetails(
-    @Param("id", ParseUUIDPipe) id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateEmploymentDetailsDto
   ) {
     return this.employeesService.updateEmploymentDetails(id, dto)
@@ -88,35 +101,35 @@ export class EmployeesController {
   // ---- Step 3: Position Assignment ----------------------------------------
 
   @Post(":id/position-assignment")
-  assignPosition(@Param("id", ParseUUIDPipe) id: string, @Body() dto: AssignPositionDto) {
+  assignPosition(@Param("id") id: string, @Body() dto: AssignPositionDto) {
     return this.employeesService.assignPosition(id, dto)
   }
 
   @Post(":id/transfer")
-  transfer(@Param("id", ParseUUIDPipe) id: string, @Body() dto: TransferEmployeeDto) {
+  transfer(@Param("id") id: string, @Body() dto: TransferEmployeeDto) {
     return this.employeesService.transferPosition(id, dto)
   }
 
   @Post(":id/band")
-  changeBand(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ChangeBandDto) {
+  changeBand(@Param("id") id: string, @Body() dto: ChangeBandDto) {
     return this.employeesService.changeBand(id, dto)
   }
 
   // ---- Step 4: Family Information -----------------------------------------
 
   @Put(":id/partner")
-  updatePartner(@Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdatePartnerDto) {
+  updatePartner(@Param("id") id: string, @Body() dto: UpdatePartnerDto) {
     return this.employeesService.updatePartner(id, dto)
   }
 
   @Post(":id/children")
-  addChild(@Param("id", ParseUUIDPipe) id: string, @Body() dto: CreateChildDto) {
+  addChild(@Param("id") id: string, @Body() dto: CreateChildDto) {
     return this.employeesService.addChild(id, dto)
   }
 
   @Patch(":id/children/:childId")
   updateChild(
-    @Param("id", ParseUUIDPipe) id: string,
+    @Param("id") id: string,
     @Param("childId", ParseUUIDPipe) childId: string,
     @Body() dto: UpdateChildDto
   ) {
@@ -125,7 +138,7 @@ export class EmployeesController {
 
   @Delete(":id/children/:childId")
   removeChild(
-    @Param("id", ParseUUIDPipe) id: string,
+    @Param("id") id: string,
     @Param("childId", ParseUUIDPipe) childId: string
   ) {
     return this.employeesService.removeChild(id, childId)
@@ -134,13 +147,13 @@ export class EmployeesController {
   // ---- Step 5: Education & Professional Development ------------------------
 
   @Post(":id/education")
-  addEducation(@Param("id", ParseUUIDPipe) id: string, @Body() dto: CreateEducationDto) {
+  addEducation(@Param("id") id: string, @Body() dto: CreateEducationDto) {
     return this.employeesService.addEducation(id, dto)
   }
 
   @Patch(":id/education/:educationId")
   updateEducation(
-    @Param("id", ParseUUIDPipe) id: string,
+    @Param("id") id: string,
     @Param("educationId", ParseUUIDPipe) educationId: string,
     @Body() dto: UpdateEducationDto
   ) {
@@ -149,7 +162,7 @@ export class EmployeesController {
 
   @Delete(":id/education/:educationId")
   removeEducation(
-    @Param("id", ParseUUIDPipe) id: string,
+    @Param("id") id: string,
     @Param("educationId", ParseUUIDPipe) educationId: string
   ) {
     return this.employeesService.removeEducation(id, educationId)
@@ -158,12 +171,12 @@ export class EmployeesController {
   // ---- Exit Management ------------------------------------------------------
 
   @Post(":id/exit")
-  processExit(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ProcessExitDto) {
+  processExit(@Param("id") id: string, @Body() dto: ProcessExitDto) {
     return this.employeesService.processExit(id, dto)
   }
 
   @Delete(":id")
-  remove(@Param("id", ParseUUIDPipe) id: string) {
+  remove(@Param("id") id: string) {
     return this.employeesService.deactivate(id)
   }
 }

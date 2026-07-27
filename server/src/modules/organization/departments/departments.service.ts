@@ -1,25 +1,65 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common"
+import { Prisma } from "@prisma/client"
 
+import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
 
 import { CreateDepartmentDto } from "./dto/create-department.dto"
 import { UpdateDepartmentDto } from "./dto/update-department.dto"
 
+const DEPARTMENT_LIST_INCLUDE = { function: true, units: { where: { isActive: true } } } as const
+
 @Injectable()
 export class DepartmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(params: { functionId?: string; includeInactive?: boolean } = {}) {
+  private buildFindAllWhere(params: {
+    functionId?: string
+    includeInactive?: boolean
+  }): Prisma.DepartmentWhereInput {
     const { functionId, includeInactive = false } = params
 
+    return {
+      ...(includeInactive ? {} : { isActive: true }),
+      ...(functionId ? { functionId } : {}),
+    }
+  }
+
+  /** Full, unpaginated list — used by filter dropdowns throughout the app
+   *  (Leave approvals/calendar/analytics filters, etc.). See
+   *  findAllPaginated() for the admin table view. */
+  findAll(params: { functionId?: string; includeInactive?: boolean } = {}) {
     return this.prisma.department.findMany({
-      where: {
-        ...(includeInactive ? {} : { isActive: true }),
-        ...(functionId ? { functionId } : {}),
-      },
-      include: { function: true, units: { where: { isActive: true } } },
+      where: this.buildFindAllWhere(params),
+      include: DEPARTMENT_LIST_INCLUDE,
       orderBy: { name: "asc" },
     })
+  }
+
+  /** Paginated version for the Departments admin table. */
+  async findAllPaginated(
+    params: { functionId?: string; includeInactive?: boolean } = {},
+    page?: number,
+    pageSize?: number
+  ): Promise<PaginatedResult<Prisma.DepartmentGetPayload<{ include: typeof DEPARTMENT_LIST_INCLUDE }>>> {
+    const where = this.buildFindAllWhere(params)
+    const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
+      page,
+      pageSize
+    )
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.department.findMany({
+        where,
+        include: DEPARTMENT_LIST_INCLUDE,
+        orderBy: { name: "asc" },
+        skip,
+        take,
+      }),
+      this.prisma.department.count({ where }),
+    ])
+
+    return buildPaginatedResult(data, total, normalizedPage, normalizedPageSize)
   }
 
   async findOne(id: string) {

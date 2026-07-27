@@ -44,9 +44,13 @@ export async function submitLeaveRequest(
   const leaveTypeId = trimmedOrUndefined(formData.get("leaveTypeId"))
   const startDate = trimmedOrUndefined(formData.get("startDate"))
   const endDate = trimmedOrUndefined(formData.get("endDate"))
+  const reason = trimmedOrUndefined(formData.get("reason"))
 
   if (!leaveTypeId || !startDate || !endDate) {
     return { error: "Leave type, start date, and end date are required." }
+  }
+  if (!reason || reason.length < 3) {
+    return { error: "Please provide a reason for this leave request." }
   }
 
   try {
@@ -58,7 +62,7 @@ export async function submitLeaveRequest(
         startDate,
         endDate,
         returnDate: trimmedOrUndefined(formData.get("returnDate")),
-        reason: trimmedOrUndefined(formData.get("reason")),
+        reason,
         attachmentUrl: trimmedOrUndefined(formData.get("attachmentUrl")),
         delegateEmployeeId: trimmedOrUndefined(formData.get("delegateEmployeeId")),
         hrOverride: formData.get("hrOverride") === "on",

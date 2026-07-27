@@ -1,7 +1,7 @@
-import { IsString, IsUUID, MinLength } from "class-validator"
+import { IsString, MinLength } from "class-validator"
 
 export class ChangePasswordDto {
-  @IsUUID()
+  @IsString()
   employeeId!: string
 
   @IsString()

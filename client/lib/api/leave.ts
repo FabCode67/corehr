@@ -1,5 +1,7 @@
+import type { Branch } from "./branches"
 import { apiFetchSafe } from "./client"
-import type { Gender, WorkLocation } from "./employees"
+import type { Gender } from "./employees"
+import type { PaginatedResult } from "./pagination"
 
 // ---- Enums ------------------------------------------------------------
 
@@ -136,12 +138,11 @@ export interface LeaveBalance {
 // ---- Requests / Approvals -------------------------------------------------
 
 export interface LeaveRequestEmployee {
-  id: string
+  employeeNumber: string
   firstName: string
   lastName: string
-  employeeNumber: string
   gender: Gender
-  workLocation: WorkLocation
+  branch: Branch | null
   position: {
     id: string
     title: string
@@ -161,7 +162,7 @@ export interface LeaveApproval {
   comment: string | null
   decidedAt: string | null
   createdAt: string
-  approver: { id: string; firstName: string; lastName: string } | null
+  approver: { employeeNumber: string; firstName: string; lastName: string } | null
 }
 
 export interface LeaveRequest {
@@ -182,7 +183,7 @@ export interface LeaveRequest {
   updatedAt: string
   employee: LeaveRequestEmployee
   leaveType: LeaveTypeBase
-  delegate: { id: string; firstName: string; lastName: string } | null
+  delegate: { employeeNumber: string; firstName: string; lastName: string } | null
   approvals: LeaveApproval[]
 }
 
@@ -214,7 +215,7 @@ export interface LeaveNotification {
 export interface AnalyticsFilters {
   departmentId?: string
   functionId?: string
-  workLocation?: string
+  branchId?: string
   employeeId?: string
   year?: number
 }
@@ -227,7 +228,8 @@ export interface DepartmentUtilization {
 }
 
 export interface BranchUtilization {
-  workLocation: string
+  branchId: string
+  branchName: string
   days: number
   requests: number
 }
@@ -268,7 +270,7 @@ export interface UpcomingLeaveEntry {
   startDate: string
   endDate: string
   numberOfDays: number
-  employee: { id: string; firstName: string; lastName: string }
+  employee: { employeeNumber: string; firstName: string; lastName: string }
   leaveType: { name: string }
 }
 
@@ -278,7 +280,7 @@ export interface CurrentlyOnLeaveEntry {
   endDate: string
   numberOfDays: number
   employee: {
-    id: string
+    employeeNumber: string
     firstName: string
     lastName: string
     position: { title: string; department: { name: string } } | null
@@ -315,6 +317,13 @@ export function fetchPublicHolidays(includeInactive = false) {
   )
 }
 
+/** Paginated version for the Leave Settings holidays table. */
+export function fetchPublicHolidaysPaginated(includeInactive = false, page = 1, pageSize?: number) {
+  return apiFetchSafe<PaginatedResult<PublicHoliday>>(
+    `/leave/holidays${toQuery({ includeInactive: includeInactive ? "true" : undefined, page, pageSize })}`
+  )
+}
+
 export function fetchLeaveSettings() {
   return apiFetchSafe<LeaveSettings>("/leave/settings")
 }
@@ -330,7 +339,7 @@ export function fetchLeaveBalances(employeeId: string, year?: number) {
 export interface LeaveRequestFilters {
   employeeId?: string
   departmentId?: string
-  workLocation?: string
+  branchId?: string
   status?: LeaveRequestStatus
   leaveTypeId?: string
   from?: string
@@ -339,6 +348,17 @@ export interface LeaveRequestFilters {
 
 export function fetchLeaveRequests(filters: LeaveRequestFilters = {}) {
   return apiFetchSafe<LeaveRequest[]>(`/leave/requests${toQuery(filters)}`)
+}
+
+/** Paginated version for the Approvals and My Requests tables. */
+export function fetchLeaveRequestsPaginated(
+  filters: LeaveRequestFilters = {},
+  page = 1,
+  pageSize?: number
+) {
+  return apiFetchSafe<PaginatedResult<LeaveRequest>>(
+    `/leave/requests${toQuery({ ...filters, page, pageSize })}`
+  )
 }
 
 export function fetchLeaveRequest(id: string) {
@@ -352,7 +372,7 @@ export function fetchPendingForManager(employeeId: string) {
 export function fetchLeaveCalendar(
   year: number,
   month: number,
-  filters: { departmentId?: string; workLocation?: string } = {}
+  filters: { departmentId?: string; branchId?: string } = {}
 ) {
   return apiFetchSafe<LeaveCalendarData>(
     `/leave/requests/calendar${toQuery({ year, month, ...filters })}`

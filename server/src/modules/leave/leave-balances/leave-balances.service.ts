@@ -30,7 +30,7 @@ export class LeaveBalancesService {
    */
   async ensureBalancesForEmployee(employeeId: string, year = new Date().getFullYear()) {
     const employee = await this.prisma.employee.findUnique({
-      where: { id: employeeId },
+      where: { employeeNumber: employeeId },
       include: { position: { include: { level: true } } },
     })
     if (!employee) return

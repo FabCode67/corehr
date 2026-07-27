@@ -6,6 +6,7 @@ import { Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Band } from "@/lib/api/bands"
+import type { Branch } from "@/lib/api/branches"
 import type { Department } from "@/lib/api/departments"
 import type { Employee, PositionHistoryEntry, ReportingManagerResult } from "@/lib/api/employees"
 import type { Position } from "@/lib/api/positions"
@@ -29,7 +30,8 @@ interface RegistrationWizardProps {
   departments: Department[]
   positions: Position[]
   bands: Band[]
-  employeesForPreview: Pick<Employee, "id" | "firstName" | "lastName" | "positionId" | "isActive">[]
+  branches: Branch[]
+  employeesForPreview: Pick<Employee, "employeeNumber" | "firstName" | "lastName" | "positionId" | "isActive">[]
   history: PositionHistoryEntry[]
   reportingManager: ReportingManagerResult | null
   actions: {
@@ -51,6 +53,7 @@ export function RegistrationWizard({
   departments,
   positions,
   bands,
+  branches,
   employeesForPreview,
   history,
   reportingManager,
@@ -124,6 +127,7 @@ export function RegistrationWizard({
           <CardContent>
             <BasicInfoForm
               employee={employee}
+              branches={branches}
               action={actions.updateBasicInfo}
               submitLabel="Save changes"
             />

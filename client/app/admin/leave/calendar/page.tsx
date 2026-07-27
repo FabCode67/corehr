@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import { WORK_LOCATIONS, formatEnumLabel } from "@/lib/api/employees"
+import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { fetchLeaveCalendar, MONTH_NAMES, type LeaveRequest, type PublicHoliday } from "@/lib/api/leave"
 
@@ -13,7 +13,7 @@ interface SearchParams {
   year?: string
   month?: string
   departmentId?: string
-  workLocation?: string
+  branchId?: string
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -54,12 +54,14 @@ export default async function AdminLeaveCalendarPage({
   const year = filters.year ? Number(filters.year) : today.getUTCFullYear()
   const month = filters.month ? Number(filters.month) : today.getUTCMonth() + 1 // 1-12
 
-  const [calendarResult, departmentsResult] = await Promise.all([
-    fetchLeaveCalendar(year, month, { departmentId: filters.departmentId, workLocation: filters.workLocation }),
+  const [calendarResult, departmentsResult, branchesResult] = await Promise.all([
+    fetchLeaveCalendar(year, month, { departmentId: filters.departmentId, branchId: filters.branchId }),
     fetchDepartments(),
+    fetchBranches(),
   ])
 
   const departments = departmentsResult.ok ? departmentsResult.data : []
+  const branches = branchesResult.ok ? branchesResult.data : []
   const requests = calendarResult.ok ? calendarResult.data.requests : []
   const holidays = calendarResult.ok ? calendarResult.data.holidays : []
 
@@ -84,7 +86,7 @@ export default async function AdminLeaveCalendarPage({
     params.set("year", String(y))
     params.set("month", String(m))
     if (filters.departmentId) params.set("departmentId", filters.departmentId)
-    if (filters.workLocation) params.set("workLocation", filters.workLocation)
+    if (filters.branchId) params.set("branchId", filters.branchId)
     return `/admin/leave/calendar?${params.toString()}`
   }
 
@@ -120,11 +122,11 @@ export default async function AdminLeaveCalendarPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="workLocation" defaultValue={filters.workLocation ?? ""} className="w-44">
+              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-44">
                 <option value="">All branches</option>
-                {WORK_LOCATIONS.map((location) => (
-                  <option key={location} value={location}>
-                    {formatEnumLabel(location)}
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
                   </option>
                 ))}
               </Select>

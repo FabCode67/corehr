@@ -10,7 +10,18 @@ export class PublicHolidaysController {
   constructor(private readonly publicHolidaysService: PublicHolidaysService) {}
 
   @Get()
-  findAll(@Query("includeInactive") includeInactive?: string) {
+  findAll(
+    @Query("includeInactive") includeInactive?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string
+  ) {
+    if (page) {
+      return this.publicHolidaysService.findAllPaginated(
+        includeInactive === "true",
+        Number(page),
+        pageSize ? Number(pageSize) : undefined
+      )
+    }
     return this.publicHolidaysService.findAll(includeInactive === "true")
   }
 

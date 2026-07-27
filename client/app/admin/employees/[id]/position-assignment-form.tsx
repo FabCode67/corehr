@@ -17,7 +17,7 @@ interface PositionAssignmentFormProps {
   departments: Department[]
   positions: Position[]
   bands: Band[]
-  employees: Pick<Employee, "id" | "firstName" | "lastName" | "positionId" | "isActive">[]
+  employees: Pick<Employee, "employeeNumber" | "firstName" | "lastName" | "positionId" | "isActive">[]
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
 }
 

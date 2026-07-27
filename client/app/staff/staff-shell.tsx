@@ -6,6 +6,7 @@ import {
   FileText,
   GraduationCap,
   LayoutDashboard,
+  Scale,
   Target,
   User,
   Users,
@@ -25,6 +26,7 @@ const STAFF_NAV: PortalNavItem[] = [
   { label: "Learning", href: "/staff/learning", icon: GraduationCap },
   { label: "Family & Dependents", href: "/staff/family", icon: Users },
   { label: "Forms & Requests", href: "/staff/forms", icon: FileText },
+  { label: "Employee Relations", href: "/staff/employee-relations", icon: Scale },
 ]
 
 export function StaffShell({

@@ -2,11 +2,15 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { fetchBranches } from "@/lib/api/branches"
 
 import { createEmployee } from "../actions"
 import { BasicInfoForm } from "../employee-form"
 
-export default function NewEmployeePage() {
+export default async function NewEmployeePage() {
+  const branchesResult = await fetchBranches()
+  const branches = branchesResult.ok ? branchesResult.data : []
+
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
@@ -33,7 +37,11 @@ export default function NewEmployeePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <BasicInfoForm action={createEmployee} submitLabel="Create employee & continue" />
+          <BasicInfoForm
+            branches={branches}
+            action={createEmployee}
+            submitLabel="Create employee & continue"
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common"
-import { LeaveRequestStatus, NotificationType, WorkLocation } from "@prisma/client"
+import { LeaveRequestStatus, NotificationType, Prisma } from "@prisma/client"
 
+import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { LeaveBalancesService } from "../leave-balances/leave-balances.service"
 import { LeaveCalendarService } from "../leave-policy/leave-calendar.service"
@@ -11,21 +12,28 @@ import { CreateLeaveRequestDto, DecideApprovalDto } from "./dto/leave-request.dt
 const REQUEST_INCLUDE = {
   employee: {
     select: {
-      id: true,
+      employeeNumber: true,
       firstName: true,
       lastName: true,
-      employeeNumber: true,
       gender: true,
-      workLocation: true,
+      branch: { select: { id: true, name: true } },
       position: { select: { id: true, title: true, departmentId: true, department: { select: { id: true, name: true } } } },
     },
   },
   leaveType: true,
-  delegate: { select: { id: true, firstName: true, lastName: true } },
-  approvals: { orderBy: { order: "asc" as const }, include: { approver: { select: { id: true, firstName: true, lastName: true } } } },
+  delegate: { select: { employeeNumber: true, firstName: true, lastName: true } },
+  approvals: { orderBy: { order: "asc" as const }, include: { approver: { select: { employeeNumber: true, firstName: true, lastName: true } } } },
 } as const
 
 const OPEN_STATUSES: LeaveRequestStatus[] = ["SUBMITTED", "PENDING_APPROVAL", "APPROVED"]
+
+// Prisma's interactive-transaction default timeout (5s) is too tight for a
+// pooled Neon connection under cold-start latency — each awaited query in
+// these transactions is its own round trip, and a slow one can easily push
+// the whole chain past 5s even though no single step is actually stuck.
+// Bumped generously rather than trimmed to the bone; these transactions
+// still normally complete in well under a second.
+const TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 }
 
 /**
  * Owns the full leave-request lifecycle: validated creation (balance,
@@ -45,28 +53,76 @@ export class LeaveRequestsService {
     private readonly notificationsService: NotificationsService
   ) {}
 
+  private buildFindAllWhere(filters: {
+    employeeId?: string
+    departmentId?: string
+    branchId?: string
+    status?: LeaveRequestStatus
+    leaveTypeId?: string
+    from?: Date
+    to?: Date
+  }): Prisma.LeaveRequestWhereInput {
+    return {
+      ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
+      ...(filters.departmentId ? { employee: { position: { departmentId: filters.departmentId } } } : {}),
+      ...(filters.branchId ? { employee: { branchId: filters.branchId } } : {}),
+      ...(filters.from ? { endDate: { gte: filters.from } } : {}),
+      ...(filters.to ? { startDate: { lte: filters.to } } : {}),
+    }
+  }
+
+  /** Full, unpaginated list — used by filter dropdowns/calendars/analytics
+   *  throughout the app. See findAllPaginated() for table views. */
   async findAll(filters: {
     employeeId?: string
     departmentId?: string
-    workLocation?: WorkLocation
+    branchId?: string
     status?: LeaveRequestStatus
     leaveTypeId?: string
     from?: Date
     to?: Date
   }) {
     return this.prisma.leaveRequest.findMany({
-      where: {
-        ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
-        ...(filters.departmentId ? { employee: { position: { departmentId: filters.departmentId } } } : {}),
-        ...(filters.workLocation ? { employee: { workLocation: filters.workLocation } } : {}),
-        ...(filters.from ? { endDate: { gte: filters.from } } : {}),
-        ...(filters.to ? { startDate: { lte: filters.to } } : {}),
-      },
+      where: this.buildFindAllWhere(filters),
       include: REQUEST_INCLUDE,
       orderBy: { createdAt: "desc" },
     })
+  }
+
+  /** Paginated version for the Approvals and My Requests tables. */
+  async findAllPaginated(
+    filters: {
+      employeeId?: string
+      departmentId?: string
+      branchId?: string
+      status?: LeaveRequestStatus
+      leaveTypeId?: string
+      from?: Date
+      to?: Date
+    },
+    page?: number,
+    pageSize?: number
+  ): Promise<PaginatedResult<Prisma.LeaveRequestGetPayload<{ include: typeof REQUEST_INCLUDE }>>> {
+    const where = this.buildFindAllWhere(filters)
+    const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
+      page,
+      pageSize
+    )
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.leaveRequest.findMany({
+        where,
+        include: REQUEST_INCLUDE,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+      this.prisma.leaveRequest.count({ where }),
+    ])
+
+    return buildPaginatedResult(data, total, normalizedPage, normalizedPageSize)
   }
 
   async findOne(id: string) {
@@ -89,8 +145,8 @@ export class LeaveRequestsService {
 
   async create(dto: CreateLeaveRequestDto) {
     const employee = await this.prisma.employee.findUnique({
-      where: { id: dto.employeeId },
-      select: { id: true, gender: true, isActive: true },
+      where: { employeeNumber: dto.employeeId },
+      select: { employeeNumber: true, gender: true, isActive: true },
     })
     if (!employee) {
       throw new NotFoundException(`Employee ${dto.employeeId} not found`)
@@ -211,7 +267,7 @@ export class LeaveRequestsService {
       )
 
       return created
-    })
+    }, TRANSACTION_OPTIONS)
 
     if (firstStep?.role === "LINE_MANAGER") {
       const managerId = await this.resolveLineManagerId(dto.employeeId)
@@ -324,7 +380,7 @@ export class LeaveRequestsService {
         tx
       )
       return updated
-    })
+    }, TRANSACTION_OPTIONS)
   }
 
   /** The employee may cancel before it begins; per spec this is "subject to
@@ -382,7 +438,7 @@ export class LeaveRequestsService {
       )
 
       return updated
-    })
+    }, TRANSACTION_OPTIONS)
   }
 
   /** Requests where the current step is LINE_MANAGER and this employee is
@@ -408,7 +464,7 @@ export class LeaveRequestsService {
   async getCalendarData(
     year: number,
     month: number,
-    filters: { departmentId?: string; workLocation?: WorkLocation }
+    filters: { departmentId?: string; branchId?: string }
   ) {
     const rangeStart = new Date(Date.UTC(year, month - 1, 1))
     const rangeEnd = new Date(Date.UTC(year, month, 0))
@@ -420,7 +476,7 @@ export class LeaveRequestsService {
           startDate: { lte: rangeEnd },
           endDate: { gte: rangeStart },
           ...(filters.departmentId ? { employee: { position: { departmentId: filters.departmentId } } } : {}),
-          ...(filters.workLocation ? { employee: { workLocation: filters.workLocation } } : {}),
+          ...(filters.branchId ? { employee: { branchId: filters.branchId } } : {}),
         },
         include: REQUEST_INCLUDE,
       }),
@@ -443,16 +499,16 @@ export class LeaveRequestsService {
    */
   private async resolveLineManagerId(employeeId: string): Promise<string | null> {
     const employee = await this.prisma.employee.findUnique({
-      where: { id: employeeId },
+      where: { employeeNumber: employeeId },
       include: { reportingManagerOverride: true, position: true },
     })
     if (!employee) return null
-    if (employee.reportingManagerOverride) return employee.reportingManagerOverride.id
+    if (employee.reportingManagerOverride) return employee.reportingManagerOverride.employeeNumber
     if (!employee.position?.reportsToPositionId) return null
 
     const holder = await this.prisma.employee.findFirst({
       where: { positionId: employee.position.reportsToPositionId, isActive: true },
     })
-    return holder?.id ?? null
+    return holder?.employeeNumber ?? null
   }
 }

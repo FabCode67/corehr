@@ -5,7 +5,6 @@ import { redirect } from "next/navigation"
 
 import { loginRequest } from "@/lib/api/auth"
 import { ApiError } from "@/lib/api/client"
-import { formatEnumLabel } from "@/lib/api/employees"
 import { encodeSession, SESSION_COOKIE, type SessionUser } from "@/lib/session"
 
 export interface LoginState {
@@ -38,14 +37,14 @@ export async function login(
   }
 
   const sessionUser: SessionUser = {
-    id: employee.id,
-    employeeId: employee.id,
+    id: employee.employeeNumber,
+    employeeId: employee.employeeNumber,
     name: `${employee.firstName} ${employee.lastName}`,
     email: employee.email,
     role: employee.isAdmin ? "admin" : "staff",
     jobTitle: employee.position?.title ?? "Not yet assigned",
     department: employee.position?.department.name ?? "Not yet assigned",
-    branch: formatEnumLabel(employee.workLocation),
+    branch: employee.branch?.name ?? "Not assigned",
   }
 
   const cookieStore = await cookies()

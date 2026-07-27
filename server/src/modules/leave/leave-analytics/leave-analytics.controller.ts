@@ -11,14 +11,14 @@ export class LeaveAnalyticsController {
   private parseFilters(query: {
     departmentId?: string
     functionId?: string
-    workLocation?: string
+    branchId?: string
     employeeId?: string
     year?: string
   }): AnalyticsFilters {
     return {
       departmentId: query.departmentId,
       functionId: query.functionId,
-      workLocation: query.workLocation,
+      branchId: query.branchId,
       employeeId: query.employeeId,
       year: query.year ? Number(query.year) : undefined,
     }
@@ -28,12 +28,12 @@ export class LeaveAnalyticsController {
   utilizationByDepartment(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.utilizationByDepartment(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 
@@ -41,12 +41,12 @@ export class LeaveAnalyticsController {
   utilizationByBranch(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.utilizationByBranch(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 
@@ -54,12 +54,12 @@ export class LeaveAnalyticsController {
   utilizationByGender(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.utilizationByGender(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 
@@ -67,12 +67,12 @@ export class LeaveAnalyticsController {
   monthlyTrends(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.monthlyTrends(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 
@@ -80,12 +80,12 @@ export class LeaveAnalyticsController {
   typeDistribution(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.typeDistribution(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 
@@ -93,13 +93,13 @@ export class LeaveAnalyticsController {
   balanceExtremes(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string,
     @Query("limit") limit?: string
   ) {
     return this.leaveAnalyticsService.balanceExtremes(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year }),
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year }),
       limit ? Number(limit) : undefined
     )
   }
@@ -108,13 +108,13 @@ export class LeaveAnalyticsController {
   upcomingLeave(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string,
     @Query("daysAhead") daysAhead?: string
   ) {
     return this.leaveAnalyticsService.upcomingLeave(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year }),
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year }),
       daysAhead ? Number(daysAhead) : undefined
     )
   }
@@ -123,12 +123,12 @@ export class LeaveAnalyticsController {
   currentlyOnLeave(
     @Query("departmentId") departmentId?: string,
     @Query("functionId") functionId?: string,
-    @Query("workLocation") workLocation?: string,
+    @Query("branchId") branchId?: string,
     @Query("employeeId") employeeId?: string,
     @Query("year") year?: string
   ) {
     return this.leaveAnalyticsService.currentlyOnLeave(
-      this.parseFilters({ departmentId, functionId, workLocation, employeeId, year })
+      this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
   }
 }

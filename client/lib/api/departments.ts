@@ -1,4 +1,5 @@
 import { apiFetchSafe } from "./client"
+import type { PaginatedResult } from "./pagination"
 
 export interface OrgFunction {
   id: string
@@ -35,6 +36,23 @@ export function fetchDepartments() {
   return apiFetchSafe<Department[]>("/organization/departments?includeInactive=true")
 }
 
+/** Paginated version for the Departments admin table — see lib/api/pagination.ts. */
+export function fetchDepartmentsPaginated(page: number, pageSize?: number) {
+  const search = new URLSearchParams({ includeInactive: "true", page: String(page) })
+  if (pageSize) search.set("pageSize", String(pageSize))
+  return apiFetchSafe<PaginatedResult<Department>>(`/organization/departments?${search.toString()}`)
+}
+
 export function fetchDepartment(id: string) {
   return apiFetchSafe<Department>(`/organization/departments/${id}`)
+}
+
+export interface UnitWithDepartment extends DepartmentUnit {
+  department: { id: string; name: string }
+}
+
+/** All units across every department, for pickers that need every unit
+ *  regardless of parent department (e.g. Course eligibility restrictions). */
+export function fetchUnits() {
+  return apiFetchSafe<UnitWithDepartment[]>("/organization/units?includeInactive=true")
 }

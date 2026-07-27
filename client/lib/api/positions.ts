@@ -1,4 +1,5 @@
 import { apiFetchSafe } from "./client"
+import type { PaginatedResult } from "./pagination"
 
 export interface PositionLevel {
   id: string
@@ -21,11 +22,18 @@ export interface Position {
   level?: PositionLevel
   reportsTo?: { id: string; title: string } | null
   directReports?: { id: string; title: string }[]
-  employees?: { id: string; firstName: string; lastName: string }[]
+  employees?: { employeeNumber: string; firstName: string; lastName: string }[]
 }
 
 export function fetchPositions() {
   return apiFetchSafe<Position[]>("/organization/positions?includeInactive=true")
+}
+
+/** Paginated version for the Positions admin table — see lib/api/pagination.ts. */
+export function fetchPositionsPaginated(page: number, pageSize?: number) {
+  const search = new URLSearchParams({ includeInactive: "true", page: String(page) })
+  if (pageSize) search.set("pageSize", String(pageSize))
+  return apiFetchSafe<PaginatedResult<Position>>(`/organization/positions?${search.toString()}`)
 }
 
 export function fetchPosition(id: string) {

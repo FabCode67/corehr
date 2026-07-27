@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
-import { Gender, MaritalStatus, WorkLocation } from "@prisma/client"
+import { Gender, MaritalStatus } from "@prisma/client"
 import { Type } from "class-transformer"
 import {
   IsDate,
@@ -65,8 +65,8 @@ export class CreateEmployeeDto {
   @Matches(/^\+?[0-9 ()-]{7,20}$/, { message: "phone must be a valid phone number" })
   phone!: string
 
-  @IsEnum(WorkLocation)
-  workLocation!: WorkLocation
+  @IsUUID()
+  branchId!: string
 
   @ApiPropertyOptional({ description: "Cloudinary URL, set via POST /uploads first." })
   @IsString()
@@ -77,7 +77,7 @@ export class CreateEmployeeDto {
     description:
       "Only for documented exceptions (e.g. dotted-line reporting). Leave unset to derive the reporting manager automatically from the position hierarchy.",
   })
-  @IsUUID()
+  @IsString()
   @IsOptional()
   reportingManagerOverrideId?: string
 }

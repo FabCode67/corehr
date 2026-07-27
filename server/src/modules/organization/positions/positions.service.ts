@@ -1,14 +1,37 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
+import { Prisma } from "@prisma/client"
 
+import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
 
 import { CreatePositionDto } from "./dto/create-position.dto"
 import { UpdatePositionDto } from "./dto/update-position.dto"
 
+const POSITION_LIST_INCLUDE = { department: true, unit: true, level: true, reportsTo: true } as const
+
 @Injectable()
 export class PositionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private buildFindAllWhere(params: {
+    departmentId?: string
+    unitId?: string
+    reportsToPositionId?: string
+    includeInactive?: boolean
+  }): Prisma.PositionWhereInput {
+    const { departmentId, unitId, reportsToPositionId, includeInactive = false } = params
+
+    return {
+      ...(includeInactive ? {} : { isActive: true }),
+      ...(departmentId ? { departmentId } : {}),
+      ...(unitId ? { unitId } : {}),
+      ...(reportsToPositionId ? { reportsToPositionId } : {}),
+    }
+  }
+
+  /** Full, unpaginated list — used by cascading Department -> Position
+   *  selects (e.g. Position Assignment step) that need every match. See
+   *  findAllPaginated() for the admin table view. */
   findAll(
     params: {
       departmentId?: string
@@ -17,18 +40,42 @@ export class PositionsService {
       includeInactive?: boolean
     } = {}
   ) {
-    const { departmentId, unitId, reportsToPositionId, includeInactive = false } = params
-
     return this.prisma.position.findMany({
-      where: {
-        ...(includeInactive ? {} : { isActive: true }),
-        ...(departmentId ? { departmentId } : {}),
-        ...(unitId ? { unitId } : {}),
-        ...(reportsToPositionId ? { reportsToPositionId } : {}),
-      },
-      include: { department: true, unit: true, level: true, reportsTo: true },
+      where: this.buildFindAllWhere(params),
+      include: POSITION_LIST_INCLUDE,
       orderBy: { title: "asc" },
     })
+  }
+
+  /** Paginated version for the Positions admin table. */
+  async findAllPaginated(
+    params: {
+      departmentId?: string
+      unitId?: string
+      reportsToPositionId?: string
+      includeInactive?: boolean
+    } = {},
+    page?: number,
+    pageSize?: number
+  ): Promise<PaginatedResult<Prisma.PositionGetPayload<{ include: typeof POSITION_LIST_INCLUDE }>>> {
+    const where = this.buildFindAllWhere(params)
+    const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
+      page,
+      pageSize
+    )
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.position.findMany({
+        where,
+        include: POSITION_LIST_INCLUDE,
+        orderBy: { title: "asc" },
+        skip,
+        take,
+      }),
+      this.prisma.position.count({ where }),
+    ])
+
+    return buildPaginatedResult(data, total, normalizedPage, normalizedPageSize)
   }
 
   async findOne(id: string) {

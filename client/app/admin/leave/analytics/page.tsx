@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import { WORK_LOCATIONS, formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employees"
+import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
   fetchBalanceExtremes,
@@ -18,7 +19,7 @@ import { LeaveTabs } from "../leave-tabs"
 
 interface SearchParams {
   departmentId?: string
-  workLocation?: string
+  branchId?: string
   year?: string
 }
 
@@ -64,12 +65,13 @@ export default async function AdminLeaveAnalyticsPage({
   const filters = await searchParams
   const analyticsFilters = {
     departmentId: filters.departmentId,
-    workLocation: filters.workLocation,
+    branchId: filters.branchId,
     year: filters.year ? Number(filters.year) : undefined,
   }
 
   const [
     departmentsResult,
+    branchesResult,
     byDepartmentResult,
     byBranchResult,
     byGenderResult,
@@ -80,6 +82,7 @@ export default async function AdminLeaveAnalyticsPage({
     currentlyOnLeaveResult,
   ] = await Promise.all([
     fetchDepartments(),
+    fetchBranches(),
     fetchUtilizationByDepartment(analyticsFilters),
     fetchUtilizationByBranch(analyticsFilters),
     fetchUtilizationByGender(analyticsFilters),
@@ -91,6 +94,7 @@ export default async function AdminLeaveAnalyticsPage({
   ])
 
   const departments = departmentsResult.ok ? departmentsResult.data : []
+  const branches = branchesResult.ok ? branchesResult.data : []
   const currentYear = new Date().getUTCFullYear()
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
 
@@ -124,11 +128,11 @@ export default async function AdminLeaveAnalyticsPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="workLocation" defaultValue={filters.workLocation ?? ""} className="w-44">
+              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-44">
                 <option value="">All branches</option>
-                {WORK_LOCATIONS.map((location) => (
-                  <option key={location} value={location}>
-                    {formatEnumLabel(location)}
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
                   </option>
                 ))}
               </Select>
@@ -184,7 +188,7 @@ export default async function AdminLeaveAnalyticsPage({
               rows={
                 byBranchResult.ok
                   ? byBranchResult.data.map((row) => ({
-                      label: formatEnumLabel(row.workLocation),
+                      label: row.branchName,
                       value: row.days,
                       sub: `(${row.requests})`,
                     }))

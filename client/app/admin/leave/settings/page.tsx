@@ -1,7 +1,12 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
 import { fetchEmployees } from "@/lib/api/employees"
-import { fetchLeaveBalances, fetchLeaveSettings, fetchLeaveTypes, fetchPublicHolidays } from "@/lib/api/leave"
+import {
+  fetchLeaveBalances,
+  fetchLeaveSettings,
+  fetchLeaveTypes,
+  fetchPublicHolidaysPaginated,
+} from "@/lib/api/leave"
 
 import { LeaveTabs } from "../leave-tabs"
 
@@ -13,8 +18,10 @@ import { LeaveSettingsForm } from "./leave-settings-form"
 import { LeaveTypeCard } from "./leave-type-card"
 
 interface SearchParams {
+  [key: string]: string | undefined
   employeeId?: string
   year?: string
+  holidaysPage?: string
 }
 
 export default async function AdminLeaveSettingsPage({
@@ -28,7 +35,7 @@ export default async function AdminLeaveSettingsPage({
 
   const [leaveTypesResult, holidaysResult, settingsResult, employeesResult] = await Promise.all([
     fetchLeaveTypes(true),
-    fetchPublicHolidays(true),
+    fetchPublicHolidaysPaginated(true, filters.holidaysPage ? Number(filters.holidaysPage) : 1),
     fetchLeaveSettings(),
     fetchEmployees(),
   ])
@@ -36,7 +43,7 @@ export default async function AdminLeaveSettingsPage({
   const balancesResult = filters.employeeId ? await fetchLeaveBalances(filters.employeeId, year) : null
 
   const leaveTypes = leaveTypesResult.ok ? leaveTypesResult.data : []
-  const holidays = holidaysResult.ok ? holidaysResult.data : []
+  const holidays = holidaysResult.ok ? holidaysResult.data.data : []
   const employees = employeesResult.ok ? employeesResult.data : []
 
   return (
@@ -77,7 +84,16 @@ export default async function AdminLeaveSettingsPage({
           {!holidaysResult.ok ? (
             <p className="text-sm text-destructive">{holidaysResult.error}</p>
           ) : (
-            <HolidaysPanel holidays={holidays} />
+            <HolidaysPanel
+              holidays={holidays}
+              pagination={{
+                page: holidaysResult.data.page,
+                totalPages: holidaysResult.data.totalPages,
+                total: holidaysResult.data.total,
+                pageSize: holidaysResult.data.pageSize,
+              }}
+              searchParams={filters}
+            />
           )}
         </CardContent>
       </Card>
@@ -121,7 +137,7 @@ export default async function AdminLeaveSettingsPage({
               <Select name="employeeId" defaultValue={filters.employeeId ?? ""} className="w-64">
                 <option value="">Select an employee…</option>
                 {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
+                  <option key={employee.employeeNumber} value={employee.employeeNumber}>
                     {employee.firstName} {employee.lastName} ({employee.employeeNumber})
                   </option>
                 ))}
