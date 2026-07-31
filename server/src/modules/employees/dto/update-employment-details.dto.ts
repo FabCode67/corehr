@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { ContractType } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsBoolean, IsDate, IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsBoolean, IsDate, IsEnum, IsNumber, IsOptional, IsString, Min, MaxLength } from "class-validator"
 
 /**
  * Step 2 of the Employee Registration wizard — Employment Details. Entirely
@@ -71,4 +71,14 @@ export class UpdateEmploymentDetailsDto {
   @IsString()
   @IsOptional()
   previousReasonForLeaving?: string
+
+  @ApiPropertyOptional({
+    description:
+      "Years of banking experience prior to joining NCBA — combined with tenure here (computed, not stored) for the employee list's Total Banking Experience column.",
+  })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  previousBankingExperienceYears?: number
 }

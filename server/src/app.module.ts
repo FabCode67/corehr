@@ -53,6 +53,21 @@ import { GrievancesModule } from "./modules/employee-relations/grievances/grieva
 import { AppealsModule } from "./modules/employee-relations/appeals/appeals.module"
 import { EmployeeRelationsAnalyticsModule } from "./modules/employee-relations/analytics/employee-relations-analytics.module"
 import { CasePdfModule } from "./modules/employee-relations/pdf/case-pdf.module"
+import { DocumentTypesModule } from "./modules/onboarding-documents/document-types/document-types.module"
+import { AssignmentsModule as OnboardingDocumentAssignmentsModule } from "./modules/onboarding-documents/assignments/assignments.module"
+import { ExitProcessModule } from "./modules/employees/exit-process/exit-process.module"
+import { ExecutiveDashboardModule } from "./modules/executive-dashboard/executive-dashboard.module"
+import { ImportsModule } from "./modules/imports/imports.module"
+import { EmailModule } from "./modules/email/email.module"
+import { InstitutionsModule as ProfileInstitutionsModule } from "./modules/professional-profile/institutions/institutions.module"
+import { SkillsModule } from "./modules/professional-profile/skills/skills.module"
+import { WorkExperienceModule } from "./modules/professional-profile/work-experience/work-experience.module"
+import { EducationRecordsModule } from "./modules/professional-profile/education/education-records.module"
+import { CertificationsModule } from "./modules/professional-profile/certifications/certifications.module"
+import { ProfileModule } from "./modules/professional-profile/profile/profile.module"
+import { ProfileAnalyticsModule } from "./modules/professional-profile/analytics/profile-analytics.module"
+import { HrAnalyticsModule } from "./modules/hr-analytics/hr-analytics.module"
+import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
 
 @Module({
   imports: [
@@ -109,6 +124,21 @@ import { CasePdfModule } from "./modules/employee-relations/pdf/case-pdf.module"
     AppealsModule,
     EmployeeRelationsAnalyticsModule,
     CasePdfModule,
+    DocumentTypesModule,
+    OnboardingDocumentAssignmentsModule,
+    ExitProcessModule,
+    ExecutiveDashboardModule,
+    ImportsModule,
+    EmailModule,
+    ProfileInstitutionsModule,
+    SkillsModule,
+    WorkExperienceModule,
+    EducationRecordsModule,
+    CertificationsModule,
+    ProfileModule,
+    ProfileAnalyticsModule,
+    HrAnalyticsModule,
+    AiAssistantModule,
   ],
 })
 export class AppModule {}

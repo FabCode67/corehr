@@ -2,32 +2,43 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select } from "@/components/ui/select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
-import { fetchDepartments } from "@/lib/api/departments"
+import { fetchDepartments, fetchFunctions } from "@/lib/api/departments"
 import { fetchPositionLevels } from "@/lib/api/positions"
 import {
   fetchByBand,
   fetchByBranch,
   fetchByContractType,
   fetchByDepartment,
+  fetchByFunction,
   fetchByGender,
   fetchByPositionLevel,
   fetchDistribution,
+  fetchHeatMap,
+  fetchHighPotential,
   fetchNeedsImprovement,
+  fetchPromotionReadiness,
   fetchReviewPeriods,
   fetchTopPerformers,
   fetchTrends,
   type AnalyticsFilters,
 } from "@/lib/api/performance"
 
+import { getSession } from "@/lib/get-session"
+
+import { ImportManager } from "../imports/import-manager"
 import { PerformanceTabs } from "./performance-tabs"
 
 interface SearchParams {
   periodId?: string
+  year?: string
   reviewType?: string
   departmentId?: string
+  functionId?: string
   branchId?: string
   levelId?: string
   bandId?: string
+  contractType?: string
+  gender?: string
 }
 
 function HorizontalBarList({
@@ -83,21 +94,27 @@ export default async function AdminPerformanceDashboardPage({
   const filters = await searchParams
   const analyticsFilters: AnalyticsFilters = {
     periodId: filters.periodId,
+    year: filters.year ? Number(filters.year) : undefined,
     reviewType: filters.reviewType as AnalyticsFilters["reviewType"],
     departmentId: filters.departmentId,
+    functionId: filters.functionId,
     branchId: filters.branchId,
     levelId: filters.levelId,
     bandId: filters.bandId,
+    contractType: filters.contractType,
+    gender: filters.gender,
   }
 
   const [
     periodsResult,
     departmentsResult,
+    functionsResult,
     branchesResult,
     levelsResult,
     bandsResult,
     distributionResult,
     byDepartmentResult,
+    byFunctionResult,
     byBranchResult,
     byLevelResult,
     byBandResult,
@@ -106,14 +123,19 @@ export default async function AdminPerformanceDashboardPage({
     trendsResult,
     topPerformersResult,
     needsImprovementResult,
+    heatMapResult,
+    promotionReadinessResult,
+    highPotentialResult,
   ] = await Promise.all([
     fetchReviewPeriods(),
     fetchDepartments(),
+    fetchFunctions(),
     fetchBranches(),
     fetchPositionLevels(),
     fetchBands(),
     fetchDistribution(analyticsFilters),
     fetchByDepartment(analyticsFilters),
+    fetchByFunction(analyticsFilters),
     fetchByBranch(analyticsFilters),
     fetchByPositionLevel(analyticsFilters),
     fetchByBand(analyticsFilters),
@@ -122,23 +144,35 @@ export default async function AdminPerformanceDashboardPage({
     fetchTrends(analyticsFilters),
     fetchTopPerformers(analyticsFilters, 10),
     fetchNeedsImprovement(analyticsFilters),
+    fetchHeatMap(analyticsFilters, "department"),
+    fetchPromotionReadiness(analyticsFilters),
+    fetchHighPotential(analyticsFilters),
   ])
 
   const periods = periodsResult.ok ? periodsResult.data : []
   const departments = departmentsResult.ok ? departmentsResult.data : []
+  const functions = functionsResult.ok ? functionsResult.data : []
   const branches = branchesResult.ok ? branchesResult.data : []
   const levels = levelsResult.ok ? levelsResult.data : []
   const bands = bandsResult.ok ? bandsResult.data : []
   const distribution = distributionResult.ok ? distributionResult.data : []
   const totalRated = distribution.reduce((sum, entry) => sum + entry.count, 0)
+  const byDepartment = byDepartmentResult.ok ? byDepartmentResult.data : []
+  const topDepartments = byDepartment.slice(0, 3)
+  const lowestDepartments = [...byDepartment].sort((a, b) => a.averageRating - b.averageRating).slice(0, 3)
+  const session = await getSession()
+  const actingEmployeeId = session?.employeeId ?? ""
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Performance Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Executive insights into ratings, review progress, and workforce performance trends.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Performance Management</h1>
+          <p className="text-sm text-muted-foreground">
+            Executive insights into ratings, review progress, and workforce performance trends.
+          </p>
+        </div>
+        <ImportManager moduleKey="performance" moduleLabel="Performance" actingEmployeeId={actingEmployeeId} />
       </div>
 
       <PerformanceTabs />
@@ -169,12 +203,33 @@ export default async function AdminPerformanceDashboardPage({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Year</label>
+              <input
+                type="number"
+                name="year"
+                defaultValue={filters.year ?? ""}
+                placeholder="All years"
+                className="h-9 w-24 rounded-lg border border-input bg-transparent px-3 text-sm shadow-xs outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
               <Select name="departmentId" defaultValue={filters.departmentId ?? ""} className="w-40">
                 <option value="">All departments</option>
                 {departments.map((department) => (
                   <option key={department.id} value={department.id}>
                     {department.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Function</label>
+              <Select name="functionId" defaultValue={filters.functionId ?? ""} className="w-40">
+                <option value="">All functions</option>
+                {functions.map((fn) => (
+                  <option key={fn.id} value={fn.id}>
+                    {fn.name}
                   </option>
                 ))}
               </Select>
@@ -210,6 +265,24 @@ export default async function AdminPerformanceDashboardPage({
                     {band.name}
                   </option>
                 ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Contract type</label>
+              <Select name="contractType" defaultValue={filters.contractType ?? ""} className="w-40">
+                <option value="">All contract types</option>
+                <option value="PERMANENT">Permanent</option>
+                <option value="TEMPORARY">Temporary</option>
+                <option value="GRADUATE_TRAINEE">Graduate Trainee</option>
+                <option value="INTERN">Intern</option>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Gender</label>
+              <Select name="gender" defaultValue={filters.gender ?? ""} className="w-32">
+                <option value="">All</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
               </Select>
             </div>
             <button
@@ -257,6 +330,48 @@ export default async function AdminPerformanceDashboardPage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Bell curve — expected vs actual</CardTitle>
+          <CardDescription>Actual rating distribution (%) against the organization&apos;s expected curve, configured per rank in Rating Scale settings.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {distribution.every((entry) => entry.expectedPercentage === null) ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              No expected percentages configured yet — set them on each rank in Rating Scale settings to see the overlay.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {distribution.map((entry) => (
+                <div key={entry.rank} className="flex items-center gap-3 text-sm">
+                  <div className="w-40 shrink-0 truncate text-muted-foreground">
+                    {entry.rank} · {entry.label}
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-14 shrink-0 text-[0.65rem] text-muted-foreground">Actual</span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${RATING_COLORS[entry.rank]}`} style={{ width: `${Math.max(2, entry.actualPercentage)}%` }} />
+                      </div>
+                      <span className="w-12 shrink-0 text-right text-xs font-medium">{entry.actualPercentage}%</span>
+                    </div>
+                    {entry.expectedPercentage !== null ? (
+                      <div className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[0.65rem] text-muted-foreground">Expected</span>
+                        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-foreground/30" style={{ width: `${Math.max(2, entry.expectedPercentage)}%` }} />
+                        </div>
+                        <span className="w-12 shrink-0 text-right text-xs font-medium">{entry.expectedPercentage}%</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -269,6 +384,26 @@ export default async function AdminPerformanceDashboardPage({
                 byDepartmentResult.ok
                   ? byDepartmentResult.data.map((d) => ({
                       label: d.departmentName,
+                      value: d.averageRating,
+                      sub: `(${d.reviews})`,
+                    }))
+                  : []
+              }
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Function performance</CardTitle>
+            <CardDescription>Average rating (out of 5).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarList
+              rows={
+                byFunctionResult.ok
+                  ? byFunctionResult.data.map((d) => ({
+                      label: d.functionName,
                       value: d.averageRating,
                       sub: `(${d.reviews})`,
                     }))
@@ -461,6 +596,132 @@ export default async function AdminPerformanceDashboardPage({
                       </p>
                     </div>
                     <span className="font-medium text-destructive">{entry.rating}/5</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Top performing departments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarList rows={topDepartments.map((d) => ({ label: d.departmentName, value: d.averageRating, sub: `(${d.reviews})` }))} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Lowest performing departments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HorizontalBarList rows={lowestDepartments.map((d) => ({ label: d.departmentName, value: d.averageRating, sub: `(${d.reviews})` }))} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Rating distribution heat map — by department</CardTitle>
+          <CardDescription>Count of reviews at each rank, shaded by concentration.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!heatMapResult.ok || heatMapResult.data.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No data for this selection.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="py-1 pr-3 font-medium">Department</th>
+                    {[5, 4, 3, 2, 1].map((rank) => (
+                      <th key={rank} className="px-2 py-1 text-center font-medium">
+                        {rank}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {heatMapResult.data.map((row) => {
+                    const rowMax = Math.max(1, ...Object.values(row.counts))
+                    return (
+                      <tr key={row.key} className="border-t border-border">
+                        <td className="py-1.5 pr-3 font-medium text-foreground">{row.label}</td>
+                        {[5, 4, 3, 2, 1].map((rank) => {
+                          const count = row.counts[rank] ?? 0
+                          const intensity = count === 0 ? 0 : 0.15 + (count / rowMax) * 0.65
+                          return (
+                            <td key={rank} className="px-2 py-1.5 text-center text-xs">
+                              <span
+                                className="inline-flex size-7 items-center justify-center rounded"
+                                style={{ backgroundColor: `rgba(16, 185, 129, ${intensity})` }}
+                              >
+                                {count || ""}
+                              </span>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Promotion readiness</CardTitle>
+            <CardDescription>Consistently strong, non-declining rating history (avg &amp; latest ≥ 4, 2+ reviews).</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!promotionReadinessResult.ok || promotionReadinessResult.data.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No candidates for this selection.</p>
+            ) : (
+              <ul className="flex flex-col gap-2 text-sm">
+                {promotionReadinessResult.data.map((candidate) => (
+                  <li key={candidate.employeeId} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">{candidate.employeeName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {candidate.departmentName}
+                        {candidate.bandName ? ` · ${candidate.bandName}` : ""} · {candidate.trend}
+                      </p>
+                    </div>
+                    <span className="font-medium text-emerald-600">{candidate.averageRating}/5</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>High-potential employees</CardTitle>
+            <CardDescription>Average rating ≥ 4.5, or a perfect latest rating with a non-declining trend.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!highPotentialResult.ok || highPotentialResult.data.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No candidates for this selection.</p>
+            ) : (
+              <ul className="flex flex-col gap-2 text-sm">
+                {highPotentialResult.data.map((candidate) => (
+                  <li key={candidate.employeeId} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">{candidate.employeeName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {candidate.departmentName}
+                        {candidate.bandName ? ` · ${candidate.bandName}` : ""} · {candidate.trend}
+                      </p>
+                    </div>
+                    <span className="font-medium text-emerald-600">{candidate.averageRating}/5</span>
                   </li>
                 ))}
               </ul>

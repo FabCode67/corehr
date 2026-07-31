@@ -124,6 +124,7 @@ export async function updateEmploymentDetails(
         employmentStartDate: trimmedOrUndefined(formData.get("employmentStartDate")),
         probationEndDate: trimmedOrUndefined(formData.get("probationEndDate")),
         contractEndDate: trimmedOrUndefined(formData.get("contractEndDate")),
+        previousBankingExperienceYears: trimmedOrUndefined(formData.get("previousBankingExperienceYears")),
         previousEmployee,
         previousEmployeeNumber: previousEmployee
           ? trimmedOrUndefined(formData.get("previousEmployeeNumber"))
@@ -376,6 +377,30 @@ export async function processExit(
   revalidatePath(`/admin/employees/${id}`)
   revalidatePath("/admin/organization")
   return {}
+}
+
+export async function initiateExit(id: string, actingEmployeeId: string): Promise<ActionState> {
+  try {
+    await apiFetch(`/employees/${id}/initiate-exit`, {
+      method: "POST",
+      body: JSON.stringify({ actingEmployeeId }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to start the exit process." }
+  }
+
+  revalidatePath("/admin/employees")
+  revalidatePath(`/admin/employees/${id}`)
+  return {}
+}
+
+/** Void-returning wrapper for the bare "Start Exit Process" `<form
+ *  action={...}>` button — see deleteSanctionTypeForm's doc comment
+ *  (lib/api/employee-relations-actions.ts) for why a
+ *  `Promise<ActionState>`-returning action can't be bound directly into a
+ *  plain form action. Fully bound (no remaining formData use). */
+export async function initiateExitForm(id: string, actingEmployeeId: string): Promise<void> {
+  await initiateExit(id, actingEmployeeId)
 }
 
 // ---- Status (legacy quick deactivate — Exit Management above is preferred) ----

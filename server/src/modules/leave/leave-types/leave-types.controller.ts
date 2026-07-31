@@ -18,6 +18,7 @@ import {
   UpdateLeaveTypeDto,
   UpsertCarryForwardRuleDto,
   UpsertEntitlementRuleDto,
+  UpsertLeaveAttachmentRequirementDto,
 } from "./dto/leave-type.dto"
 import { LeaveTypesService } from "./leave-types.service"
 
@@ -78,5 +79,21 @@ export class LeaveTypesController {
     @Body() dto: UpsertCarryForwardRuleDto
   ) {
     return this.leaveTypesService.upsertCarryForwardRule(id, dto)
+  }
+
+  @Put(":id/attachment-requirements")
+  upsertAttachmentRequirement(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpsertLeaveAttachmentRequirementDto
+  ) {
+    return this.leaveTypesService.upsertAttachmentRequirement(id, dto)
+  }
+
+  @Delete(":id/attachment-requirements/:requirementId")
+  removeAttachmentRequirement(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("requirementId", ParseUUIDPipe) requirementId: string
+  ) {
+    return this.leaveTypesService.removeAttachmentRequirement(id, requirementId)
   }
 }

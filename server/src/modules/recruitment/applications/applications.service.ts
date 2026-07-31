@@ -4,6 +4,7 @@ import { ApplicationStatus, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 import { RecruitmentAccessScope, RecruitmentAccessService } from "../access/recruitment-access.service"
 
 import { CreateApplicationDto } from "./dto/create-application.dto"
@@ -44,8 +45,17 @@ export interface ApplicationFilters {
 export class ApplicationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessService: RecruitmentAccessService
+    private readonly accessService: RecruitmentAccessService,
+    private readonly emailService: EmailService
   ) {}
+
+  private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
+    try {
+      await this.emailService.enqueue(params)
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+  }
 
   private buildWhere(filters: ApplicationFilters, scope: RecruitmentAccessScope): Prisma.ApplicationWhereInput {
     const filterWhere: Prisma.ApplicationWhereInput = {
@@ -114,6 +124,36 @@ export class ApplicationsService {
         include: APPLICATION_INCLUDE,
       })
       await this.log(application.id, "CREATED", actingEmployeeId)
+
+      await this.safeSendEmail({
+        templateKey: "recruitment_application_received",
+        recipientEmail: candidate.email,
+        relatedModule: "recruitment",
+        relatedEntityId: application.id,
+        variables: {
+          candidate_name: `${candidate.firstName} ${candidate.lastName}`,
+          job_title: application.jobPosting.postingTitle,
+        },
+      })
+
+      const recruiterId = application.jobPosting.requisition?.recruiterId
+      if (recruiterId) {
+        const recruiter = await this.prisma.employee.findUnique({ where: { employeeNumber: recruiterId }, select: { email: true } })
+        if (recruiter) {
+          await this.safeSendEmail({
+            templateKey: "recruitment_recruiter_new_application",
+            recipientEmail: recruiter.email,
+            recipientEmployeeId: recruiterId,
+            relatedModule: "recruitment",
+            relatedEntityId: application.id,
+            variables: {
+              candidate_name: `${candidate.firstName} ${candidate.lastName}`,
+              job_title: application.jobPosting.postingTitle,
+            },
+          })
+        }
+      }
+
       return application
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -131,6 +171,20 @@ export class ApplicationsService {
       include: APPLICATION_INCLUDE,
     })
     await this.log(id, "STATUS_CHANGED", dto.actingEmployeeId, dto.status)
+
+    if (dto.status === "REJECTED") {
+      await this.safeSendEmail({
+        templateKey: "recruitment_rejection",
+        recipientEmail: updated.candidate.email,
+        relatedModule: "recruitment",
+        relatedEntityId: id,
+        variables: {
+          candidate_name: `${updated.candidate.firstName} ${updated.candidate.lastName}`,
+          job_title: updated.jobPosting.postingTitle,
+        },
+      })
+    }
+
     return updated
   }
 
@@ -153,6 +207,20 @@ export class ApplicationsService {
     ])
 
     await this.log(id, "SCREENED", actingEmployeeId, dto.decision)
+
+    if (STATUS_FOR_DECISION[dto.decision] === "REJECTED") {
+      await this.safeSendEmail({
+        templateKey: "recruitment_rejection",
+        recipientEmail: application.candidate.email,
+        relatedModule: "recruitment",
+        relatedEntityId: id,
+        variables: {
+          candidate_name: `${application.candidate.firstName} ${application.candidate.lastName}`,
+          job_title: application.jobPosting.postingTitle,
+        },
+      })
+    }
+
     return application
   }
 

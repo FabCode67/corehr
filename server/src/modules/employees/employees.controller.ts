@@ -61,6 +61,15 @@ export class EmployeesController {
     return this.employeesService.findByEmployeeNumber(employeeNumber)
   }
 
+  /** Batch line-manager lookup for the employee list table — same
+   *  resolution rules as getReportingManager() below, but computed for
+   *  every active employee in a couple of queries instead of N+1 calls to
+   *  that per-employee endpoint. */
+  @Get("line-managers")
+  getLineManagersBatch() {
+    return this.employeesService.getLineManagersBatch()
+  }
+
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.employeesService.findOne(id)

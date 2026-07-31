@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import {
   deactivateLeaveType,
+  removeAttachmentRequirement,
   replaceApprovalSteps,
   updateLeaveType,
+  upsertAttachmentRequirement,
   upsertCarryForwardRule,
   upsertEntitlementRule,
   type LeaveActionState,
@@ -116,6 +118,31 @@ export function LeaveTypeCard({ leaveType }: { leaveType: LeaveType }) {
           />
         </div>
 
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`excludeWeekends-${leaveType.id}`}>Exclude weekends from day count</Label>
+          <Select
+            id={`excludeWeekends-${leaveType.id}`}
+            name="excludeWeekendsOverride"
+            defaultValue={leaveType.excludeWeekendsOverride === null ? "" : String(leaveType.excludeWeekendsOverride)}
+          >
+            <option value="">Use bank default</option>
+            <option value="true">Yes, exclude weekends</option>
+            <option value="false">No, include weekends</option>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`excludeHolidays-${leaveType.id}`}>Exclude public holidays from day count</Label>
+          <Select
+            id={`excludeHolidays-${leaveType.id}`}
+            name="excludePublicHolidaysOverride"
+            defaultValue={leaveType.excludePublicHolidaysOverride === null ? "" : String(leaveType.excludePublicHolidaysOverride)}
+          >
+            <option value="">Use bank default</option>
+            <option value="true">Yes, exclude public holidays</option>
+            <option value="false">No, include public holidays</option>
+          </Select>
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-foreground">
           <input
             type="checkbox"
@@ -172,6 +199,7 @@ export function LeaveTypeCard({ leaveType }: { leaveType: LeaveType }) {
 
       <ApprovalStepsEditor leaveType={leaveType} />
       <CarryForwardEditor leaveType={leaveType} />
+      <AttachmentRequirementsEditor leaveType={leaveType} />
     </div>
   )
 }
@@ -302,6 +330,9 @@ function CarryForwardEditor({ leaveType }: { leaveType: LeaveType }) {
   const [enabled, setEnabled] = useState(rule?.enabled ?? false)
   const [maxDays, setMaxDays] = useState(rule?.maxDays ?? 0)
   const [expiresAfterDays, setExpiresAfterDays] = useState(rule?.expiresAfterDays ?? 90)
+  const [autoExpiryEnabled, setAutoExpiryEnabled] = useState(rule?.autoExpiryEnabled ?? true)
+  const [exemptDepartmentIds, setExemptDepartmentIds] = useState((rule?.exemptDepartmentIds ?? []).join(", "))
+  const [exemptEmployeeIds, setExemptEmployeeIds] = useState((rule?.exemptEmployeeIds ?? []).join(", "))
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -311,7 +342,20 @@ function CarryForwardEditor({ leaveType }: { leaveType: LeaveType }) {
         leaveType.id,
         enabled,
         enabled ? maxDays : undefined,
-        enabled ? expiresAfterDays : undefined
+        enabled ? expiresAfterDays : undefined,
+        enabled ? autoExpiryEnabled : undefined,
+        enabled
+          ? exemptDepartmentIds
+              .split(",")
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined,
+        enabled
+          ? exemptEmployeeIds
+              .split(",")
+              .map((id) => id.trim())
+              .filter(Boolean)
+          : undefined
       )
       setError(result?.error ?? null)
     })
@@ -352,10 +396,98 @@ function CarryForwardEditor({ leaveType }: { leaveType: LeaveType }) {
                 className="h-8 w-24 text-xs"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={autoExpiryEnabled}
+                onChange={(event) => setAutoExpiryEnabled(event.target.checked)}
+                className="size-4 rounded border-input"
+              />
+              Auto-expire unused carry-forward
+            </label>
           </>
         ) : null}
         <Button type="button" size="xs" variant="outline" onClick={save} disabled={pending}>
           {pending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+      {enabled ? (
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[0.65rem] text-muted-foreground">Exempt department IDs (comma-separated, uncapped)</label>
+            <Input
+              value={exemptDepartmentIds}
+              onChange={(event) => setExemptDepartmentIds(event.target.value)}
+              className="h-8 text-xs"
+              placeholder="department UUIDs"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[0.65rem] text-muted-foreground">Exempt employee numbers (comma-separated, uncapped)</label>
+            <Input
+              value={exemptEmployeeIds}
+              onChange={(event) => setExemptEmployeeIds(event.target.value)}
+              className="h-8 text-xs"
+              placeholder="e.g. EMP-0001, EMP-0042"
+            />
+          </div>
+        </div>
+      ) : null}
+      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+    </div>
+  )
+}
+
+function AttachmentRequirementsEditor({ leaveType }: { leaveType: LeaveType }) {
+  const [name, setName] = useState("")
+  const [isMandatory, setIsMandatory] = useState(true)
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function add() {
+    if (!name.trim()) return
+    startTransition(async () => {
+      const result = await upsertAttachmentRequirement(leaveType.id, name.trim(), isMandatory)
+      setError(result?.error ?? null)
+      if (!result?.error) setName("")
+    })
+  }
+
+  return (
+    <div className="rounded-md border border-dashed border-border p-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">Required supporting documents</p>
+      {leaveType.attachmentRequirements && leaveType.attachmentRequirements.length > 0 ? (
+        <ul className="mb-3 flex flex-col gap-1">
+          {leaveType.attachmentRequirements.map((requirement) => (
+            <li key={requirement.id} className="flex items-center justify-between rounded border border-border px-2 py-1 text-sm">
+              <span>
+                {requirement.name}
+                {requirement.isMandatory ? null : <span className="ml-1 text-xs text-muted-foreground">(optional)</span>}
+              </span>
+              <button
+                type="button"
+                onClick={() => void removeAttachmentRequirement(leaveType.id, requirement.id)}
+                className="text-xs font-medium text-destructive hover:underline"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-3 text-xs text-muted-foreground">None configured — this leave type has no named document requirements.</p>
+      )}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[0.65rem] text-muted-foreground">Document name</label>
+          <Input value={name} onChange={(event) => setName(event.target.value)} className="h-8 w-48 text-xs" placeholder="e.g. Medical Certificate" />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input type="checkbox" checked={isMandatory} onChange={(event) => setIsMandatory(event.target.checked)} className="size-4 rounded border-input" />
+          Mandatory
+        </label>
+        <Button type="button" size="xs" variant="outline" onClick={add} disabled={pending || !name.trim()}>
+          {pending ? "Adding…" : "Add"}
         </Button>
       </div>
       {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}

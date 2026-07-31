@@ -132,13 +132,27 @@ export class FormTemplatesService {
 
   async addField(templateId: string, dto: CreateFormFieldDto) {
     await this.assertStructurallyEditable(templateId)
-    return this.prisma.formField.create({ data: { formTemplateId: templateId, ...dto } })
+    return this.prisma.formField.create({
+      data: {
+        formTemplateId: templateId,
+        ...dto,
+        options: (dto.options ?? undefined) as Prisma.InputJsonValue | undefined,
+        tableColumns: (dto.tableColumns ?? undefined) as Prisma.InputJsonValue | undefined,
+      },
+    })
   }
 
   async updateField(templateId: string, fieldId: string, dto: UpdateFormFieldDto) {
     await this.assertStructurallyEditable(templateId)
     await this.assertFieldBelongsToTemplate(templateId, fieldId)
-    return this.prisma.formField.update({ where: { id: fieldId }, data: dto })
+    return this.prisma.formField.update({
+      where: { id: fieldId },
+      data: {
+        ...dto,
+        options: (dto.options ?? undefined) as Prisma.InputJsonValue | undefined,
+        tableColumns: (dto.tableColumns ?? undefined) as Prisma.InputJsonValue | undefined,
+      },
+    })
   }
 
   async removeField(templateId: string, fieldId: string) {

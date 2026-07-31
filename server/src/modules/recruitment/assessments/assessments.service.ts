@@ -6,13 +6,14 @@ import { CreateAssessmentDto } from "./dto/create-assessment.dto"
 import { RecordAssessmentResultDto } from "./dto/record-assessment-result.dto"
 import { UpdateAssessmentDto } from "./dto/update-assessment.dto"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 
 const ASSESSMENT_INCLUDE = {
   evaluator: { select: { employeeNumber: true, firstName: true, lastName: true } },
   application: {
     select: {
       id: true,
-      candidate: { select: { id: true, firstName: true, lastName: true } },
+      candidate: { select: { id: true, firstName: true, lastName: true, email: true } },
       jobPosting: {
         select: {
           id: true,
@@ -28,7 +29,8 @@ const ASSESSMENT_INCLUDE = {
 export class AssessmentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessService: RecruitmentAccessService
+    private readonly accessService: RecruitmentAccessService,
+    private readonly emailService: EmailService
   ) {}
 
   async findAll(applicationId: string | undefined, actingEmployeeId: string) {
@@ -62,6 +64,26 @@ export class AssessmentsService {
     }
     const assessment = await this.prisma.assessment.create({ data: dto, include: ASSESSMENT_INCLUDE })
     await this.log(assessment.id, "CREATED", actingEmployeeId)
+
+    try {
+      await this.emailService.enqueue({
+        templateKey: "recruitment_assessment_invitation",
+        recipientEmail: assessment.application.candidate.email,
+        relatedModule: "recruitment",
+        relatedEntityId: assessment.id,
+        variables: {
+          candidate_name: `${assessment.application.candidate.firstName} ${assessment.application.candidate.lastName}`,
+          job_title: assessment.application.jobPosting.postingTitle,
+          deadline: assessment.scheduledDate ? assessment.scheduledDate.toISOString().slice(0, 10) : "To be confirmed",
+          // No public candidate portal exists in this app yet — the
+          // recruiter follows up directly with assessment details/link.
+          assessment_url: "#",
+        },
+      })
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+
     return assessment
   }
 

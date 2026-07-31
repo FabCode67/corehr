@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/learning"
 import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../imports/import-manager"
 import { LearningTabs } from "./learning-tabs"
 
 interface SearchParams {
@@ -126,11 +127,14 @@ export default async function LearningDashboardPage({ searchParams }: { searchPa
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Learning & Development</h1>
-        <p className="text-sm text-muted-foreground">
-          Executive overview of course completion, mandatory compliance, and organization-wide training progress.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Learning & Development</h1>
+          <p className="text-sm text-muted-foreground">
+            Executive overview of course completion, mandatory compliance, and organization-wide training progress.
+          </p>
+        </div>
+        <ImportManager moduleKey="training" moduleLabel="Training" actingEmployeeId={actingEmployeeId} />
       </div>
 
       <LearningTabs />

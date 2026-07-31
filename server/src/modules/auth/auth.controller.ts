@@ -19,4 +19,9 @@ export class AuthController {
   changePassword(@Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(dto)
   }
+
+  @Post("accept-terms")
+  acceptTerms(@Body("employeeId") employeeId: string) {
+    return this.authService.acceptTerms(employeeId)
+  }
 }

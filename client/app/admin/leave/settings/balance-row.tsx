@@ -31,7 +31,14 @@ export function BalanceRow({ employeeId, balance }: { employeeId: string; balanc
     <tr>
       <td className="px-4 py-2 font-medium text-foreground">{balance.leaveType.name}</td>
       <td className="px-4 py-2 text-muted-foreground">{balance.entitledDays}</td>
-      <td className="px-4 py-2 text-muted-foreground">{balance.carriedForwardDays}</td>
+      <td className="px-4 py-2 text-muted-foreground">
+        {balance.carriedForwardDays}
+        {balance.carryForwardExpiresAt ? (
+          <span className={balance.carryForwardExpired ? "ml-1 text-xs text-destructive" : "ml-1 text-xs text-muted-foreground"}>
+            ({balance.carryForwardExpired ? "expired" : `exp. ${new Date(balance.carryForwardExpiresAt).toLocaleDateString()}`})
+          </span>
+        ) : null}
+      </td>
       <td className="px-4 py-2 text-muted-foreground">{balance.takenDays}</td>
       <td className="px-4 py-2 text-muted-foreground">{balance.pendingDays}</td>
       <td className="px-4 py-2 font-medium text-foreground">{balance.remainingDays}</td>

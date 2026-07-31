@@ -1,4 +1,4 @@
-import { Geist_Mono } from "next/font/google"
+import { Alex_Brush, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -13,6 +13,15 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
+// Cursive script used only for the DocuSign-style signature stamp
+// (components/ui/signature-stamp.tsx) — see that file for the rest of the
+// stamp styling.
+const fontSignature = Alex_Brush({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-signature",
+})
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -22,7 +31,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans")}
+      className={cn("antialiased", fontMono.variable, fontSignature.variable, "font-sans")}
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>

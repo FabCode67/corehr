@@ -45,6 +45,7 @@ export async function login(
     jobTitle: employee.position?.title ?? "Not yet assigned",
     department: employee.position?.department.name ?? "Not yet assigned",
     branch: employee.branch?.name ?? "Not assigned",
+    mustChangePassword: employee.mustChangePassword,
   }
 
   const cookieStore = await cookies()
@@ -56,7 +57,9 @@ export async function login(
     maxAge: 60 * 60 * 8, // 8 hours
   })
 
-  redirect(sessionUser.role === "admin" ? "/admin" : "/staff")
+  // First Login Security: a temporary password sends the employee straight
+  // to the forced change-password/terms page instead of their portal.
+  redirect(sessionUser.mustChangePassword ? "/change-password" : sessionUser.role === "admin" ? "/admin" : "/staff")
 }
 
 export async function logout() {

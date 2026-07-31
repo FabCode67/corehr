@@ -20,10 +20,12 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@nestjs/common": "^11.0.10",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.10",
     "@nestjs/platform-express": "^11.0.10",
+    "@nestjs/schedule": "^4.1.1",
     "@nestjs/swagger": "^11.4.4",
     "@prisma/client": "^6.3.1",
     "bcryptjs": "^2.4.3",
@@ -32,9 +34,13 @@
     "cloudinary": "^2.5.1",
     "helmet": "^8.0.0",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.16",
     "pdfkit": "^0.15.1",
+    "pptxgenjs": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "11.0.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.2",
@@ -42,6 +48,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^6.4.17",
     "@types/pdfkit": "^0.13.4",
     "prisma": "^6.3.1",
     "ts-node": "^10.9.2",

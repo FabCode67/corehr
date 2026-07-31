@@ -106,7 +106,16 @@ export default async function StaffLeavePage({
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 text-sm">
                 <Stat label="Entitlement" value={balance.entitledDays} />
-                <Stat label="Carried forward" value={balance.carriedForwardDays} />
+                <div>
+                  <p className="text-xs text-muted-foreground">Carried forward</p>
+                  <p className="font-medium text-foreground">{balance.carriedForwardDays}</p>
+                  {balance.carryForwardExpiresAt ? (
+                    <p className={balance.carryForwardExpired ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                      {balance.carryForwardExpired ? "Expired " : "Expires "}
+                      {new Date(balance.carryForwardExpiresAt).toLocaleDateString()}
+                    </p>
+                  ) : null}
+                </div>
                 <Stat label="Taken" value={balance.takenDays} />
                 <Stat label="Pending" value={balance.pendingDays} />
                 <Stat label="Remaining" value={balance.remainingDays} emphasize />
@@ -181,7 +190,7 @@ export default async function StaffLeavePage({
                     </td>
                     <td className="px-4 py-3">
                       {isCancellable(request.status, request.startDate) ? (
-                        <CancelRequestButton requestId={request.id} />
+                        <CancelRequestButton requestId={request.id} actingEmployeeId={employeeId} />
                       ) : null}
                     </td>
                   </tr>

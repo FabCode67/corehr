@@ -49,7 +49,38 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
+  // Named attachment requirements (e.g. "Medical Certificate") are
+  // per-leave-type — one upload slot per requirement, keyed by requirement
+  // id, serialized into a single hidden JSON input on submit since FormData
+  // can't carry a nested array directly.
+  const [requirementUploads, setRequirementUploads] = useState<Record<string, string>>({})
+  const [requirementUploadErrors, setRequirementUploadErrors] = useState<Record<string, string>>({})
+  const [requirementUploading, setRequirementUploading] = useState<Record<string, boolean>>({})
+
   const selectedBalance = balances.find((balance) => balance.leaveTypeId === leaveTypeId)
+  const attachmentRequirements = selectedBalance?.leaveType.attachmentRequirements ?? []
+
+  async function handleRequirementFileChange(requirementId: string, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setRequirementUploading((prev) => ({ ...prev, [requirementId]: true }))
+    setRequirementUploadErrors((prev) => ({ ...prev, [requirementId]: "" }))
+    const result = await uploadFile("leave-attachments", file)
+    setRequirementUploading((prev) => ({ ...prev, [requirementId]: false }))
+
+    if (!result.ok) {
+      setRequirementUploadErrors((prev) => ({ ...prev, [requirementId]: result.error }))
+      return
+    }
+    setRequirementUploads((prev) => ({ ...prev, [requirementId]: result.url }))
+  }
+
+  const attachmentsJson = JSON.stringify(
+    Object.entries(requirementUploads)
+      .filter(([, url]) => url)
+      .map(([requirementId, fileUrl]) => ({ requirementId, fileUrl }))
+  )
 
   useEffect(() => {
     if (!startDate || !endDate) {
@@ -108,6 +139,7 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="returnDate" value={returnDate} />
       <input type="hidden" name="attachmentUrl" value={attachmentUrl} />
+      <input type="hidden" name="attachments" value={attachmentsJson} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -227,6 +259,32 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
         {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
         {attachmentUrl ? <p className="text-xs text-emerald-600">Attached.</p> : null}
       </div>
+
+      {attachmentRequirements.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase">
+            Required document(s) for {selectedBalance?.leaveType.name}
+          </p>
+          {attachmentRequirements.map((requirement) => (
+            <div key={requirement.id} className="flex flex-col gap-1">
+              <Label htmlFor={`req-${requirement.id}`}>
+                {requirement.name}
+                {requirement.isMandatory ? <span className="text-destructive"> *</span> : " (optional)"}
+              </Label>
+              <input
+                id={`req-${requirement.id}`}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(event) => handleRequirementFileChange(requirement.id, event)}
+                className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1 file:text-xs file:font-medium"
+              />
+              {requirementUploading[requirement.id] ? <p className="text-xs text-muted-foreground">Uploading…</p> : null}
+              {requirementUploadErrors[requirement.id] ? <p className="text-xs text-destructive">{requirementUploadErrors[requirement.id]}</p> : null}
+              {requirementUploads[requirement.id] ? <p className="text-xs text-emerald-600">Attached.</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {state?.error ? (
         <p role="alert" className="text-sm text-destructive">

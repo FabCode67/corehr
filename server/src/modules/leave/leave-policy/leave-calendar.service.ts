@@ -29,16 +29,31 @@ export class LeaveCalendarService {
     private readonly leaveSettingsService: LeaveSettingsService
   ) {}
 
-  async compute(startDate: Date, endDate: Date): Promise<LeaveDayComputation> {
+  /**
+   * `leaveType` lets a specific leave type override the bank-wide default
+   * (e.g. Annual Leave excludes weekends/holidays, but Study Leave includes
+   * them) — per-field, and only where the override is non-null; a null/
+   * omitted override field falls back to the bank-wide LeaveSettings value.
+   * Callers that don't know the leave type yet (e.g. a generic date-range
+   * preview) can omit this param entirely and get bank-default behavior.
+   */
+  async compute(
+    startDate: Date,
+    endDate: Date,
+    leaveType?: { excludeWeekendsOverride?: boolean | null; excludePublicHolidaysOverride?: boolean | null }
+  ): Promise<LeaveDayComputation> {
     const settings = await this.leaveSettingsService.get()
-    const holidays = settings.excludePublicHolidays
+    const excludeWeekends = leaveType?.excludeWeekendsOverride ?? settings.excludeWeekends
+    const excludePublicHolidays = leaveType?.excludePublicHolidaysOverride ?? settings.excludePublicHolidays
+
+    const holidays = excludePublicHolidays
       ? await this.prisma.publicHoliday.findMany({ where: { isActive: true } })
       : []
 
     let numberOfDays = 0
     const cursor = new Date(startDate)
     while (cursor.getTime() <= endDate.getTime()) {
-      if (this.isLeaveDay(cursor, settings.weekendDays, settings.excludeWeekends, holidays)) {
+      if (this.isLeaveDay(cursor, settings.weekendDays, excludeWeekends, holidays)) {
         numberOfDays += 1
       }
       cursor.setUTCDate(cursor.getUTCDate() + 1)
@@ -47,7 +62,7 @@ export class LeaveCalendarService {
     const returnDate = new Date(endDate)
     do {
       returnDate.setUTCDate(returnDate.getUTCDate() + 1)
-    } while (!this.isLeaveDay(returnDate, settings.weekendDays, settings.excludeWeekends, holidays))
+    } while (!this.isLeaveDay(returnDate, settings.weekendDays, excludeWeekends, holidays))
 
     return { numberOfDays, returnDate }
   }

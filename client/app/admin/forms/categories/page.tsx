@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchFormCategories } from "@/lib/api/forms"
-import { deleteFormCategory } from "@/lib/api/forms-actions"
+import { deleteFormCategoryForm } from "@/lib/api/forms-actions"
 
 import { FormsTabs } from "../forms-tabs"
 
@@ -70,7 +70,7 @@ export default async function FormCategoriesPage() {
                           Edit
                         </Link>
                         {category.isActive ? (
-                          <form action={deleteFormCategory.bind(null, category.id)}>
+                          <form action={deleteFormCategoryForm.bind(null, category.id)}>
                             <button type="submit" className="text-xs font-medium text-destructive hover:underline">
                               Deactivate
                             </button>

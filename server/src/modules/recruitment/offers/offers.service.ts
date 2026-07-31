@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 
 import { RecruitmentAccessService } from "../access/recruitment-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 
 import { ActingEmployeeDto } from "./dto/acting-employee.dto"
 import { CreateOfferDto } from "./dto/create-offer.dto"
@@ -53,7 +54,8 @@ const OFFER_INCLUDE = {
 export class OffersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessService: RecruitmentAccessService
+    private readonly accessService: RecruitmentAccessService,
+    private readonly emailService: EmailService
   ) {}
 
   async findAll(applicationId: string | undefined, actingEmployeeId: string) {
@@ -129,6 +131,23 @@ export class OffersService {
       this.prisma.application.update({ where: { id: offer.applicationId }, data: { status: "OFFER" } }),
     ])
     await this.log(id, "SENT", dto.actingEmployeeId)
+
+    try {
+      await this.emailService.enqueue({
+        templateKey: "recruitment_offer_letter",
+        recipientEmail: updated.application.candidate.email,
+        relatedModule: "recruitment",
+        relatedEntityId: id,
+        variables: {
+          candidate_name: `${updated.application.candidate.firstName} ${updated.application.candidate.lastName}`,
+          job_title: updated.application.jobPosting.postingTitle,
+          offer_url: updated.offerLetterUrl ?? "#",
+        },
+      })
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+
     return updated
   }
 

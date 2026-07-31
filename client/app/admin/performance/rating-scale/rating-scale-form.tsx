@@ -28,6 +28,19 @@ export function RatingScaleForm({ entry }: { entry: RatingScaleEntry }) {
           defaultValue={entry.description ?? ""}
         />
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`expectedPercentage-${entry.id}`}>Expected %</Label>
+        <Input
+          id={`expectedPercentage-${entry.id}`}
+          name="expectedPercentage"
+          type="number"
+          min={0}
+          max={100}
+          step="0.1"
+          defaultValue={entry.expectedPercentage ?? ""}
+          className="w-24"
+        />
+      </div>
       <Button type="submit" disabled={pending} size="sm">
         {pending ? "Saving…" : "Save"}
       </Button>

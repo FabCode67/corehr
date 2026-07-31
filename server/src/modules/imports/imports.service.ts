@@ -1,0 +1,338 @@
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
+import type { Prisma } from "@prisma/client"
+
+import { EmployeesService } from "../employees/employees.service"
+import { NotificationsService } from "../leave/notifications/notifications.service"
+import { PrismaService } from "../../prisma/prisma.service"
+
+import { IMPORT_MODULES, IMPORT_MODULES_BY_KEY, type ImportDeps, type ImportModuleConfig, type ImportRowOutcome, type ImportRowResult } from "./registry"
+import { ALLOWED_IMPORT_MIME_TYPES, MAX_IMPORT_FILE_SIZE_BYTES, SpreadsheetParseError, buildCsv, buildTemplateWorkbook, parseSpreadsheet } from "./spreadsheet.util"
+
+const ROW_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 20_000 }
+
+export interface UploadedFileLike {
+  originalname: string
+  mimetype: string
+  size: number
+  buffer: Buffer
+}
+
+/**
+ * The reusable engine every import module rides on top of. Nothing in here
+ * is module-specific — everything module-specific (field mapping,
+ * validation, how a row gets written) lives in registry/*.config.ts. See
+ * that folder's index.ts doc comment for how to add a new module.
+ */
+@Injectable()
+export class ImportsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly employeesService: EmployeesService,
+    private readonly notificationsService: NotificationsService
+  ) {}
+
+  private get deps(): ImportDeps {
+    return { prisma: this.prisma, employeesService: this.employeesService, notificationsService: this.notificationsService }
+  }
+
+  listModules() {
+    return IMPORT_MODULES.map((config) => ({
+      key: config.key,
+      label: config.label,
+      referenceKeyLabel: config.referenceKeyLabel,
+      matchStrategy: config.matchStrategy,
+      columns: config.columns,
+    }))
+  }
+
+  private getConfig(moduleKey: string): ImportModuleConfig {
+    const config = IMPORT_MODULES_BY_KEY.get(moduleKey)
+    if (!config) throw new NotFoundException(`Unknown import module "${moduleKey}".`)
+    return config
+  }
+
+  downloadTemplate(moduleKey: string): { buffer: Buffer; fileName: string } {
+    const config = this.getConfig(moduleKey)
+    return { buffer: buildTemplateWorkbook(config.columns), fileName: `${config.key}-import-template.xlsx` }
+  }
+
+  async preview(moduleKey: string, file: UploadedFileLike, importedById: string) {
+    this.assertFileIsAcceptable(file)
+    return this.previewFromBuffer(moduleKey, file.buffer, file.originalname, file.mimetype, importedById)
+  }
+
+  private assertFileIsAcceptable(file: UploadedFileLike) {
+    if (!file || file.size === 0) throw new BadRequestException("No file uploaded, or the file is empty.")
+    if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+      throw new BadRequestException(`File exceeds the maximum upload size of ${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB.`)
+    }
+    const hasValidExtension = /\.(csv|xlsx)$/i.test(file.originalname)
+    if (!hasValidExtension) {
+      throw new BadRequestException("Unsupported file format — upload a .csv or .xlsx file.")
+    }
+    // Browsers/OSes send inconsistent MIME types for CSV in particular, so
+    // this is a soft check layered on top of the (authoritative) extension
+    // check above, not a hard gate on its own.
+    if (file.mimetype && !ALLOWED_IMPORT_MIME_TYPES.has(file.mimetype) && !file.mimetype.startsWith("application/octet-stream")) {
+      // Still allow it through — the extension check is what actually
+      // matters, since MIME sniffing for spreadsheets is unreliable across
+      // browsers. No error thrown here, just documenting the leniency.
+    }
+  }
+
+  private async previewFromBuffer(moduleKey: string, buffer: Buffer, fileName: string, mimeType: string, importedById: string) {
+    const config = this.getConfig(moduleKey)
+
+    let parsed
+    try {
+      parsed = parseSpreadsheet(buffer, fileName)
+    } catch (error) {
+      if (error instanceof SpreadsheetParseError) throw new BadRequestException(error.message)
+      throw error
+    }
+
+    const missingColumns = config.columns.filter((column) => column.required && !parsed.headers.includes(column.header))
+    if (missingColumns.length > 0) {
+      throw new BadRequestException(`The file is missing required column(s): ${missingColumns.map((c) => c.header).join(", ")}. Download the template to see the expected format.`)
+    }
+
+    const ctx = await config.buildContext(this.deps)
+    const seen = new Set<string>()
+    const rows: ImportRowResult[] = parsed.rows.map((raw, index) => config.validateRow(raw, index + 1, ctx, seen))
+
+    const counts = this.summarizeCounts(rows)
+
+    const job = await this.prisma.importJob.create({
+      data: {
+        module: moduleKey,
+        status: "DRAFT",
+        fileName,
+        mimeType,
+        // Buffer's TS type is Buffer<ArrayBufferLike> (ArrayBuffer |
+        // SharedArrayBuffer), but Prisma's generated Bytes type is narrower
+        // (Uint8Array<ArrayBuffer>) — copy into a plain Uint8Array so the
+        // types line up. Buffer already extends Uint8Array, so this is a
+        // cheap, correctness-preserving copy, not a format conversion.
+        fileBytes: new Uint8Array(buffer),
+        parsedRows: rows as unknown as Prisma.InputJsonValue,
+        totalRows: rows.length,
+        importedById,
+      },
+    })
+
+    return { jobId: job.id, module: moduleKey, label: config.label, totalRows: rows.length, counts, rows }
+  }
+
+  private summarizeCounts(rows: ImportRowResult[]) {
+    return {
+      new: rows.filter((r) => r.status === "new").length,
+      updated: rows.filter((r) => r.status === "updated").length,
+      duplicate: rows.filter((r) => r.status === "duplicate").length,
+      invalid: rows.filter((r) => r.status === "invalid").length,
+    }
+  }
+
+  async commit(jobId: string, actingEmployeeId: string) {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
+    if (!job) throw new NotFoundException("Import job not found.")
+    if (job.status !== "DRAFT") {
+      throw new ConflictException(`This import has already been ${job.status.replace("_", " ").toLowerCase()} — re-upload the file to run it again.`)
+    }
+
+    const config = this.getConfig(job.module)
+    const rows = job.parsedRows as unknown as ImportRowResult[]
+
+    await this.prisma.importJob.update({ where: { id: jobId }, data: { status: "IMPORTING", startedAt: new Date() } })
+
+    const ctx = await config.buildContext(this.deps)
+    const outcomes: ImportRowOutcome[] = []
+    let created = 0
+    let updated = 0
+    let skipped = 0
+    let failed = 0
+
+    for (const row of rows) {
+      if (row.status === "invalid") {
+        failed += 1
+        outcomes.push({ row: row.row, employeeNumber: row.employeeNumber, action: "failed", error: row.errors.join("; ") })
+        continue
+      }
+      if (row.status === "duplicate") {
+        skipped += 1
+        outcomes.push({ row: row.row, employeeNumber: row.employeeNumber, action: "skipped", error: "Duplicate within this file, or already exists/open." })
+        continue
+      }
+
+      try {
+        // One transaction per row — see ImportModuleConfig.applyRow's doc
+        // comment in registry/types.ts for why this (not one transaction
+        // for the whole job) is what makes "some rows fail, valid rows
+        // still commit" both possible and safe. Configs that flag
+        // usesTransaction: false (employees, exit) ignore `tx` entirely and
+        // call a real service that manages its own transaction — wrapping
+        // that in a second, pointless outer transaction would just hold an
+        // idle connection open for the whole nested call chain and risk a
+        // spurious "failed" result if the outer watchdog times out after
+        // the inner writes already committed.
+        const result =
+          config.usesTransaction === false
+            ? await config.applyRow(row, undefined as never, ctx, actingEmployeeId, this.deps)
+            : await this.prisma.$transaction((tx) => config.applyRow(row, tx, ctx, actingEmployeeId, this.deps), ROW_TRANSACTION_OPTIONS)
+        if (result.action === "created") created += 1
+        else if (result.action === "updated") updated += 1
+        else skipped += 1
+        outcomes.push({ row: row.row, employeeNumber: result.employeeNumber ?? row.employeeNumber, action: result.action })
+      } catch (error) {
+        failed += 1
+        outcomes.push({
+          row: row.row,
+          employeeNumber: row.employeeNumber,
+          action: "failed",
+          error: error instanceof Error ? error.message : "Unknown error while importing this row.",
+        })
+      }
+    }
+
+    const startedAt = (await this.prisma.importJob.findUnique({ where: { id: jobId }, select: { startedAt: true } }))?.startedAt
+    const completedAt = new Date()
+    const durationMs = startedAt ? completedAt.getTime() - startedAt.getTime() : undefined
+    // Only a genuine failure (at least one row errored) with nothing else
+    // to show for it counts as FAILED — an all-duplicate/all-skipped rerun
+    // (0 failed, 0 created, 0 updated) is a correct no-op, not a failure.
+    const finalStatus = failed > 0 && created + updated === 0 ? "FAILED" : failed > 0 ? "PARTIALLY_COMPLETED" : "COMPLETED"
+
+    const updatedJob = await this.prisma.importJob.update({
+      where: { id: jobId },
+      data: {
+        status: finalStatus,
+        newRecords: created,
+        updatedRecords: updated,
+        skippedRecords: skipped,
+        failedRecords: failed,
+        completedAt,
+        durationMs,
+        rowResults: outcomes as unknown as Prisma.InputJsonValue,
+      },
+    })
+
+    // Best-effort — an import that succeeded shouldn't be reported as
+    // failed to the user just because the notification fan-out hiccuped.
+    await this.notificationsService
+      .createForAllAdmins({
+        type: "BULK_IMPORT_COMPLETED",
+        title: `${config.label} import ${finalStatus === "COMPLETED" ? "completed" : finalStatus === "PARTIALLY_COMPLETED" ? "completed with errors" : "failed"}`,
+        message: `${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed out of ${rows.length} rows. Imported by ${actingEmployeeId}.`,
+      })
+      .catch(() => undefined)
+
+    return updatedJob
+  }
+
+  async reimportAsDraft(jobId: string, importedById: string) {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
+    if (!job) throw new NotFoundException("Import job not found.")
+    return this.previewFromBuffer(job.module, Buffer.from(job.fileBytes), job.fileName, job.mimeType, importedById)
+  }
+
+  async listHistory(filters: { module?: string; page?: number; pageSize?: number }) {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20))
+    const where = filters.module ? { module: filters.module } : {}
+
+    const [total, items] = await Promise.all([
+      this.prisma.importJob.count({ where }),
+      this.prisma.importJob.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          module: true,
+          status: true,
+          fileName: true,
+          totalRows: true,
+          newRecords: true,
+          updatedRecords: true,
+          skippedRecords: true,
+          failedRecords: true,
+          durationMs: true,
+          createdAt: true,
+          completedAt: true,
+          importedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+        },
+      }),
+    ])
+
+    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
+  }
+
+  async getJob(jobId: string) {
+    const job = await this.prisma.importJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        module: true,
+        status: true,
+        fileName: true,
+        totalRows: true,
+        newRecords: true,
+        updatedRecords: true,
+        skippedRecords: true,
+        failedRecords: true,
+        durationMs: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true,
+        parsedRows: true,
+        rowResults: true,
+        importedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+      },
+    })
+    if (!job) throw new NotFoundException("Import job not found.")
+    const config = this.getConfig(job.module)
+    return { ...job, label: config.label, referenceKeyLabel: config.referenceKeyLabel }
+  }
+
+  async downloadOriginalFile(jobId: string) {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId }, select: { fileBytes: true, fileName: true, mimeType: true } })
+    if (!job) throw new NotFoundException("Import job not found.")
+    return { buffer: Buffer.from(job.fileBytes), fileName: job.fileName, mimeType: job.mimeType }
+  }
+
+  async downloadErrorReport(jobId: string): Promise<{ buffer: Buffer; fileName: string }> {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
+    if (!job) throw new NotFoundException("Import job not found.")
+
+    const rows: [number, string, string, string][] = []
+    if (job.rowResults) {
+      const outcomes = job.rowResults as unknown as ImportRowOutcome[]
+      for (const outcome of outcomes) {
+        if (outcome.action === "failed" || outcome.action === "skipped") {
+          rows.push([outcome.row, outcome.employeeNumber ?? "", job.module, outcome.error ?? ""])
+        }
+      }
+    } else {
+      const parsedRows = job.parsedRows as unknown as ImportRowResult[]
+      for (const row of parsedRows) {
+        if (row.errors.length > 0) rows.push([row.row, row.employeeNumber ?? "", job.module, row.errors.join("; ")])
+      }
+    }
+
+    const buffer = buildCsv(["Row Number", "Employee Number", "Module", "Error Description"], rows)
+    return { buffer, fileName: `${job.module}-import-errors-${job.id}.csv` }
+  }
+
+  async downloadSuccessReport(jobId: string): Promise<{ buffer: Buffer; fileName: string }> {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
+    if (!job) throw new NotFoundException("Import job not found.")
+
+    const outcomes = (job.rowResults as unknown as ImportRowOutcome[] | null) ?? []
+    const rows: [number, string, string][] = outcomes
+      .filter((outcome) => outcome.action === "created" || outcome.action === "updated")
+      .map((outcome) => [outcome.row, outcome.employeeNumber ?? "", outcome.action === "created" ? "Created" : "Updated"])
+
+    const buffer = buildCsv(["Row Number", "Employee Number", "Action"], rows)
+    return { buffer, fileName: `${job.module}-import-success-${job.id}.csv` }
+  }
+}

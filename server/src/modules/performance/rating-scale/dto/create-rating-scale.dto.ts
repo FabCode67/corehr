@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator"
+import { IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from "class-validator"
 
 export class CreateRatingScaleDto {
   /** 1 (Unsatisfactory) .. 5 (Outstanding). */
@@ -16,4 +16,11 @@ export class CreateRatingScaleDto {
   @IsString()
   @IsOptional()
   description?: string
+
+  @ApiPropertyOptional({ description: "The organization's expected percentage of ratings at this rank, for the bell-curve 'expected vs actual' overlay." })
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @IsOptional()
+  expectedPercentage?: number
 }

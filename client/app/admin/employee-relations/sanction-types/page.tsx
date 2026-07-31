@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchSanctionTypes } from "@/lib/api/employee-relations"
-import { deleteSanctionType } from "@/lib/api/employee-relations-actions"
+import { deleteSanctionTypeForm } from "@/lib/api/employee-relations-actions"
 
 import { EmployeeRelationsTabs } from "../employee-relations-tabs"
 
@@ -62,7 +62,7 @@ export default async function SanctionTypesPage() {
                           Edit
                         </Link>
                         {sanctionType.isActive ? (
-                          <form action={deleteSanctionType.bind(null, sanctionType.id)}>
+                          <form action={deleteSanctionTypeForm.bind(null, sanctionType.id)}>
                             <button type="submit" className="text-xs font-medium text-destructive hover:underline">
                               Deactivate
                             </button>

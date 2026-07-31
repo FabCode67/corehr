@@ -107,6 +107,48 @@ enum EducationType {
   TRAINING
   COURSE
   WORKSHOP
+  /// Added for the Professional Profile module's fuller Education Type list
+  /// (spec: Secondary School/Diploma/Degree/Master's/PhD/Professional
+  /// Certification/Short Course/Training) — CERTIFICATE/COURSE/WORKSHOP
+  /// above predate that spec and are kept for the existing HR-registration
+  /// "Step 5" records that already use them.
+  SECONDARY_SCHOOL
+  MASTERS_DEGREE
+  PHD
+  SHORT_COURSE
+}
+
+/// Shared across every Professional Profile record an employee can
+/// self-submit with a supporting document (EmployeeEducation,
+/// EmployeeCertification) and manually-added AcademicInstitution entries.
+/// Records added by an HR admin directly (e.g. via the existing Employee
+/// Registration wizard) are auto-verified — see EmployeesService's education/
+/// certification methods — since HR is already vetting them at entry time;
+/// this workflow exists for what an *employee* self-submits.
+enum RecordVerificationStatus {
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+/// Prior-employer employment type (Professional Profile module's Work
+/// Experience section) — deliberately separate from ContractType (the
+/// employee's own NCBA Rwanda contract), which has different values
+/// (GRADUATE_TRAINEE/INTERN, no CONTRACT/CONSULTANCY) and a different
+/// meaning entirely.
+enum PriorEmploymentType {
+  PERMANENT
+  TEMPORARY
+  CONTRACT
+  INTERNSHIP
+  CONSULTANCY
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
 }
 
 enum ExitReason {
@@ -149,8 +191,12 @@ model Department {
   code        String?  @unique
   description String?
   isActive    Boolean  @default(true)
+  /// Added for the Bulk Import framework's Department module ("Head of
+  /// Department" column) — no such field existed before this.
+  headOfDepartmentId String?
 
-  function  Function   @relation(fields: [functionId], references: [id])
+  function        Function   @relation(fields: [functionId], references: [id])
+  headOfDepartment Employee? @relation("DepartmentHead", fields: [headOfDepartmentId], references: [employeeNumber])
   units     Unit[]
   positions Position[] // positions attached directly (department has no units)
   performanceReviews PerformanceReview[]
@@ -249,6 +295,12 @@ model PositionLevel {
 model Position {
   id           String  @id @default(uuid()) @db.Uuid
   title        String
+  /// Optional, HR-assigned — not auto-generated (unlike Employee.employeeNumber).
+  /// Added for the Bulk Import framework's Position module, whose reference
+  /// key is "Position Code"; existing positions created before this field
+  /// existed simply have code = null and are matched by (department, title)
+  /// instead (see ImportsModule's position config).
+  code         String? @unique
   departmentId String  @db.Uuid
   unitId       String? @db.Uuid
   levelId      String  @db.Uuid
@@ -334,6 +386,10 @@ model Employee {
   gender            Gender
   dateOfBirth       DateTime
   nationalIdNumber  String        @unique
+  /// Added for the Bulk Import framework's Employee module ("Passport"
+  /// column) — no passport field existed in the registration wizard before
+  /// this; left optional since most employees register with National ID only.
+  passportNumber    String?
   nationality       String
   maritalStatus     MaritalStatus
   email             String        @unique
@@ -349,6 +405,11 @@ model Employee {
   /// workLocation by the seed script.
   branchId          String?       @db.Uuid
   profilePictureUrl String?
+  /// Added for the Bulk Import framework's Employee module ("Address" /
+  /// "Emergency Contact" columns) — free text, one column each, matching
+  /// the spec's field list literally (not split into structured sub-fields).
+  address           String?
+  emergencyContact  String?
 
   // --- Auth ---
   /// bcrypt hash, set to a hash of the default password ("Staff@123") by
@@ -363,6 +424,26 @@ model Employee {
   /// false — HR/IT sets this manually (e.g. via seed) for the handful of
   /// people who administer the system; every other employee is staff-only.
   isAdmin      Boolean @default(false)
+
+  /// First Login Security (Email Notification & Automation module). Set to
+  /// true by EmployeesService.create() for every new hire; AuthService
+  /// .changePassword() clears it to false on a successful change.
+  /// AuthService.login() refuses to authenticate once
+  /// temporaryPasswordExpiresAt has passed while this is still true — see
+  /// that method's doc comment for why a hard block (not just a nudge) was
+  /// chosen there. Defaults to false so this migration doesn't retroactively
+  /// force every already-seeded demo employee through the flow.
+  mustChangePassword         Boolean   @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  /// Single checkbox acceptance, not a full policy-acknowledgement log —
+  /// see AuthController's accept-terms endpoint.
+  termsAcceptedAt            DateTime?
+
+  // --- Professional Profile module ("About" section) ----------------------
+  // Free text, self-service, no verification (unlike Education/Certification
+  // below) — same trust level as a LinkedIn "About" blurb.
+  professionalSummary String?
+  careerInterests     String?
 
   // --- Step 2: Employment Details (optional) ---
   contractType        ContractType?
@@ -382,6 +463,12 @@ model Employee {
   previousDepartment       String?
   previousExitDate         DateTime?
   previousReasonForLeaving String?
+  /// HR-entered years of banking experience prior to joining NCBA —
+  /// "Current Banking Experience" is deliberately NOT a stored column, it's
+  /// computed from employmentStartDate (tenure at this bank) wherever
+  /// Total Banking Experience is shown, so it can never drift out of sync
+  /// with employmentStartDate the way a duplicated stored value could.
+  previousBankingExperienceYears Float?
 
   // --- Step 3: Position Assignment (optional) ---
   // Nullable: an employee can exist with basic info only, before ever being
@@ -411,7 +498,19 @@ model Employee {
   /// employmentStatus is the source of truth the UI shows per spec.
   isActive Boolean @default(true)
 
-  // --- Exit Management (set once, by EmployeesService.processExit) -------
+  // --- Exit Management -------------------------------------------------
+  // exitDate/exitReason/exitType/nextMove/exitComments are set once, by
+  // EmployeesService.processExit — the final clearance step. exitInitiatedAt
+  // marks the earlier, non-terminal moment HR starts the process (see
+  // EmployeesService.initiateExit): this is when the Exit Form in Forms
+  // Management gets auto-created/assigned, tracked separately from
+  // finalization since "the employee should complete the form before exit
+  // clearance can continue" implies a gap between the two, not one atomic
+  // action. There's no hard block on processExit still running before the
+  // form is complete (HR can always override) — the exit form's status is
+  // just surfaced to HR as a tracker, not a database-enforced gate.
+  exitInitiatedAt   DateTime?
+  exitInitiatedById String?
   exitDate     DateTime?
   exitReason   ExitReason?
   exitType     ExitType?
@@ -423,17 +522,42 @@ model Employee {
   branch                   Branch?    @relation(fields: [branchId], references: [id])
   reportingManagerOverride Employee?  @relation("ReportingOverride", fields: [reportingManagerOverrideId], references: [employeeNumber])
   managedOverrides         Employee[] @relation("ReportingOverride")
+  exitInitiatedBy          Employee?  @relation("ExitInitiator", fields: [exitInitiatedById], references: [employeeNumber])
+  initiatedExits           Employee[] @relation("ExitInitiator")
 
   positionHistory PositionHistory[]
   children        EmployeeChild[]
-  education       EmployeeEducation[]
+  education       EmployeeEducation[]     @relation("EmployeeEducationOwner")
+  educationVerified EmployeeEducation[]   @relation("EmployeeEducationVerifier")
+  educationAdded  EmployeeEducation[]     @relation("EmployeeEducationAddedBy")
+  certifications  EmployeeCertification[] @relation("EmployeeCertificationOwner")
+  certificationsVerified EmployeeCertification[] @relation("EmployeeCertificationVerifier")
+  certificationsAdded    EmployeeCertification[] @relation("EmployeeCertificationAddedBy")
+  academicInstitutionsAdded   AcademicInstitution[] @relation("AcademicInstitutionAddedBy")
+  academicInstitutionsVerified AcademicInstitution[] @relation("AcademicInstitutionVerifier")
+  workExperiences EmployeeWorkExperience[]
+  skills          EmployeeSkill[]
+  skillsAdded     Skill[]
+  familyMembers   EmployeeFamilyMember[]
+  salaryRecords   EmployeeSalaryRecord[]
+  importJobs      ImportJob[]            @relation("ImportJobUploader")
+  headOfDepartments Department[]         @relation("DepartmentHead")
+  emailLogs             EmailLog[]
+  notificationPreference NotificationPreference?
+  createdEmailTemplates EmailTemplate[]  @relation("EmailTemplateCreator")
 
   // --- Leave Management ---------------------------------------------------
-  leaveBalances      LeaveBalance[]
-  leaveRequests      LeaveRequest[]      @relation("LeaveRequester")
-  delegateOnRequests LeaveRequest[]      @relation("LeaveDelegate")
-  approvalActions    LeaveApproval[]
-  notifications      Notification[]
+  leaveBalances       LeaveBalance[]
+  leaveRequests       LeaveRequest[]      @relation("LeaveRequester")
+  delegateOnRequests  LeaveRequest[]      @relation("LeaveDelegate")
+  leaveRequestsCancelled LeaveRequest[]   @relation("LeaveCancelledBy")
+  approvalActions     LeaveApproval[]
+  notifications       Notification[]
+
+  // --- Onboarding Document Management --------------------------------------
+  onboardingDocuments         OnboardingDocumentAssignment[] @relation("OnboardingDocumentEmployee")
+  onboardingDocumentsAssigned OnboardingDocumentAssignment[] @relation("OnboardingDocumentAssigner")
+  onboardingDocumentsReviewed OnboardingDocumentAssignment[] @relation("OnboardingDocumentReviewer")
 
   // --- Performance Management ----------------------------------------------
   performanceReviewsAsSubject  PerformanceReview[]     @relation("PerformanceSubject")
@@ -488,6 +612,16 @@ model Employee {
   appealsDecided              Appeal[]                    @relation("AppealDecider")
   employeeRelationsAuditLogs  EmployeeRelationsAuditLog[] @relation("ERAuditActor")
 
+  // --- HR Analytics Dashboard ------------------------------------------------
+  hrAnalyticsSavedViews   HrAnalyticsSavedView[]
+  hrAnalyticsAccessLogs   HrAnalyticsAccessLog[]
+
+  // --- AI HR Administration Assistant -----------------------------------------
+  aiConversations      AiConversation[]
+  aiAuditLogs          AiAuditLog[]
+  aiPendingActionsMade AiPendingAction[] @relation("AiActionRequestedBy")
+  aiPendingActionsConfirmed AiPendingAction[] @relation("AiActionConfirmedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -513,25 +647,270 @@ model EmployeeChild {
 
 /// Step 5 (Education & Professional Development): unlimited
 /// degrees/diplomas/certifications/training records per employee.
+///
+/// Extended for the Professional Profile module (LinkedIn-style self-service
+/// profile): institutionId/country/graduationDate/certificate metadata and
+/// the verification workflow are all additive, so the pre-existing HR
+/// Registration wizard (EducationSection.tsx) keeps working unchanged.
+/// `institution` remains an always-populated display snapshot (copied from
+/// the selected AcademicInstitution, or typed manually if not catalogued) —
+/// institutionId is only for analytics grouping and is nullable so old rows
+/// and manually-typed ones don't need backfilling. `title` doubles as
+/// "Qualification / Degree Title" per the module spec — not renamed, to
+/// avoid touching every existing call site.
 model EmployeeEducation {
   id             String        @id @default(uuid()) @db.Uuid
   employeeId     String
   type           EducationType
   title          String
   institution    String
+  institutionId  String?             @db.Uuid
+  country        String?
   fieldOfStudy   String?
   grade          String?
   startDate      DateTime
   endDate        DateTime?
+  /// Distinct from endDate — a program can end (e.g. coursework complete)
+  /// before the formal graduation/conferral date.
+  graduationDate DateTime?
   certificateUrl String?
+  certificateFileName String?
+  certificateUploadedAt DateTime?
   description    String?
+
+  /// PENDING_REVIEW for a self-service employee submission; auto-set to
+  /// VERIFIED at creation time when an HR admin adds it directly (see
+  /// EducationService.create()'s isAdmin check) — the field still exists on
+  /// admin-added rows so verifiedById/verifiedAt/hrComment stay meaningful.
+  verificationStatus RecordVerificationStatus @default(PENDING_REVIEW)
+  hrComment          String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  /// Who actually created this row — the employee themselves (self-service)
+  /// or an HR admin (registration wizard). Nullable only for rows that
+  /// predate this column.
+  addedById          String?
+
+  employee     Employee            @relation("EmployeeEducationOwner", fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+  institutionRef AcademicInstitution? @relation(fields: [institutionId], references: [id])
+  verifiedBy   Employee?           @relation("EmployeeEducationVerifier", fields: [verifiedById], references: [employeeNumber])
+  addedBy      Employee?           @relation("EmployeeEducationAddedBy", fields: [addedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([verificationStatus])
+  @@map("employee_education")
+}
+
+/// Certification tracking distinct from EmployeeEducation — EmployeeEducation
+/// covers degrees/diplomas/courses generically (via EducationType, which
+/// includes CERTIFICATE/PROFESSIONAL_CERTIFICATION) but has no issuer/expiry
+/// fields, which compliance tracking (and the Bulk Import framework's
+/// Certification module) needs. Also closes the "Expired Certifications is
+/// not trackable" gap noted in ExecutiveDashboardService's compliance
+/// section — once certifications are imported/entered here, that tile can
+/// be wired up to a real count (left as a follow-up, not done in this pass).
+///
+/// Extended for the Professional Profile module — certificateNumber/document
+/// metadata/verification are additive; `status` (Active/Expired) is
+/// deliberately NOT a stored column, computed on read from expiryDate
+/// instead, matching this codebase's existing "computed on read, never
+/// stored" convention (see LeaveBalancesService's remainingDays, tenure,
+/// carry-forward expiry).
+model EmployeeCertification {
+  id                String    @id @default(uuid()) @db.Uuid
+  employeeId        String
+  name              String
+  issuer            String
+  certificateNumber String?
+  issueDate         DateTime
+  expiryDate        DateTime?
+
+  certificateUrl         String?
+  certificateFileName    String?
+  certificateUploadedAt  DateTime?
+
+  verificationStatus RecordVerificationStatus @default(PENDING_REVIEW)
+  hrComment          String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  addedById          String?
+
+  employee   Employee  @relation("EmployeeCertificationOwner", fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+  verifiedBy Employee? @relation("EmployeeCertificationVerifier", fields: [verifiedById], references: [employeeNumber])
+  addedBy    Employee? @relation("EmployeeCertificationAddedBy", fields: [addedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([expiryDate])
+  @@index([verificationStatus])
+  @@map("employee_certifications")
+}
+
+/// Global searchable catalog of schools/colleges/universities for the
+/// Professional Profile module's Education section — deliberately a
+/// separate model from the existing `Institution` model (Learning &
+/// Development's training-provider list for Course.institutionId), which is
+/// a different, HR-only-managed concept (internal training vendors, not a
+/// worldwide academic-institution directory). Seeded with a starter set;
+/// grows organically as employees add ones that aren't found via "Not
+/// Found? Add Institution Manually", which HR can later review.
+model AcademicInstitution {
+  id      String  @id @default(uuid()) @db.Uuid
+  name    String
+  country String?
+  city    String?
+  website String?
+
+  /// True for an employee-submitted manual addition, false for a seeded/
+  /// HR-curated one — drives whether it needs review, same PENDING_REVIEW
+  /// default as EmployeeEducation/EmployeeCertification.
+  verificationStatus RecordVerificationStatus @default(VERIFIED)
+  hrComment            String?
+  addedById           String?
+  verifiedById         String?
+  verifiedAt           DateTime?
+
+  addedBy    Employee? @relation("AcademicInstitutionAddedBy", fields: [addedById], references: [employeeNumber])
+  verifiedBy Employee? @relation("AcademicInstitutionVerifier", fields: [verifiedById], references: [employeeNumber])
+
+  educationRecords EmployeeEducation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([country])
+  @@index([verificationStatus])
+  @@map("academic_institutions")
+}
+
+/// Professional Profile module's Work Experience section — pure self-service,
+/// no HR verification workflow (the spec doesn't ask for one here, unlike
+/// Education/Certification which both have a document to authenticate).
+model EmployeeWorkExperience {
+  id             String              @id @default(uuid()) @db.Uuid
+  employeeId     String
+  companyName    String
+  jobTitle       String
+  employmentType PriorEmploymentType
+  location       String?
+  industry       String?
+  startDate      DateTime
+  endDate        DateTime?
+  /// When true, endDate is ignored/cleared by the service layer — "Present"
+  /// in the timeline UI.
+  isCurrent      Boolean             @default(false)
+  description    String?
+  skillsUsed     String[]            @default([])
 
   employee Employee @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("employee_education")
+  @@index([employeeId])
+  @@map("employee_work_experiences")
+}
+
+/// Global skill catalog (technical + professional) — `category` is a plain
+/// string rather than an enum since the spec's Technical/Professional split
+/// is illustrative, not exhaustive (e.g. Language skills fit neither
+/// cleanly). Employee-added custom skills are inserted here too (addedById
+/// set), immediately usable — unlike institutions, the spec doesn't ask for
+/// HR review of custom skills, so there's no verificationStatus here.
+model Skill {
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String  @unique
+  category String  @default("General")
+  addedById String?
+
+  addedBy Employee? @relation(fields: [addedById], references: [employeeNumber])
+
+  employeeSkills EmployeeSkill[]
+
+  createdAt DateTime @default(now())
+
+  @@index([category])
+  @@map("skills")
+}
+
+model EmployeeSkill {
+  id         String     @id @default(uuid()) @db.Uuid
+  employeeId String
+  skillId    String     @db.Uuid
+  level      SkillLevel @default(INTERMEDIATE)
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, skillId])
+  @@map("employee_skills")
+}
+
+/// Generic family member record, distinct from EmployeeChild — EmployeeChild
+/// is children-only (no relationship-type/occupation/contact fields); this
+/// model covers any relationship (spouse, parent, sibling, other) for the
+/// Bulk Import framework's Family Members module. Employee.partnerName/
+/// partnerPhone/partnerDateOfBirth (Step 4 of registration) and
+/// EmployeeChild remain the primary UI-driven family data; this table is
+/// additive, not a replacement, to avoid touching the existing wizard.
+enum FamilyRelationship {
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  OTHER
+}
+
+model EmployeeFamilyMember {
+  id             String             @id @default(uuid()) @db.Uuid
+  employeeId     String
+  name           String
+  relationship   FamilyRelationship
+  dateOfBirth    DateTime?
+  occupation     String?
+  contactNumber  String?
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@map("employee_family_members")
+}
+
+/// Historical compensation record — no Salary/Compensation/Payroll model
+/// existed anywhere in the schema before this (confirmed by a full-schema
+/// grep during the Bulk Import framework's research pass). Modeled as
+/// append-only, one row per effective date, consistent with how every other
+/// "child record" import module in this framework treats history (never
+/// silently overwrites a prior row — see ImportsModule's match-strategy
+/// doc comment).
+model EmployeeSalaryRecord {
+  id                 String   @id @default(uuid()) @db.Uuid
+  employeeId         String
+  basicSalary        Float
+  housingAllowance   Float    @default(0)
+  transportAllowance Float    @default(0)
+  otherAllowances    Float    @default(0)
+  effectiveDate      DateTime
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, effectiveDate])
+  @@map("employee_salary_records")
 }
 
 /// Point-in-time record of an employee's position + band, closed off by
@@ -659,6 +1038,26 @@ enum NotificationType {
   ERC_MANAGER_INPUT_NEEDED
   ERC_INVESTIGATION_OVERDUE
   ERC_APPEAL_SUBMITTED
+  ONBOARDING_DOCUMENT_ASSIGNED
+  ONBOARDING_DOCUMENT_UPLOADED
+  ONBOARDING_DOCUMENT_APPROVED
+  ONBOARDING_DOCUMENT_REJECTED
+  ONBOARDING_DOCUMENT_RESUBMISSION_REQUIRED
+  /// Reserved for a future scheduler — see LeaveCarryForwardRule module note.
+  /// Not fired by any cron this pass; "days until expiry" is instead
+  /// computed live wherever a balance is shown.
+  LEAVE_CARRY_FORWARD_EXPIRING
+  EXIT_PROCESS_STARTED
+  BULK_IMPORT_COMPLETED
+  /// Professional Profile module — see EmployeeEducation/EmployeeCertification's
+  /// verification workflow.
+  EDUCATION_VERIFIED
+  EDUCATION_REJECTED
+  CERTIFICATION_VERIFIED
+  CERTIFICATION_REJECTED
+  /// Fired to HR admins when an employee submits a new self-service
+  /// education/certification/institution record awaiting review.
+  PROFILE_RECORD_PENDING_REVIEW
 }
 
 /// A configurable leave type (Annual, Maternity, Paternity, Sick,
@@ -692,11 +1091,22 @@ model LeaveType {
   /// the admin UI.
   requiresHrApproval Boolean @default(true)
 
-  entitlementRules  LeaveEntitlementRule[]
-  approvalSteps     LeaveApprovalStep[]
-  carryForwardRule  LeaveCarryForwardRule?
-  balances          LeaveBalance[]
-  requests          LeaveRequest[]
+  /// Per-type override of LeaveSettings' bank-wide weekend/holiday
+  /// exclusion — null means "inherit the bank-wide default", so most types
+  /// need no row-level configuration at all. Set explicitly for types that
+  /// deliberately differ (e.g. Study Leave counting weekends where Annual
+  /// Leave doesn't) — see LeaveCalendarService.compute(), which now takes
+  /// the LeaveType so it can resolve these before falling back to
+  /// LeaveSettings.
+  excludeWeekendsOverride       Boolean?
+  excludePublicHolidaysOverride Boolean?
+
+  entitlementRules       LeaveEntitlementRule[]
+  approvalSteps          LeaveApprovalStep[]
+  carryForwardRule       LeaveCarryForwardRule?
+  attachmentRequirements LeaveAttachmentRequirement[]
+  balances               LeaveBalance[]
+  requests                LeaveRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -741,12 +1151,80 @@ model LeaveCarryForwardRule {
   enabled     Boolean   @default(false)
   maxDays     Int?
   /// Carried-forward days expire this many days into the following year
-  /// (e.g. 90 = expires ~March 31). Null = never expires.
+  /// (e.g. 90 = expires ~March 31) — doubles as the "Carry Forward Expiry
+  /// Date" the spec asks for: the concrete date is derived per-year as
+  /// Jan 1 of the target year + this many days, rather than stored as its
+  /// own column, so it never drifts out of sync across years. Null = never
+  /// expires.
   expiresAfterDays Int?
+  /// Master on/off switch for expiry enforcement, independent of whether
+  /// expiresAfterDays is set — lets HR configure a number ahead of time
+  /// without turning enforcement on yet. Expiry itself is computed live
+  /// wherever a balance is read (LeaveBalancesService.getSummary), never a
+  /// background job — see LEAVE_CARRY_FORWARD_EXPIRING's doc comment.
+  autoExpiryEnabled Boolean @default(true)
+  /// Employees in these departments are skipped by both the carry-forward
+  /// run and expiry — HR manages their carry-forward manually via
+  /// LeaveBalance.adjustmentDays instead. Plain ID arrays (not a join
+  /// table), same simplification already used for e.g.
+  /// DisciplinaryCase.witnesses.
+  exemptDepartmentIds String[] @default([])
+  exemptEmployeeIds   String[] @default([])
 
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
 
   @@map("leave_carry_forward_rules")
+}
+
+/// HR-configurable named attachment a LeaveType may require (e.g. Study
+/// Leave: "Admission Letter", "Examination Schedule", "Academic Approval
+/// Letter") — see module note above on LeaveRequestAttachment for how a
+/// submitted file is matched back to one of these.
+model LeaveAttachmentRequirement {
+  id          String  @id @default(uuid()) @db.Uuid
+  leaveTypeId String  @db.Uuid
+  name        String
+  isMandatory Boolean @default(true)
+
+  leaveType   LeaveType                @relation(fields: [leaveTypeId], references: [id])
+  attachments LeaveRequestAttachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leaveTypeId, name])
+  @@map("leave_attachment_requirements")
+}
+
+/// Purpose distinguishes a submission-time supporting document from an
+/// optional cancellation attachment — both live in the same table since
+/// they're structurally identical (a file against a leave request).
+enum LeaveAttachmentPurpose {
+  SUBMISSION
+  CANCELLATION
+}
+
+/// One uploaded file against a LeaveRequest. `requirementId` is null for a
+/// cancellation attachment (cancellation isn't tied to a named
+/// requirement) or for a free-form submission attachment on a LeaveType
+/// with no configured named requirements — LeaveRequest.attachmentUrl
+/// (the original single-file field) is left in place for backward
+/// compatibility with already-submitted requests; new requests use this
+/// table instead so a type like Study Leave can carry more than one file.
+model LeaveRequestAttachment {
+  id             String                 @id @default(uuid()) @db.Uuid
+  leaveRequestId String                 @db.Uuid
+  requirementId  String?                @db.Uuid
+  purpose        LeaveAttachmentPurpose @default(SUBMISSION)
+  fileUrl        String
+
+  leaveRequest LeaveRequest                @relation(fields: [leaveRequestId], references: [id])
+  requirement  LeaveAttachmentRequirement? @relation(fields: [requirementId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([leaveRequestId])
+  @@map("leave_request_attachments")
 }
 
 /// Rwanda public holidays — excluded from leave-day calculations.
@@ -827,11 +1305,21 @@ model LeaveRequest {
   /// balance negative.
   hrOverride Boolean @default(false)
 
-  employee Employee @relation("LeaveRequester", fields: [employeeId], references: [employeeNumber])
-  delegate Employee? @relation("LeaveDelegate", fields: [delegateEmployeeId], references: [employeeNumber])
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
-  approvals LeaveApproval[]
+  /// Permanent audit trail for a cancellation — required (not optional)
+  /// whenever status moves to CANCELLED, per the spec. Never cleared once
+  /// set, even if the request is somehow reused (it isn't, in practice —
+  /// cancellation is terminal).
+  cancellationReason String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+
+  employee    Employee   @relation("LeaveRequester", fields: [employeeId], references: [employeeNumber])
+  delegate    Employee?  @relation("LeaveDelegate", fields: [delegateEmployeeId], references: [employeeNumber])
+  cancelledBy Employee?  @relation("LeaveCancelledBy", fields: [cancelledById], references: [employeeNumber])
+  leaveType   LeaveType  @relation(fields: [leaveTypeId], references: [id])
+  approvals   LeaveApproval[]
   notifications Notification[]
+  attachments LeaveRequestAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -881,6 +1369,201 @@ model Notification {
 
   @@index([recipientEmployeeId, isRead])
   @@map("notifications")
+}
+
+// =============================================================================
+// Bulk Import Framework
+//
+// Design notes:
+// - `module` is a plain string (an ImportModuleKey from the ImportsModule's
+//   config registry, e.g. "employees", "leave", "department"), not a Prisma
+//   enum — adding a future import module (Recruitment, Payroll, Assets,
+//   Medical, Disciplinary, ...) only means registering a new config object
+//   in code, never a schema migration, matching the "reusable framework"
+//   requirement.
+// - `fileBytes` holds the original upload in the database (no local-disk or
+//   Cloudinary storage precedent exists in this codebase — see UploadsService
+//   doc comment; Cloudinary is for permanent, publicly-served files, which an
+//   import spreadsheet isn't). This is what "Re-import" replays and what the
+//   original-file download button serves.
+// - `parsedRows`/`rowResults` are Json rather than a normalized per-row table:
+//   at HR-system scale (hundreds to low thousands of rows per file) this is
+//   simpler than an ImportJobRow table and is exactly what the Error
+//   Report/Success Report CSVs are generated from on demand.
+// - Every completed job's counts are the single source of truth for the
+//   Import Summary and Import History list — never recomputed differently
+//   in two places.
+// =============================================================================
+
+enum ImportJobStatus {
+  DRAFT // uploaded + parsed + validated, previewed, not yet committed
+  IMPORTING
+  COMPLETED
+  PARTIALLY_COMPLETED // some rows failed, valid rows were still committed
+  FAILED // nothing was committed (e.g. transaction rolled back)
+}
+
+model ImportJob {
+  id       String          @id @default(uuid()) @db.Uuid
+  module   String // ImportModuleKey, see module doc comment above
+  status   ImportJobStatus @default(DRAFT)
+
+  fileName String
+  mimeType String
+  fileBytes Bytes
+
+  /// Normalized rows as parsed + validated at preview time, keyed by row
+  /// number — the commit step re-reads this rather than re-parsing the file,
+  /// so preview and commit can never disagree about what a row contained.
+  parsedRows Json
+
+  totalRows       Int @default(0)
+  newRecords      Int @default(0)
+  updatedRecords  Int @default(0)
+  skippedRecords  Int @default(0)
+  failedRecords   Int @default(0)
+
+  /// Row-level outcomes once committed — [{ row, employeeNumber, action,
+  /// error? }] — source for both the Error Report and Success Report CSVs.
+  rowResults Json?
+
+  importedById String
+  startedAt    DateTime?
+  completedAt  DateTime?
+  durationMs   Int?
+
+  importedBy Employee @relation("ImportJobUploader", fields: [importedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([module, createdAt])
+  @@index([importedById])
+  @@map("import_jobs")
+}
+
+// =============================================================================
+// Email Notification & Automation
+//
+// Design notes:
+// - No Redis/BullMQ: this repo has zero queue/scheduler infrastructure and
+//   no REDIS_URL anywhere (confirmed by a full-repo grep before writing this
+//   schema) — introducing Redis would mean the deploy environment has to
+//   provision and operate a whole separate service just for this feature.
+//   EmailLog itself doubles as the job queue instead: `status` PENDING/
+//   RETRYING rows are what EmailQueueProcessor (a @nestjs/schedule interval,
+//   also new — same reasoning, but in-process and npm-only, not external
+//   infra) picks up and sends, exactly mirroring the spec's "Create Email
+//   Job → Queue Processing → Send Email → Store Delivery Status" pipeline,
+//   just backed by Postgres instead of Redis. `nextAttemptAt` implements
+//   retry backoff the same way a real queue would.
+// - EmailTemplate.key (not id) is what calling code references
+//   ("employee_welcome", "leave_approved", ...) so a template's *content*
+//   can be edited by HR without touching a single line of code — the whole
+//   point of "HR Administrators should be able to manage email templates."
+// - EmailLog stores the fully-rendered subject/body (not just the template
+//   key + variables) so the Email History / delivery log page shows exactly
+//   what was actually sent, even if the template is edited or deleted later.
+// =============================================================================
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+model EmailTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Stable machine key referenced from code, e.g. "employee_welcome" —
+  /// never shown to HR admins as the primary label (name is).
+  key         String   @unique
+  name        String
+  category    String
+  subject     String
+  bodyHtml    String
+  /// Documents which {{variable}} placeholders this template expects —
+  /// informational (surfaced in the template editor UI), not enforced.
+  variables   String[] @default([])
+  isActive    Boolean  @default(true)
+  /// Compliance-critical templates (e.g. AML training reminders, welcome
+  /// email) that NotificationPreference can never suppress — see
+  /// EmailService.enqueue()'s preference-check.
+  isMandatory Boolean  @default(false)
+
+  createdById String
+  createdBy   Employee @relation("EmailTemplateCreator", fields: [createdById], references: [employeeNumber])
+
+  logs EmailLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+model EmailLog {
+  id            String      @id @default(uuid()) @db.Uuid
+  templateKey   String
+  template      EmailTemplate? @relation(fields: [templateKey], references: [key])
+
+  recipientEmail      String
+  /// Nullable — recipients outside the Employee table (recruitment
+  /// candidates) still get logged, just without a linkable employee row.
+  recipientEmployeeId String?
+  recipientEmployee   Employee? @relation(fields: [recipientEmployeeId], references: [employeeNumber])
+
+  subject  String
+  bodyHtml String
+  /// The resolved {{variable}} → value map used to render this specific
+  /// email — kept for audit/debugging even after the template changes.
+  variables Json
+
+  status        EmailStatus @default(PENDING)
+  failureReason String?
+  retryCount    Int         @default(0)
+  maxRetries    Int         @default(3)
+  /// When EmailQueueProcessor should next attempt this row — set to "now"
+  /// on creation, pushed forward with exponential-ish backoff on failure.
+  nextAttemptAt DateTime    @default(now())
+  sentAt        DateTime?
+
+  /// Free-text tag for "what part of the app caused this email" (e.g.
+  /// "leave", "performance", "recruitment") — mirrors ImportJob.module's
+  /// plain-string-not-enum approach, for the same extensibility reason.
+  relatedModule   String?
+  relatedEntityId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([recipientEmployeeId])
+  @@index([relatedModule, relatedEntityId])
+  @@map("email_logs")
+}
+
+/// One row per employee, created lazily on first read/write (see
+/// NotificationPreferencesService). Mandatory/compliance templates
+/// (EmailTemplate.isMandatory) always bypass every toggle here.
+model NotificationPreference {
+  id         String  @id @default(uuid()) @db.Uuid
+  employeeId String  @unique
+  employee   Employee @relation(fields: [employeeId], references: [employeeNumber])
+
+  emailEnabled Boolean @default(true)
+  inAppEnabled Boolean @default(true)
+
+  leaveEmails       Boolean @default(true)
+  performanceEmails Boolean @default(true)
+  learningEmails    Boolean @default(true)
+  recruitmentEmails Boolean @default(true)
+  exitEmails        Boolean @default(true)
+  approvalEmails    Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
 }
 
 // =============================================================================
@@ -947,6 +1630,11 @@ model PerformanceRatingScale {
   label       String  @unique
   description String?
   isActive    Boolean @default(true)
+  /// HR's target share of reviews expected at this rank (e.g. a forced
+  /// curve of 10/20/40/20/10) — optional, used only to draw the "expected"
+  /// reference line/bars next to the actual bell curve on the dashboard.
+  /// Null means no expectation has been configured for this rank.
+  expectedPercentage Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -964,10 +1652,18 @@ model PerformanceReviewPeriod {
   midYearStatus   PerformanceCycleStatus @default(DRAFT)
   midYearOpensAt  DateTime?
   midYearClosesAt DateTime?
+  /// HR-set target self-appraisal deadline (Email Notification & Automation
+  /// module) — distinct from midYearClosesAt, which only ever records when
+  /// the cycle was actually closed. PerformanceReminderScheduler reads this
+  /// to fire the 14/7/1-day-before and overdue reminder emails. Optional:
+  /// a cycle can be opened without one, it just won't get reminder emails.
+  midYearDeadline DateTime?
 
   annualStatus   PerformanceCycleStatus @default(DRAFT)
   annualOpensAt  DateTime?
   annualClosesAt DateTime?
+  /// See midYearDeadline above — the Annual-cycle equivalent.
+  annualDeadline DateTime?
 
   reviews PerformanceReview[]
 
@@ -1275,6 +1971,13 @@ model CourseAssignment {
   completedAt            DateTime? // employee self-reported completion
   certificateUploadedAt  DateTime?
   certificateUrl         String?
+  /// Added for the Bulk Import framework's Training module ("Score"
+  /// column) — no assessment score field existed on this model before this.
+  score                  Float?
+  /// Also added for the Training import ("Certificate Number" column) —
+  /// distinct from certificateUrl (an uploaded file link); this is a plain
+  /// identifier text, e.g. a printed certificate's serial number.
+  certificateNumber      String?
   employeeCertificateComment String?
   verifiedAt             DateTime?
   hrVerificationComment  String?
@@ -2631,4 +3334,302 @@ model EmployeeRelationsAuditLog {
 
   @@index([entityType, entityId, createdAt])
   @@map("employee_relations_audit_logs")
+}
+
+// =============================================================================
+// ONBOARDING DOCUMENT MANAGEMENT
+//
+// HR-configurable document requirements (Employment Contract, National ID,
+// Academic Certificates, AML Declaration, ...) assigned to employees at
+// registration time and tracked through upload/review. Design notes:
+// - OnboardingDocumentType is the configurable lookup HR extends without a
+//   code change (per the spec) — same data-driven pattern as SanctionType/
+//   FormCategory/TrainingCategory.
+// - "Applicable Contract Types/Functions/Departments/Positions/Bands" are
+//   plain scalar arrays (ContractType[] enum array, and String[] ID arrays
+//   for the UUID-keyed ones) rather than join tables — an empty array means
+//   "applies to everyone", consistent with the flat-list-field pattern
+//   already used across this schema (e.g. DisciplinaryCase.witnesses).
+//   These arrays only drive which documents the registration UI
+//   pre-suggests to HR; the actual assignment is always an explicit HR
+//   selection (see the spec's "HR should be able to select which onboarding
+//   documents are required"), so there's no server-side enforcement tying
+//   an assignment to matching the type's applicability rules.
+// - OnboardingDocumentAssignment is the per-employee tracking row, created
+//   explicitly by a bulk-assign endpoint the client calls right after
+//   POST /employees succeeds — EmployeesService.create() itself is
+//   deliberately left untouched (same reasoning as Employee Relations: keep
+//   the already-working registration transaction small and avoid a new
+//   cross-module dependency inside it).
+// - Status is a superset covering the full spec list (Not Started, Uploaded,
+//   Under Review, Approved, Rejected, Resubmission Required); "percentage
+//   completed" / "documents remaining" / "missing" are computed on read
+//   (OnboardingDocumentsService), never stored columns.
+// =============================================================================
+
+enum OnboardingDocumentCategory {
+  IDENTIFICATION
+  EMPLOYMENT
+  COMPLIANCE
+  FINANCIAL
+  MEDICAL
+  IT
+  ASSET
+  OTHER
+}
+
+enum OnboardingDocumentStatus {
+  NOT_STARTED
+  UPLOADED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESUBMISSION_REQUIRED
+}
+
+model OnboardingDocumentType {
+  id          String                     @id @default(uuid()) @db.Uuid
+  name        String                     @unique
+  description String?
+  category    OnboardingDocumentCategory @default(OTHER)
+  isMandatory Boolean                    @default(true)
+
+  /// Empty array = no restriction on that dimension (applies to everyone).
+  applicableContractTypes ContractType[]
+  applicableFunctionIds   String[]       @default([])
+  applicableDepartmentIds String[]       @default([])
+  applicablePositionIds   String[]       @default([])
+  applicableBandIds       String[]       @default([])
+
+  effectiveDate DateTime?
+  isActive      Boolean   @default(true)
+
+  assignments OnboardingDocumentAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("onboarding_document_types")
+}
+
+/// Permanent per-employee record of one required document, from assignment
+/// through review — never deleted, same "complete history" precedent as
+/// Employee Relations.
+model OnboardingDocumentAssignment {
+  id             String                    @id @default(uuid()) @db.Uuid
+  employeeId     String
+  documentTypeId String                    @db.Uuid
+  status         OnboardingDocumentStatus  @default(NOT_STARTED)
+
+  fileUrl    String?
+  uploadedAt DateTime?
+
+  assignedById String
+  assignedAt   DateTime  @default(now())
+
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewComments String?
+
+  employee     Employee               @relation("OnboardingDocumentEmployee", fields: [employeeId], references: [employeeNumber])
+  documentType OnboardingDocumentType @relation(fields: [documentTypeId], references: [id])
+  assignedBy   Employee               @relation("OnboardingDocumentAssigner", fields: [assignedById], references: [employeeNumber])
+  reviewedBy   Employee?              @relation("OnboardingDocumentReviewer", fields: [reviewedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, documentTypeId])
+  @@index([employeeId, status])
+  @@map("onboarding_document_assignments")
+}
+
+// =============================================================================
+// HR Analytics Dashboard
+//
+// A new, separate module rather than an extension of ExecutiveDashboardModule
+// — that module is a fixed, unfiltered, single-snapshot PDF aggregator (see
+// its own doc comment); this one needs filtering, drill-down, and multiple
+// export formats, so it's built as its own domain that composes the existing
+// per-module analytics services (Leave/Performance/Recruitment/Learning/
+// EmployeeRelations) the same way ExecutiveDashboardService does, plus new
+// aggregation queries for exits/demographics/org-structure/tenure that don't
+// exist anywhere else yet. Only two tables are needed here — everything else
+// this dashboard shows is computed on read from data that already lives on
+// Employee/Position/Band/etc., nothing new is stored.
+// =============================================================================
+
+/// A named, saved set of dashboard filter values (date range, department,
+/// band, etc.) so a user doesn't have to re-select the same combination
+/// every visit — "Save dashboard views" in the spec. The filter set itself
+/// is stored as opaque JSON (mirrors the query-string shape the client
+/// already builds) rather than one column per filter, since the filter list
+/// is long and will likely grow; there is no server-side need to query
+/// *inside* the JSON, only to round-trip it back to the client.
+model HrAnalyticsSavedView {
+  id         String @id @default(uuid()) @db.Uuid
+  employeeId String
+  name       String
+  filters    Json
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, name])
+  @@map("hr_analytics_saved_views")
+}
+
+/// "All dashboard access should be logged for auditing" — one row per
+/// dashboard load, following the same per-domain AuditLog convention as
+/// RecruitmentAuditLog/FormAuditLog/etc. rather than a shared generic table.
+/// filters is a snapshot of the query-string filters that were active for
+/// that particular view, so an auditor can see not just *that* someone
+/// opened the dashboard but *what slice of data* they saw.
+model HrAnalyticsAccessLog {
+  id         String  @id @default(uuid()) @db.Uuid
+  employeeId String
+  section    String // e.g. "overview", "export-xlsx", "export-pptx"
+  filters    Json?
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId, createdAt])
+  @@map("hr_analytics_access_logs")
+}
+
+// ============================================================================
+// AI HR Administration Assistant
+// ============================================================================
+// Conversational assistant over the existing HR modules. Deliberately NOT a
+// RAG/vector-search system (no pgvector/Pinecone here) — the spec's own data
+// flow ("NLU -> permission validation -> backend-service retrieval -> LLM
+// summarization", "the LLM should never have direct access to the production
+// database") maps cleanly onto tool-calling: the LLM is given a curated set
+// of tools, each one a thin wrapper around an *existing* analytics/service
+// method (HrAnalyticsService, LeaveAnalyticsService, EmployeesService, etc.),
+// so every number the assistant ever states came from the same Prisma
+// queries the dashboards already use and the same *AccessService.resolveScope
+// role-scoping already enforced everywhere else in this app. There's no HR
+// policy-document corpus in this system to embed, so semantic-search RAG
+// wasn't applicable here anyway.
+//
+// Mutating "administrative actions" are two-phase by construction, not just
+// by prompt instruction: the LLM only ever has access to `propose_*` tools,
+// which write an AiPendingAction row and nothing else. The actual mutation
+// (creating a department, assigning training, etc.) only happens from
+// AiPendingActionService.confirmAndExecute(), invoked by a human clicking
+// Confirm in the UI — the model has no tool that can execute a mutation
+// directly, so "requires explicit confirmation" is structural, not just
+// requested-of-the-model behavior.
+//
+// Predictive insights (spec explicitly labels this "(Future Enhancement)")
+// were not built. BullMQ/Redis was not introduced — chat calls are
+// synchronous (a few seconds for an LLM round trip), consistent with this
+// app's established avoidance of a queue/worker infra layer (see EmailModule
+// which uses DB-polling instead of Redis for the same reason).
+
+model AiConversation {
+  id         String  @id @default(uuid()) @db.Uuid
+  employeeId String
+  title      String?
+
+  employee Employee          @relation(fields: [employeeId], references: [employeeNumber], onDelete: Cascade)
+  messages AiMessage[]
+  actions  AiPendingAction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, updatedAt])
+  @@map("ai_conversations")
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+}
+
+/// `artifacts` holds structured, UI-renderable output collected while
+/// answering this turn (charts, tables, report download links, references
+/// to AiPendingAction rows) — kept separate from `content` (the plain text
+/// shown in the bubble) so the client can render both without re-parsing
+/// prose. `toolCalls` is a redacted trace (tool name + args + short result
+/// summary, not full raw payloads) kept for audit/debugging alongside the
+/// canonical AiAuditLog rows.
+model AiMessage {
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String        @db.Uuid
+  role           AiMessageRole
+  content        String        @db.Text
+  toolCalls      Json?
+  artifacts      Json?
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+enum AiPendingActionStatus {
+  PENDING
+  CONFIRMED
+  EXECUTED
+  REJECTED
+  FAILED
+}
+
+/// A mutation the assistant proposed but has not (yet) performed. See the
+/// module-level comment above for why this table — not a direct tool call —
+/// is what makes "every data-modifying action requires explicit user
+/// confirmation" true by construction rather than by LLM good behavior.
+model AiPendingAction {
+  id             String                 @id @default(uuid()) @db.Uuid
+  conversationId String                 @db.Uuid
+  actionType     String // e.g. "CREATE_DEPARTMENT", "ASSIGN_TRAINING"
+  description    String // human-readable summary shown on the Confirm card
+  payload        Json
+  status         AiPendingActionStatus  @default(PENDING)
+
+  requestedByEmployeeId String
+  confirmedByEmployeeId String?
+  resultSummary          String?
+
+  conversation        AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requestedByEmployee  Employee       @relation("AiActionRequestedBy", fields: [requestedByEmployeeId], references: [employeeNumber])
+  confirmedByEmployee  Employee?      @relation("AiActionConfirmedBy", fields: [confirmedByEmployeeId], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([status])
+  @@map("ai_pending_actions")
+}
+
+/// One row per assistant interaction worth auditing for banking-policy
+/// traceability: every chat message, every tool invocation (i.e. every
+/// piece of HR data the assistant read, and on whose behalf), every report
+/// generated, and every pending-action state transition. Deliberately its
+/// own flat table (not folded into AiMessage) so compliance review doesn't
+/// need to reconstruct intent from conversation JSON blobs.
+model AiAuditLog {
+  id             String  @id @default(uuid()) @db.Uuid
+  employeeId String
+  conversationId String? @db.Uuid
+  eventType      String // CHAT_MESSAGE | TOOL_CALL | REPORT_GENERATED | ACTION_PROPOSED | ACTION_CONFIRMED | ACTION_EXECUTED | ACTION_REJECTED | ACCESS_DENIED
+  detail         Json
+
+  employee Employee @relation(fields: [employeeId], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("ai_audit_logs")
 }

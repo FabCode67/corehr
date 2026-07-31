@@ -5,6 +5,7 @@ import { ArrowLeft, Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { signatureReference, SignatureStamp } from "@/components/ui/signature-stamp"
 import { fetchEmployees } from "@/lib/api/employees"
 import {
   fetchFormInstance,
@@ -14,7 +15,7 @@ import {
   SIGNER_ROLE_LABELS,
   type FormInstanceStatus,
 } from "@/lib/api/forms"
-import { archiveFormInstance } from "@/lib/api/forms-actions"
+import { archiveFormInstanceForm } from "@/lib/api/forms-actions"
 
 import { FillForm } from "./fill-form"
 import { SignaturePanel } from "./signature-panel"
@@ -173,18 +174,30 @@ export async function InstanceDetail({ id, actingEmployeeId, backHref, backLabel
           ) : (
             sortedSignatures.map((signature) => (
               <div key={signature.id} className="flex flex-col gap-2">
-                <div className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
                   <div>
                     <p className="font-medium text-foreground">
                       Stage {signature.formSignatureStage.stageOrder} — {signature.formSignatureStage.label ?? SIGNER_ROLE_LABELS[signature.formSignatureStage.role]}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {signature.signer ? `${signature.signer.firstName} ${signature.signer.lastName}` : "Not yet assigned"}
-                      {signature.signedAt ? ` · ${new Date(signature.signedAt).toLocaleString()}` : ""}
-                    </p>
+                    {signature.status === "SIGNED" && signature.signer ? (
+                      <p className="text-xs text-muted-foreground">Signed {new Date(signature.signedAt!).toLocaleString()}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {signature.signer ? `${signature.signer.firstName} ${signature.signer.lastName}` : "Not yet assigned"}
+                        {signature.signedAt ? ` · ${new Date(signature.signedAt).toLocaleString()}` : ""}
+                      </p>
+                    )}
                     {signature.comments ? <p className="mt-1 text-xs text-muted-foreground">&ldquo;{signature.comments}&rdquo;</p> : null}
                   </div>
-                  <Badge variant={SIGNATURE_STATUS_VARIANT[signature.status]}>{signature.status.replaceAll("_", " ")}</Badge>
+                  <div className="flex items-center gap-3">
+                    {signature.status === "SIGNED" && signature.signer ? (
+                      <SignatureStamp
+                        name={`${signature.signer.firstName} ${signature.signer.lastName}`}
+                        referenceId={signatureReference(signature.id)}
+                      />
+                    ) : null}
+                    <Badge variant={SIGNATURE_STATUS_VARIANT[signature.status]}>{signature.status.replaceAll("_", " ")}</Badge>
+                  </div>
                 </div>
                 {mySignature?.id === signature.id ? <SignaturePanel signatureId={signature.id} actingEmployeeId={actingEmployeeId} /> : null}
               </div>
@@ -218,7 +231,7 @@ export async function InstanceDetail({ id, actingEmployeeId, backHref, backLabel
       </Card>
 
       {canArchive ? (
-        <form action={archiveFormInstance.bind(null, instance.id, actingEmployeeId)}>
+        <form action={archiveFormInstanceForm.bind(null, instance.id, actingEmployeeId)}>
           <button type="submit" className={buttonVariants({ size: "sm", variant: "outline" })}>
             Archive
           </button>

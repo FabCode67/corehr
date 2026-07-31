@@ -5,7 +5,9 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
 import { fetchDepartmentsPaginated } from "@/lib/api/departments"
+import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../imports/import-manager"
 import { deactivateDepartment } from "./actions"
 
 export default async function AdminDepartmentsPage({
@@ -14,20 +16,24 @@ export default async function AdminDepartmentsPage({
   searchParams: Promise<{ page?: string }>
 }) {
   const { page } = await searchParams
-  const result = await fetchDepartmentsPaginated(page ? Number(page) : 1)
+  const [result, session] = await Promise.all([fetchDepartmentsPaginated(page ? Number(page) : 1), getSession()])
+  const actingEmployeeId = session?.employeeId ?? ""
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Departments</h1>
           <p className="text-sm text-muted-foreground">
             Departments belong to a Function and may optionally have Units.
           </p>
         </div>
-        <Link href="/admin/departments/new" className={buttonVariants({ size: "sm" })}>
-          New department
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportManager moduleKey="departments" moduleLabel="Departments" actingEmployeeId={actingEmployeeId} />
+          <Link href="/admin/departments/new" className={buttonVariants({ size: "sm" })}>
+            New department
+          </Link>
+        </div>
       </div>
 
       {!result.ok ? (

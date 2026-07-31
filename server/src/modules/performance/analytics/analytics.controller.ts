@@ -24,6 +24,7 @@ export class AnalyticsController {
       contractType: query.contractType,
       gender: query.gender,
       employeeId: query.employeeId,
+      functionId: query.functionId,
     }
   }
 
@@ -35,6 +36,11 @@ export class AnalyticsController {
   @Get("by-department")
   byDepartment(@Query() query: Record<string, string | undefined>) {
     return this.analyticsService.byDepartment(this.parseFilters(query))
+  }
+
+  @Get("by-function")
+  byFunction(@Query() query: Record<string, string | undefined>) {
+    return this.analyticsService.byFunction(this.parseFilters(query))
   }
 
   @Get("by-unit")
@@ -85,5 +91,20 @@ export class AnalyticsController {
   @Get("needs-improvement")
   needsImprovement(@Query() query: Record<string, string | undefined>) {
     return this.analyticsService.needsImprovement(this.parseFilters(query))
+  }
+
+  @Get("heat-map")
+  heatMap(@Query() query: Record<string, string | undefined>, @Query("dimension") dimension?: "department" | "branch" | "band" | "level") {
+    return this.analyticsService.distributionHeatMap(this.parseFilters(query), dimension)
+  }
+
+  @Get("promotion-readiness")
+  promotionReadiness(@Query() query: Record<string, string | undefined>) {
+    return this.analyticsService.promotionReadiness(this.parseFilters(query))
+  }
+
+  @Get("high-potential")
+  highPotential(@Query() query: Record<string, string | undefined>) {
+    return this.analyticsService.highPotential(this.parseFilters(query))
   }
 }

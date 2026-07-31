@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 
 import { RecruitmentAccessService } from "../access/recruitment-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 
 import { CreateInterviewDto } from "./dto/create-interview.dto"
 import { RecordInterviewOutcomeDto } from "./dto/record-interview-outcome.dto"
@@ -13,7 +14,7 @@ const INTERVIEW_INCLUDE = {
   application: {
     select: {
       id: true,
-      candidate: { select: { id: true, firstName: true, lastName: true } },
+      candidate: { select: { id: true, firstName: true, lastName: true, email: true } },
       jobPosting: {
         select: {
           id: true,
@@ -29,8 +30,17 @@ const INTERVIEW_INCLUDE = {
 export class InterviewsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessService: RecruitmentAccessService
+    private readonly accessService: RecruitmentAccessService,
+    private readonly emailService: EmailService
   ) {}
+
+  private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
+    try {
+      await this.emailService.enqueue(params)
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+  }
 
   async findAll(applicationId: string | undefined, actingEmployeeId: string) {
     const scope = await this.accessService.resolveScope(actingEmployeeId)
@@ -75,6 +85,44 @@ export class InterviewsService {
       include: INTERVIEW_INCLUDE,
     })
     await this.log(interview.id, "CREATED", actingEmployeeId)
+
+    const interviewDateStr = interview.interviewDate.toISOString().slice(0, 10)
+    const interviewTimeStr = interview.interviewDate.toISOString().slice(11, 16)
+
+    await this.safeSendEmail({
+      templateKey: "recruitment_interview_invitation",
+      recipientEmail: interview.application.candidate.email,
+      relatedModule: "recruitment",
+      relatedEntityId: interview.id,
+      variables: {
+        candidate_name: `${interview.application.candidate.firstName} ${interview.application.candidate.lastName}`,
+        job_title: interview.application.jobPosting.postingTitle,
+        interview_date: interviewDateStr,
+        interview_time: interviewTimeStr,
+        interview_mode: interview.location ?? interview.interviewType,
+      },
+    })
+
+    const recruiterId = interview.application.jobPosting.requisition?.recruiterId
+    if (recruiterId) {
+      const recruiter = await this.prisma.employee.findUnique({ where: { employeeNumber: recruiterId }, select: { email: true } })
+      if (recruiter) {
+        await this.safeSendEmail({
+          templateKey: "recruitment_interview_scheduled_recruiter",
+          recipientEmail: recruiter.email,
+          recipientEmployeeId: recruiterId,
+          relatedModule: "recruitment",
+          relatedEntityId: interview.id,
+          variables: {
+            candidate_name: `${interview.application.candidate.firstName} ${interview.application.candidate.lastName}`,
+            job_title: interview.application.jobPosting.postingTitle,
+            interview_date: interviewDateStr,
+            interview_time: interviewTimeStr,
+          },
+        })
+      }
+    }
+
     return interview
   }
 

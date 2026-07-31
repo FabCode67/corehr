@@ -4,7 +4,10 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
-import { fetchEmployeesPaginated } from "@/lib/api/employees"
+import { computeTenure, computeTotalBankingExperienceYears, fetchEmployeesPaginated, fetchLineManagersBatch, formatTenure } from "@/lib/api/employees"
+import { getSession } from "@/lib/get-session"
+
+import { ImportManager } from "../imports/import-manager"
 
 const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
   ACTIVE: "success",
@@ -24,20 +27,29 @@ export default async function AdminEmployeesPage({
 
   // Employee records are never deleted — exited employees stay visible
   // (with a status badge) for historical reporting, per the spec.
-  const result = await fetchEmployeesPaginated({ includeInactive: true, page: page ? Number(page) : 1 })
+  const [result, lineManagersResult, session] = await Promise.all([
+    fetchEmployeesPaginated({ includeInactive: true, page: page ? Number(page) : 1 }),
+    fetchLineManagersBatch(),
+    getSession(),
+  ])
+  const lineManagers = lineManagersResult.ok ? lineManagersResult.data : {}
+  const actingEmployeeId = session?.employeeId ?? ""
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Employees</h1>
           <p className="text-sm text-muted-foreground">
             Employee registration, position assignment, and band tracking.
           </p>
         </div>
-        <Link href="/admin/employees/new" className={buttonVariants({ size: "sm" })}>
-          New employee
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportManager moduleKey="employees" moduleLabel="Employees" actingEmployeeId={actingEmployeeId} />
+          <Link href="/admin/employees/new" className={buttonVariants({ size: "sm" })}>
+            New employee
+          </Link>
+        </div>
       </div>
 
       {!result.ok ? (
@@ -67,6 +79,9 @@ export default async function AdminEmployeesPage({
                   <th className="px-4 py-3 font-medium">Position</th>
                   <th className="px-4 py-3 font-medium">Department / Unit</th>
                   <th className="px-4 py-3 font-medium">Band</th>
+                  <th className="px-4 py-3 font-medium">Line Manager</th>
+                  <th className="px-4 py-3 font-medium">Tenure</th>
+                  <th className="px-4 py-3 font-medium">Banking Experience</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">
                     <span className="sr-only">Actions</span>
@@ -90,6 +105,22 @@ export default async function AdminEmployeesPage({
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {employee.band?.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {lineManagers[employee.employeeNumber] ? (
+                        <Link href={`/admin/employees/${lineManagers[employee.employeeNumber]!.id}`} className="hover:text-foreground hover:underline">
+                          {lineManagers[employee.employeeNumber]!.firstName} {lineManagers[employee.employeeNumber]!.lastName}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatTenure(computeTenure(employee.employmentStartDate))}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {(() => {
+                        const total = computeTotalBankingExperienceYears(employee)
+                        return total === null ? "—" : `${total} Year${total === 1 ? "" : "s"}`
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "destructive"}>

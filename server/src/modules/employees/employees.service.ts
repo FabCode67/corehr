@@ -3,8 +3,11 @@ import { EmploymentStatus, Prisma, PositionChangeType } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
+import { buildClientUrl } from "../../common/client-url.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { DEFAULT_EMPLOYEE_PASSWORD } from "../auth/default-password.constant"
+import { computeTemporaryPasswordExpiry } from "../auth/temporary-password.constant"
+import { EmailService } from "../email/email.service"
 import { LeaveBalancesService } from "../leave/leave-balances/leave-balances.service"
 import { AssignmentsService } from "../learning/assignments/assignments.service"
 
@@ -49,7 +52,8 @@ export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaveBalancesService: LeaveBalancesService,
-    private readonly assignmentsService: AssignmentsService
+    private readonly assignmentsService: AssignmentsService,
+    private readonly emailService: EmailService
   ) {}
 
   private buildFindAllWhere(params: {
@@ -156,18 +160,37 @@ export class EmployeesService {
    * Employee row with no position/band yet; every other field/step is
    * filled in afterwards via its own endpoint. employeeNumber is generated
    * here, never client-supplied.
+   *
+   * This is also the trigger point for the Employee Welcome Email and
+   * First Login Security (mustChangePassword/temporaryPasswordExpiresAt).
+   * The spec frames the welcome email as firing on a "Pending Onboarding ->
+   * Active Employee" status transition, but this schema has no such
+   * intermediate status — EmploymentStatus is just ACTIVE/EXIT, and every
+   * employee is created ACTIVE with a real login from day one (see the
+   * bcrypt.hash call below). So the closest, unambiguous equivalent in
+   * this codebase is "employee record created" — this is a deliberate
+   * scope decision, not an oversight. Position/department are frequently
+   * still unset at this point (they're a later step), so the welcome
+   * email's variable renderer below falls back to "To be assigned".
    */
   async create(dto: CreateEmployeeDto) {
     // Every new employee gets a real login from day one — default password,
     // expected to be changed from their profile page (see AuthService).
     const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10)
+    const temporaryPasswordExpiresAt = computeTemporaryPasswordExpiry()
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const employee = await this.prisma.$transaction(async (tx) => {
           const employeeNumber = await this.generateEmployeeNumber(tx)
           return tx.employee.create({
-            data: { ...dto, employeeNumber, passwordHash },
+            data: {
+              ...dto,
+              employeeNumber,
+              passwordHash,
+              mustChangePassword: true,
+              temporaryPasswordExpiresAt,
+            },
             include: EMPLOYEE_DETAIL_INCLUDE,
           })
         }, TRANSACTION_OPTIONS)
@@ -176,6 +199,32 @@ export class EmployeesService {
         // Leave follows once a contract type is set (see
         // updateEmploymentDetails below).
         await this.leaveBalancesService.ensureBalancesForEmployee(employee.employeeNumber)
+
+        // Best-effort: a broken email template or transient DB hiccup here
+        // must never roll back a successful employee creation.
+        try {
+          await this.emailService.enqueue({
+            templateKey: "employee_welcome",
+            recipientEmail: employee.email,
+            recipientEmployeeId: employee.employeeNumber,
+            relatedModule: "employees",
+            relatedEntityId: employee.employeeNumber,
+            variables: {
+              employee_name: `${employee.firstName} ${employee.lastName}`,
+              employee_number: employee.employeeNumber,
+              department: employee.position?.department?.name ?? "To be assigned",
+              position: employee.position?.title ?? "To be assigned",
+              start_date: employee.employmentStartDate ? employee.employmentStartDate.toISOString().slice(0, 10) : "To be confirmed",
+              login_url: buildClientUrl("/login"),
+              username: employee.email,
+              temporary_password: DEFAULT_EMPLOYEE_PASSWORD,
+            },
+          })
+        } catch {
+          // EmailService.enqueue() already logs internally; nothing further
+          // to do here except make sure it can't fail employee creation.
+        }
+
         return employee
       } catch (error) {
         if (this.isUniqueConflict(error, "employeeNumber")) {
@@ -357,6 +406,36 @@ export class EmployeesService {
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
     }, TRANSACTION_OPTIONS)
+  }
+
+  /**
+   * Marks the non-terminal start of the Exit Management process —
+   * deliberately separate from processExit() above, which remains the
+   * terminal finalize/clearance step. Called by ExitProcessModule's
+   * ExitProcessService (a sibling module that depends on this one, so this
+   * method stays here rather than EmployeesModule taking on a dependency on
+   * Forms Management, which would create a circular module import since
+   * FormInstancesModule already depends on EmployeesModule). No hard
+   * database-level gate exists between exitInitiatedAt and processExit() —
+   * the Exit Form's completion is surfaced to HR as a tracker only, per the
+   * spec's "employee should complete the form before exit clearance can
+   * continue" being a process expectation, not an enforced block.
+   */
+  async markExitInitiated(id: string, actingEmployeeId: string) {
+    const employee = await this.findOne(id)
+
+    if (employee.employmentStatus !== EmploymentStatus.ACTIVE) {
+      throw new BadRequestException("Only active employees can begin the Exit Management process.")
+    }
+    if (employee.exitInitiatedAt) {
+      throw new ConflictException("The Exit Management process has already been started for this employee.")
+    }
+
+    return this.prisma.employee.update({
+      where: { employeeNumber: id },
+      data: { exitInitiatedAt: new Date(), exitInitiatedById: actingEmployeeId },
+      include: EMPLOYEE_DETAIL_INCLUDE,
+    })
   }
 
   /**
@@ -551,6 +630,60 @@ export class EmployeesService {
       source: "POSITION_HIERARCHY",
       ...(resolvable.length > 1 ? { candidates: resolvable } : {}),
     }
+  }
+
+  /** Batch version of getReportingManager() for the employee list table —
+   *  same override-first-then-position-hierarchy resolution, but computed
+   *  for every active employee from two in-memory maps built off a single
+   *  query, rather than one getReportingManager() call per row. Doesn't
+   *  replicate the single-employee version's "override may point at an
+   *  inactive employee" edge case, since this list only ever needs to
+   *  surface managers who are themselves active. */
+  async getLineManagersBatch(): Promise<Record<string, { id: string; firstName: string; lastName: string } | null>> {
+    const employees = await this.prisma.employee.findMany({
+      where: { isActive: true },
+      select: {
+        employeeNumber: true,
+        firstName: true,
+        lastName: true,
+        positionId: true,
+        reportingManagerOverrideId: true,
+        position: { select: { reportsToPositionId: true } },
+      },
+    })
+
+    const byPositionId = new Map<string, typeof employees>()
+    for (const employee of employees) {
+      if (!employee.positionId) continue
+      const list = byPositionId.get(employee.positionId) ?? []
+      list.push(employee)
+      byPositionId.set(employee.positionId, list)
+    }
+    const byEmployeeNumber = new Map(employees.map((employee) => [employee.employeeNumber, employee]))
+
+    const result: Record<string, { id: string; firstName: string; lastName: string } | null> = {}
+    for (const employee of employees) {
+      if (employee.reportingManagerOverrideId) {
+        const override = byEmployeeNumber.get(employee.reportingManagerOverrideId)
+        result[employee.employeeNumber] = override
+          ? { id: override.employeeNumber, firstName: override.firstName, lastName: override.lastName }
+          : null
+        continue
+      }
+
+      const reportsToPositionId = employee.position?.reportsToPositionId
+      if (!reportsToPositionId) {
+        result[employee.employeeNumber] = null
+        continue
+      }
+
+      const candidates = byPositionId.get(reportsToPositionId) ?? []
+      result[employee.employeeNumber] = candidates[0]
+        ? { id: candidates[0].employeeNumber, firstName: candidates[0].firstName, lastName: candidates[0].lastName }
+        : null
+    }
+
+    return result
   }
 
   private async assertPositionExists(positionId: string) {

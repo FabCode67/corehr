@@ -94,6 +94,7 @@ export interface Employee {
   previousDepartment: string | null
   previousExitDate: string | null
   previousReasonForLeaving: string | null
+  previousBankingExperienceYears: number | null
 
   // Step 3: Position Assignment
   positionId: string | null
@@ -115,11 +116,32 @@ export interface Employee {
   isActive: boolean
 
   // Exit Management
+  exitInitiatedAt: string | null
+  exitInitiatedById: string | null
   exitDate: string | null
   exitReason: ExitReason | null
   exitType: ExitType | null
   nextMove: string | null
   exitComments: string | null
+}
+
+export type FormInstanceStatus = "DRAFT" | "ASSIGNED" | "IN_PROGRESS" | "SUBMITTED" | "PENDING_SIGNATURES" | "REJECTED" | "COMPLETED" | "ARCHIVED"
+
+export interface ExitFormStatus {
+  id: string
+  status: FormInstanceStatus
+  assignmentDate: string
+  dueDate: string | null
+  submittedAt: string | null
+  completedAt: string | null
+  formTemplate: { title: string }
+}
+
+/** The auto-assigned Exit Clearance Form's current progress, for HR's exit
+ *  tracker — see ExitProcessService.getExitFormStatus() on the backend.
+ *  Returns null if exit hasn't been initiated (or the template is missing). */
+export function fetchExitFormStatus(id: string) {
+  return apiFetchSafe<ExitFormStatus | null>(`/employees/${id}/exit-form-status`)
 }
 
 export interface PositionHistoryEntry {
@@ -169,4 +191,62 @@ export function fetchEmployeeHistory(id: string) {
 
 export function fetchReportingManager(id: string) {
   return apiFetchSafe<ReportingManagerResult>(`/employees/${id}/reporting-manager`)
+}
+
+export interface LineManagerSummary {
+  id: string
+  firstName: string
+  lastName: string
+}
+
+/** Batch lookup backing the employee list's Line Manager column — see
+ *  EmployeesService.getLineManagersBatch() for why this exists instead of
+ *  calling fetchReportingManager() once per row. */
+export function fetchLineManagersBatch() {
+  return apiFetchSafe<Record<string, LineManagerSummary | null>>("/employees/line-managers")
+}
+
+// ---- Computed display fields (Tenure, Total Banking Experience) --------------
+// Both are derived purely from fields the API already returns, so they're
+// computed on read here rather than stored or round-tripped through the
+// backend — same "computed on read" convention used across every other
+// module this session (onboarding progress %, leave carry-forward expiry).
+
+export interface Tenure {
+  years: number
+  months: number
+  totalYears: number
+}
+
+/** Current Date − Employment Start Date, in whole years + remainder months. */
+export function computeTenure(employmentStartDate: string | null): Tenure | null {
+  if (!employmentStartDate) return null
+  const start = new Date(employmentStartDate)
+  if (Number.isNaN(start.getTime())) return null
+
+  const now = new Date()
+  let years = now.getFullYear() - start.getFullYear()
+  let months = now.getMonth() - start.getMonth()
+  if (now.getDate() < start.getDate()) months -= 1
+  if (months < 0) {
+    years -= 1
+    months += 12
+  }
+  if (years < 0) return null
+
+  return { years, months, totalYears: years + months / 12 }
+}
+
+export function formatTenure(tenure: Tenure | null): string {
+  if (!tenure) return "—"
+  return `${tenure.years} Year${tenure.years === 1 ? "" : "s"} ${tenure.months} Month${tenure.months === 1 ? "" : "s"}`
+}
+
+/** Previous Banking Experience (HR-entered) + Current Banking Experience
+ *  (tenure at NCBA, computed) — see the spec's Employee Table Enhancements. */
+export function computeTotalBankingExperienceYears(employee: Pick<Employee, "previousBankingExperienceYears" | "employmentStartDate">): number | null {
+  const previous = employee.previousBankingExperienceYears ?? 0
+  const tenure = computeTenure(employee.employmentStartDate)
+  if (employee.previousBankingExperienceYears === null && !tenure) return null
+  return Math.round((previous + (tenure?.totalYears ?? 0)) * 10) / 10
 }

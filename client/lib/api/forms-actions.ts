@@ -78,6 +78,14 @@ export async function deleteFormCategory(id: string): Promise<FormsActionState> 
   return {}
 }
 
+/** Plain `<form action={...}>` elements require a `(formData) => void |
+ *  Promise<void>` handler — deleteFormCategory returns `Promise<FormsActionState>`
+ *  for callers that can surface the error, so this void-returning wrapper is
+ *  what the bare delete button in the categories list binds to instead. */
+export async function deleteFormCategoryForm(id: string): Promise<void> {
+  await deleteFormCategory(id)
+}
+
 // ---- Templates --------------------------------------------------------------------
 
 export async function createFormTemplate(
@@ -351,6 +359,14 @@ export async function archiveFormInstance(instanceId: string, actingEmployeeId: 
   }
   revalidateFormsPaths()
   return {}
+}
+
+/** Plain `<form action={...}>` elements require a `(formData) => void |
+ *  Promise<void>` handler — archiveFormInstance returns `Promise<FormsActionState>`
+ *  for callers that can surface the error, so this void-returning wrapper is
+ *  what the bare archive button binds to instead. */
+export async function archiveFormInstanceForm(instanceId: string, actingEmployeeId: string): Promise<void> {
+  await archiveFormInstance(instanceId, actingEmployeeId)
 }
 
 // ---- Signatures -------------------------------------------------------------------

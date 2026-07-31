@@ -5,7 +5,9 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
 import { fetchPositionsPaginated } from "@/lib/api/positions"
+import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../imports/import-manager"
 import { deactivatePosition } from "./actions"
 
 export default async function AdminPositionsPage({
@@ -14,20 +16,24 @@ export default async function AdminPositionsPage({
   searchParams: Promise<{ page?: string }>
 }) {
   const { page } = await searchParams
-  const result = await fetchPositionsPaginated(page ? Number(page) : 1)
+  const [result, session] = await Promise.all([fetchPositionsPaginated(page ? Number(page) : 1), getSession()])
+  const actingEmployeeId = session?.employeeId ?? ""
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Positions</h1>
           <p className="text-sm text-muted-foreground">
             Roles in the org tree. Reporting lines are set per position, not hardcoded.
           </p>
         </div>
-        <Link href="/admin/positions/new" className={buttonVariants({ size: "sm" })}>
-          New position
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportManager moduleKey="positions" moduleLabel="Positions" actingEmployeeId={actingEmployeeId} />
+          <Link href="/admin/positions/new" className={buttonVariants({ size: "sm" })}>
+            New position
+          </Link>
+        </div>
       </div>
 
       {!result.ok ? (

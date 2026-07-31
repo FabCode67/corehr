@@ -17,6 +17,7 @@ export interface PerformanceAnalyticsFilters {
   contractType?: string
   gender?: string
   employeeId?: string
+  functionId?: string
 }
 
 const ANALYTICS_SELECT = {
@@ -26,7 +27,7 @@ const ANALYTICS_SELECT = {
   status: true,
   employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
   reviewer: { select: { firstName: true, lastName: true } },
-  department: { select: { id: true, name: true } },
+  department: { select: { id: true, name: true, functionId: true, function: { select: { id: true, name: true } } } },
   unit: { select: { id: true, name: true } },
   branch: { select: { id: true, name: true } },
   level: { select: { id: true, name: true } },
@@ -66,6 +67,7 @@ export class PerformanceAnalyticsService {
       ...(filters.contractType ? { contractType: filters.contractType as ContractType } : {}),
       ...(filters.gender ? { gender: filters.gender as Gender } : {}),
       ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+      ...(filters.functionId ? { department: { functionId: filters.functionId } } : {}),
     }
   }
 
@@ -80,21 +82,32 @@ export class PerformanceAnalyticsService {
     return this.prisma.performanceRatingScale.findMany({ where: { isActive: true }, orderBy: { rank: "desc" } })
   }
 
+  /** The Bell Curve Distribution Chart's data — actual count/percentage per
+   *  rank, plus each rank's HR-configured `expectedPercentage`
+   *  (PerformanceRatingScale.expectedPercentage) so the client can overlay
+   *  "expected" vs "actual" as two series on the same chart. */
   async distribution(filters: PerformanceAnalyticsFilters) {
     const [reviews, scale] = await Promise.all([this.reviews(filters), this.ratingScale()])
     const labelByRank = new Map(scale.map((entry) => [entry.rank, entry.label]))
+    const expectedByRank = new Map(scale.map((entry) => [entry.rank, entry.expectedPercentage]))
 
     const counts = new Map<number, number>()
     for (const review of reviews) {
       if (review.overallRating === null) continue
       counts.set(review.overallRating, (counts.get(review.overallRating) ?? 0) + 1)
     }
+    const total = reviews.filter((r) => r.overallRating !== null).length
 
-    return [5, 4, 3, 2, 1].map((rank) => ({
-      rank,
-      label: labelByRank.get(rank) ?? `Rating ${rank}`,
-      count: counts.get(rank) ?? 0,
-    }))
+    return [5, 4, 3, 2, 1].map((rank) => {
+      const count = counts.get(rank) ?? 0
+      return {
+        rank,
+        label: labelByRank.get(rank) ?? `Rating ${rank}`,
+        count,
+        actualPercentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+        expectedPercentage: expectedByRank.get(rank) ?? null,
+      }
+    })
   }
 
   private average(values: number[]) {
@@ -120,6 +133,23 @@ export class PerformanceAnalyticsService {
 
     return Array.from(groups.values())
       .map((g) => ({ departmentId: g.departmentId, departmentName: g.departmentName, averageRating: this.average(g.ratings), reviews: g.ratings.length }))
+      .sort((a, b) => b.averageRating - a.averageRating)
+  }
+
+  async byFunction(filters: PerformanceAnalyticsFilters) {
+    const reviews = await this.reviews(filters)
+    const groups = new Map<string, { functionId: string; functionName: string; ratings: number[] }>()
+
+    for (const review of reviews) {
+      if (review.overallRating === null || !review.department?.function) continue
+      const key = review.department.function.id
+      const entry = groups.get(key) ?? { functionId: key, functionName: review.department.function.name, ratings: [] }
+      entry.ratings.push(review.overallRating)
+      groups.set(key, entry)
+    }
+
+    return Array.from(groups.values())
+      .map((g) => ({ functionId: g.functionId, functionName: g.functionName, averageRating: this.average(g.ratings), reviews: g.ratings.length }))
       .sort((a, b) => b.averageRating - a.averageRating)
   }
 
@@ -308,5 +338,105 @@ export class PerformanceAnalyticsService {
         reviewType: r.reviewType,
         periodName: r.period.name,
       }))
+  }
+
+  /** Rating Distribution Heat Map — one row per department/branch/band/level
+   *  with a count per rank 1-5, so the client can render a dimension x
+   *  rank grid shaded by concentration. */
+  async distributionHeatMap(filters: PerformanceAnalyticsFilters, dimension: "department" | "branch" | "band" | "level" = "department") {
+    const reviews = await this.reviews(filters)
+    const groups = new Map<string, { key: string; label: string; counts: Record<number, number> }>()
+
+    for (const review of reviews) {
+      if (review.overallRating === null) continue
+      const dim =
+        dimension === "department" ? review.department : dimension === "branch" ? review.branch : dimension === "band" ? review.band : review.level
+      if (!dim) continue
+      const entry = groups.get(dim.id) ?? { key: dim.id, label: dim.name, counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
+      entry.counts[review.overallRating] = (entry.counts[review.overallRating] ?? 0) + 1
+      groups.set(dim.id, entry)
+    }
+
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label))
+  }
+
+  /** Per-employee rollup (rating history summary) shared by
+   *  promotionReadiness() and highPotential() below — not exposed as its
+   *  own route. */
+  private async employeeRatingRollups(filters: PerformanceAnalyticsFilters) {
+    const reviews = await this.reviews(filters)
+
+    const byEmployee = new Map<
+      string,
+      {
+        employeeId: string
+        employeeName: string
+        departmentName: string
+        bandName: string | null
+        levelName: string | null
+        ratings: { rating: number; periodYear: number | null }[]
+      }
+    >()
+
+    for (const review of reviews) {
+      if (review.overallRating === null) continue
+      const key = review.employee.employeeNumber
+      const entry = byEmployee.get(key) ?? {
+        employeeId: key,
+        employeeName: `${review.employee.firstName} ${review.employee.lastName}`,
+        departmentName: review.department?.name ?? "Unassigned",
+        bandName: review.band?.name ?? null,
+        levelName: review.level?.name ?? null,
+        ratings: [],
+      }
+      entry.ratings.push({ rating: review.overallRating, periodYear: review.period?.year ?? null })
+      byEmployee.set(key, entry)
+    }
+
+    return Array.from(byEmployee.values()).map((entry) => {
+      const sorted = [...entry.ratings].sort((a, b) => (a.periodYear ?? 0) - (b.periodYear ?? 0))
+      const latestRating = sorted[sorted.length - 1]?.rating ?? null
+      const averageRating = this.average(sorted.map((r) => r.rating))
+      const firstHalf = sorted.slice(0, Math.ceil(sorted.length / 2))
+      const secondHalf = sorted.slice(Math.ceil(sorted.length / 2))
+      const firstHalfAvg = this.average(firstHalf.map((r) => r.rating))
+      const secondHalfAvg = this.average(secondHalf.map((r) => r.rating))
+      const trend: "improving" | "stable" | "declining" =
+        sorted.length < 2 ? "stable" : secondHalfAvg > firstHalfAvg ? "improving" : secondHalfAvg < firstHalfAvg ? "declining" : "stable"
+
+      return {
+        employeeId: entry.employeeId,
+        employeeName: entry.employeeName,
+        departmentName: entry.departmentName,
+        bandName: entry.bandName,
+        levelName: entry.levelName,
+        reviewCount: sorted.length,
+        latestRating,
+        averageRating,
+        trend,
+      }
+    })
+  }
+
+  /** Employees with a consistently strong, non-declining rating history —
+   *  a simple, transparent heuristic (not a formal succession-planning
+   *  model): average rating >= 4, latest rating >= 4, at least 2 counted
+   *  reviews, and trend isn't declining. */
+  async promotionReadiness(filters: PerformanceAnalyticsFilters) {
+    const rollups = await this.employeeRatingRollups(filters)
+    return rollups
+      .filter((r) => r.reviewCount >= 2 && r.averageRating >= 4 && (r.latestRating ?? 0) >= 4 && r.trend !== "declining")
+      .sort((a, b) => b.averageRating - a.averageRating)
+  }
+
+  /** Employees whose rating history stands out as exceptional — average
+   *  rating >= 4.5, or a perfect latest rating with an improving/stable
+   *  trend. Same "simple, transparent heuristic" caveat as
+   *  promotionReadiness() above. */
+  async highPotential(filters: PerformanceAnalyticsFilters) {
+    const rollups = await this.employeeRatingRollups(filters)
+    return rollups
+      .filter((r) => r.averageRating >= 4.5 || (r.latestRating === 5 && r.trend !== "declining"))
+      .sort((a, b) => b.averageRating - a.averageRating)
   }
 }

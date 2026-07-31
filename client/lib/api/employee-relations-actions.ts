@@ -68,6 +68,14 @@ export async function deleteSanctionType(id: string): Promise<ErActionState> {
   return {}
 }
 
+/** Plain `<form action={...}>` elements require a `(formData) => void |
+ *  Promise<void>` handler — `deleteSanctionType` returns `Promise<ErActionState>`
+ *  for callers that can surface the error, so this void-returning wrapper is
+ *  what the bare delete button in the sanction types list binds to instead. */
+export async function deleteSanctionTypeForm(id: string): Promise<void> {
+  await deleteSanctionType(id)
+}
+
 // ---- Disciplinary cases -------------------------------------------------------------
 
 export async function createDisciplinaryCase(_prevState: ErActionState | undefined, formData: FormData): Promise<ErActionState> {

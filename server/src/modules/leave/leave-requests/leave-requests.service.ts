@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { LeaveRequestStatus, NotificationType, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 import { LeaveBalancesService } from "../leave-balances/leave-balances.service"
 import { LeaveCalendarService } from "../leave-policy/leave-calendar.service"
 import { NotificationsService } from "../notifications/notifications.service"
 
-import { CreateLeaveRequestDto, DecideApprovalDto } from "./dto/leave-request.dto"
+import { CancelLeaveRequestDto, CreateLeaveRequestDto, DecideApprovalDto } from "./dto/leave-request.dto"
 
 const REQUEST_INCLUDE = {
   employee: {
@@ -15,6 +17,7 @@ const REQUEST_INCLUDE = {
       employeeNumber: true,
       firstName: true,
       lastName: true,
+      email: true,
       gender: true,
       branch: { select: { id: true, name: true } },
       position: { select: { id: true, title: true, departmentId: true, department: { select: { id: true, name: true } } } },
@@ -23,6 +26,8 @@ const REQUEST_INCLUDE = {
   leaveType: true,
   delegate: { select: { employeeNumber: true, firstName: true, lastName: true } },
   approvals: { orderBy: { order: "asc" as const }, include: { approver: { select: { employeeNumber: true, firstName: true, lastName: true } } } },
+  attachments: { include: { requirement: true } },
+  cancelledBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
 } as const
 
 const OPEN_STATUSES: LeaveRequestStatus[] = ["SUBMITTED", "PENDING_APPROVAL", "APPROVED"]
@@ -50,8 +55,27 @@ export class LeaveRequestsService {
     private readonly prisma: PrismaService,
     private readonly leaveBalancesService: LeaveBalancesService,
     private readonly leaveCalendarService: LeaveCalendarService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService
   ) {}
+
+  /** Emails always go out through EmailService.enqueue() — a DB insert, not
+   *  a live SMTP call — so it's safe to await these right alongside the
+   *  existing in-app NotificationsService calls without risking this
+   *  method's own transaction timeout. Best-effort: never lets a broken
+   *  template or missing employee row fail the underlying leave action. */
+  private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
+    try {
+      await this.emailService.enqueue(params)
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+  }
+
+  private async getEmployeeEmail(employeeId: string): Promise<string | null> {
+    const employee = await this.prisma.employee.findUnique({ where: { employeeNumber: employeeId }, select: { email: true } })
+    return employee?.email ?? null
+  }
 
   private buildFindAllWhere(filters: {
     employeeId?: string
@@ -157,7 +181,10 @@ export class LeaveRequestsService {
 
     const leaveType = await this.prisma.leaveType.findUnique({
       where: { id: dto.leaveTypeId },
-      include: { approvalSteps: { orderBy: { order: "asc" } } },
+      include: {
+        approvalSteps: { orderBy: { order: "asc" } },
+        attachmentRequirements: true,
+      },
     })
     if (!leaveType || !leaveType.isActive) {
       throw new NotFoundException(`Leave type ${dto.leaveTypeId} not found`)
@@ -172,7 +199,8 @@ export class LeaveRequestsService {
 
     const { numberOfDays, returnDate } = await this.leaveCalendarService.compute(
       dto.startDate,
-      dto.endDate
+      dto.endDate,
+      leaveType
     )
     if (numberOfDays === 0) {
       throw new BadRequestException("This date range contains no working days.")
@@ -188,6 +216,19 @@ export class LeaveRequestsService {
           : ""
         throw new BadRequestException(`${leaveType.name} requires supporting documentation${suffix}.`)
       }
+    }
+
+    // Named attachment requirements (e.g. "Medical Certificate") — distinct
+    // from the generic requiresDocumentation check above. Every mandatory,
+    // active requirement for this leave type must have a matching upload.
+    const providedRequirementIds = new Set((dto.attachments ?? []).map((attachment) => attachment.requirementId))
+    const missingRequirements = leaveType.attachmentRequirements.filter(
+      (requirement) => requirement.isMandatory && !providedRequirementIds.has(requirement.id)
+    )
+    if (missingRequirements.length > 0) {
+      throw new BadRequestException(
+        `${leaveType.name} requires the following document(s): ${missingRequirements.map((r) => r.name).join(", ")}.`
+      )
     }
 
     // Overlap / duplicate check — any other open request for this employee
@@ -249,6 +290,17 @@ export class LeaveRequestsService {
         })
       }
 
+      if (dto.attachments && dto.attachments.length > 0) {
+        await tx.leaveRequestAttachment.createMany({
+          data: dto.attachments.map((attachment) => ({
+            leaveRequestId: created.id,
+            requirementId: attachment.requirementId,
+            purpose: "SUBMISSION",
+            fileUrl: attachment.fileUrl,
+          })),
+        })
+      }
+
       await this.leaveBalancesService.reserve(dto.employeeId, dto.leaveTypeId, year, numberOfDays, tx)
       if (!firstStep) {
         // No workflow configured for this type — auto-approved, book straight to taken.
@@ -269,6 +321,27 @@ export class LeaveRequestsService {
       return created
     }, TRANSACTION_OPTIONS)
 
+    const populated = await this.findOne(request.id)
+    const employeeName = `${populated.employee.firstName} ${populated.employee.lastName}`
+    const startDateStr = populated.startDate.toISOString().slice(0, 10)
+    const endDateStr = populated.endDate.toISOString().slice(0, 10)
+
+    await this.safeSendEmail({
+      templateKey: "leave_submitted",
+      recipientEmail: populated.employee.email,
+      recipientEmployeeId: populated.employee.employeeNumber,
+      relatedModule: "leave",
+      relatedEntityId: populated.id,
+      variables: {
+        employee_name: employeeName,
+        leave_type: populated.leaveType.name,
+        start_date: startDateStr,
+        end_date: endDateStr,
+        days: populated.numberOfDays,
+        approver_name: firstStep ? "your approving manager" : "N/A — auto-approved",
+      },
+    })
+
     if (firstStep?.role === "LINE_MANAGER") {
       const managerId = await this.resolveLineManagerId(dto.employeeId)
       if (managerId) {
@@ -279,10 +352,28 @@ export class LeaveRequestsService {
           message: `A ${leaveType.name} request needs your approval.`,
           relatedLeaveRequestId: request.id,
         })
+        const managerEmail = await this.getEmployeeEmail(managerId)
+        if (managerEmail) {
+          await this.safeSendEmail({
+            templateKey: "leave_approval_needed",
+            recipientEmail: managerEmail,
+            recipientEmployeeId: managerId,
+            relatedModule: "leave",
+            relatedEntityId: populated.id,
+            variables: {
+              employee_name: employeeName,
+              leave_type: populated.leaveType.name,
+              start_date: startDateStr,
+              end_date: endDateStr,
+              days: populated.numberOfDays,
+              approval_url: buildClientUrl("/admin/leave/approvals"),
+            },
+          })
+        }
       }
     }
 
-    return this.findOne(request.id)
+    return populated
   }
 
   /**
@@ -339,6 +430,25 @@ export class LeaveRequestsService {
           },
           tx
         )
+        const rejectingApprover = await tx.employee.findUnique({ where: { employeeNumber: dto.actingEmployeeId }, select: { firstName: true, lastName: true } })
+        await this.emailService.enqueue(
+          {
+            templateKey: "leave_rejected",
+            recipientEmail: request.employee.email,
+            recipientEmployeeId: request.employeeId,
+            relatedModule: "leave",
+            relatedEntityId: id,
+            variables: {
+              employee_name: `${request.employee.firstName} ${request.employee.lastName}`,
+              leave_type: request.leaveType.name,
+              start_date: request.startDate.toISOString().slice(0, 10),
+              end_date: request.endDate.toISOString().slice(0, 10),
+              approver_name: rejectingApprover ? `${rejectingApprover.firstName} ${rejectingApprover.lastName}` : "HR",
+              decision_comment: dto.comment ?? "No reason provided.",
+            },
+          },
+          tx
+        )
         return updated
       }
 
@@ -379,14 +489,35 @@ export class LeaveRequestsService {
         },
         tx
       )
+      const approvingApprover = await tx.employee.findUnique({ where: { employeeNumber: dto.actingEmployeeId }, select: { firstName: true, lastName: true } })
+      await this.emailService.enqueue(
+        {
+          templateKey: "leave_approved",
+          recipientEmail: request.employee.email,
+          recipientEmployeeId: request.employeeId,
+          relatedModule: "leave",
+          relatedEntityId: id,
+          variables: {
+            employee_name: `${request.employee.firstName} ${request.employee.lastName}`,
+            leave_type: request.leaveType.name,
+            start_date: request.startDate.toISOString().slice(0, 10),
+            end_date: request.endDate.toISOString().slice(0, 10),
+            approver_name: approvingApprover ? `${approvingApprover.firstName} ${approvingApprover.lastName}` : "HR",
+          },
+        },
+        tx
+      )
       return updated
     }, TRANSACTION_OPTIONS)
   }
 
   /** The employee may cancel before it begins; per spec this is "subject to
    *  approval rules" — interpreted here as: freely cancellable while still
-   *  pending, and cancellable once approved only if it hasn't started yet. */
-  async cancel(id: string) {
+   *  pending, and cancellable once approved only if it hasn't started yet.
+   *  A cancellation reason is mandatory and stored permanently for
+   *  auditing (never overwritten/cleared), with an optional attachment;
+   *  the employee's manager and HR are both notified. */
+  async cancel(id: string, dto: CancelLeaveRequestDto) {
     const request = await this.findOne(id)
 
     if (!OPEN_STATUSES.includes(request.status)) {
@@ -401,7 +532,7 @@ export class LeaveRequestsService {
 
     const year = request.startDate.getUTCFullYear()
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       if (request.status === "APPROVED") {
         await this.leaveBalancesService.reverseTaken(
           request.employeeId,
@@ -420,11 +551,23 @@ export class LeaveRequestsService {
         )
       }
 
-      const updated = await tx.leaveRequest.update({
+      const result = await tx.leaveRequest.update({
         where: { id },
-        data: { status: LeaveRequestStatus.CANCELLED, currentStepOrder: null },
+        data: {
+          status: LeaveRequestStatus.CANCELLED,
+          currentStepOrder: null,
+          cancellationReason: dto.cancellationReason,
+          cancelledAt: new Date(),
+          cancelledById: dto.actingEmployeeId,
+        },
         include: REQUEST_INCLUDE,
       })
+
+      if (dto.attachmentUrl) {
+        await tx.leaveRequestAttachment.create({
+          data: { leaveRequestId: id, purpose: "CANCELLATION", fileUrl: dto.attachmentUrl },
+        })
+      }
 
       await this.notificationsService.create(
         {
@@ -436,9 +579,48 @@ export class LeaveRequestsService {
         },
         tx
       )
+      await this.emailService.enqueue(
+        {
+          templateKey: "leave_cancelled",
+          recipientEmail: request.employee.email,
+          recipientEmployeeId: request.employeeId,
+          relatedModule: "leave",
+          relatedEntityId: id,
+          variables: {
+            employee_name: `${request.employee.firstName} ${request.employee.lastName}`,
+            leave_type: request.leaveType.name,
+            start_date: request.startDate.toISOString().slice(0, 10),
+            end_date: request.endDate.toISOString().slice(0, 10),
+          },
+        },
+        tx
+      )
 
-      return updated
+      await this.notificationsService.createForAllAdmins(
+        {
+          type: NotificationType.LEAVE_CANCELLED,
+          title: "Leave request cancelled",
+          message: `${request.employee.firstName} ${request.employee.lastName} cancelled their ${request.leaveType.name} request. Reason: ${dto.cancellationReason}`,
+          relatedLeaveRequestId: id,
+        },
+        tx
+      )
+
+      return result
     }, TRANSACTION_OPTIONS)
+
+    const managerId = await this.resolveLineManagerId(request.employeeId)
+    if (managerId) {
+      await this.notificationsService.create({
+        recipientEmployeeId: managerId,
+        type: NotificationType.LEAVE_CANCELLED,
+        title: "Leave request cancelled",
+        message: `${request.employee.firstName} ${request.employee.lastName}, who reports to you, cancelled their ${request.leaveType.name} request.`,
+        relatedLeaveRequestId: id,
+      })
+    }
+
+    return updated
   }
 
   /** Requests where the current step is LINE_MANAGER and this employee is

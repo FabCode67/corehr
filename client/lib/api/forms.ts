@@ -190,7 +190,7 @@ export interface FormTemplateFilters {
 }
 
 export function fetchFormTemplates(filters: FormTemplateFilters = {}) {
-  return apiFetchSafe<FormTemplate[]>(`/forms/templates${toQuery(filters)}`)
+  return apiFetchSafe<FormTemplate[]>(`/forms/templates${toQuery({ ...filters })}`)
 }
 
 export function fetchFormTemplate(id: string) {

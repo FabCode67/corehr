@@ -16,6 +16,8 @@ export interface AuthEmployee {
     title: string
     department: { name: string }
   } | null
+  /** First Login Security — see app/change-password. */
+  mustChangePassword: boolean
 }
 
 /** Only ever called from Server Actions (see app/login/actions.ts) — like
@@ -32,5 +34,12 @@ export function changePasswordRequest(employeeId: string, currentPassword: strin
   return apiFetch<{ success: boolean }>("/auth/change-password", {
     method: "POST",
     body: JSON.stringify({ employeeId, currentPassword, newPassword }),
+  })
+}
+
+export function acceptTermsRequest(employeeId: string) {
+  return apiFetch<{ success: boolean }>("/auth/accept-terms", {
+    method: "POST",
+    body: JSON.stringify({ employeeId }),
   })
 }

@@ -2,7 +2,7 @@
 
 import { ApiError, apiUpload } from "./client"
 
-export type UploadFolder = "profile-pictures" | "certificates" | "leave-attachments"
+export type UploadFolder = "profile-pictures" | "certificates" | "leave-attachments" | "onboarding-documents" | "professional-profile"
 
 export type UploadResult = { ok: true; url: string } | { ok: false; error: string }
 

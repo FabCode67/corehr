@@ -59,6 +59,16 @@ export class CreateLeaveTypeDto {
   @IsBoolean()
   @IsOptional()
   requiresHrApproval?: boolean
+
+  @ApiPropertyOptional({ description: "Overrides the bank-wide LeaveSettings.excludeWeekends for this leave type. Omit/null to use the bank default." })
+  @IsBoolean()
+  @IsOptional()
+  excludeWeekendsOverride?: boolean
+
+  @ApiPropertyOptional({ description: "Overrides the bank-wide LeaveSettings.excludePublicHolidays for this leave type. Omit/null to use the bank default." })
+  @IsBoolean()
+  @IsOptional()
+  excludePublicHolidaysOverride?: boolean
 }
 
 export class UpdateLeaveTypeDto {
@@ -115,6 +125,16 @@ export class UpdateLeaveTypeDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean
+
+  @ApiPropertyOptional({ description: "Overrides the bank-wide LeaveSettings.excludeWeekends for this leave type. Pass null to clear the override." })
+  @IsBoolean()
+  @IsOptional()
+  excludeWeekendsOverride?: boolean
+
+  @ApiPropertyOptional({ description: "Overrides the bank-wide LeaveSettings.excludePublicHolidays for this leave type. Pass null to clear the override." })
+  @IsBoolean()
+  @IsOptional()
+  excludePublicHolidaysOverride?: boolean
 }
 
 export class UpsertEntitlementRuleDto {
@@ -158,4 +178,32 @@ export class UpsertCarryForwardRuleDto {
   @Min(0)
   @IsOptional()
   expiresAfterDays?: number
+
+  @ApiPropertyOptional({ description: "Whether unused carried-forward leave is automatically treated as expired once expiresAfterDays passes." })
+  @IsBoolean()
+  @IsOptional()
+  autoExpiryEnabled?: boolean
+
+  @ApiPropertyOptional({ type: [String], description: "Department IDs exempt from this carry-forward rule (e.g. always allowed to carry forward in full)." })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  exemptDepartmentIds?: string[]
+
+  @ApiPropertyOptional({ type: [String], description: "Employee numbers exempt from this carry-forward rule." })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  exemptEmployeeIds?: string[]
+}
+
+export class UpsertLeaveAttachmentRequirementDto {
+  @MaxLength(120)
+  @IsString()
+  name!: string
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  isMandatory?: boolean
 }

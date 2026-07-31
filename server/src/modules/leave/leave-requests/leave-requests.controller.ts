@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from "@nestj
 import { ApiTags } from "@nestjs/swagger"
 import { LeaveRequestStatus } from "@prisma/client"
 
-import { CreateLeaveRequestDto, DecideApprovalDto, PreviewLeaveDaysDto } from "./dto/leave-request.dto"
+import { CancelLeaveRequestDto, CreateLeaveRequestDto, DecideApprovalDto, PreviewLeaveDaysDto } from "./dto/leave-request.dto"
 import { LeaveRequestsService } from "./leave-requests.service"
 
 @ApiTags("Leave / Requests")
@@ -80,7 +80,7 @@ export class LeaveRequestsController {
   }
 
   @Post(":id/cancel")
-  cancel(@Param("id", ParseUUIDPipe) id: string) {
-    return this.leaveRequestsService.cancel(id)
+  cancel(@Param("id", ParseUUIDPipe) id: string, @Body() dto: CancelLeaveRequestDto) {
+    return this.leaveRequestsService.cancel(id, dto)
   }
 }

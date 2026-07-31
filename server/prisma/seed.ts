@@ -2266,6 +2266,7 @@ async function seedFormsManagement(employees: {
   const employeeFormsCategory = await upsertFormCategory("Employee Forms", "General employee lifecycle and records forms.")
   const recruitmentFormsCategory = await upsertFormCategory("Recruitment Forms", "Forms used during hiring and onboarding.")
   const complianceFormsCategory = await upsertFormCategory("Compliance Forms", "Mandatory regulatory and policy acknowledgement forms.")
+  const exitFormsCategory = await upsertFormCategory("Exit Forms", "Employee exit clearance and offboarding forms.")
 
   /** Only creates fields/stages on first insert — matches
    *  FormTemplatesService.assertStructurallyEditable's rule that a
@@ -2351,6 +2352,29 @@ async function seedFormsManagement(employees: {
       { fieldType: FieldType.CHECKBOX, label: "I acknowledge and agree to comply with the Code of Conduct", isRequired: true, order: 1 },
     ],
     stages: [{ stageOrder: 1, role: SignerRole.EMPLOYEE, label: "Employee Acknowledgement" }],
+  })
+
+  // ---- Template 4: Exit Clearance Form (EMPLOYEE -> MANAGER -> HR) --------
+  // Auto-assigned by ExitProcessService.initiateExit() when HR starts the
+  // Exit Management process — see that service's EXIT_FORM_CODE constant,
+  // which must match this formCode exactly.
+  const exitFormTemplate = await upsertFormTemplate("FORM-0004", {
+    title: "Exit Clearance Form",
+    description: "Completed by an exiting employee as part of the Exit Management process, then signed off by their manager and HR.",
+    purpose: "Confirm knowledge transfer, asset return, and access revocation before an employee's exit is finalized.",
+    categoryId: exitFormsCategory.id,
+    createdById: itHoD.employeeNumber,
+    fields: [
+      { fieldType: FieldType.SHORT_TEXT, label: "Handover Notes / Knowledge Transfer", isRequired: true, order: 1 },
+      { fieldType: FieldType.CHECKBOX, label: "All Company Assets Returned (laptop, ID card, access card, etc.)", isRequired: true, order: 2 },
+      { fieldType: FieldType.CHECKBOX, label: "Outstanding Loans/Advances Settled or Acknowledged", isRequired: true, order: 3 },
+      { fieldType: FieldType.COMMENTS, label: "Additional Comments", isRequired: false, order: 4 },
+    ],
+    stages: [
+      { stageOrder: 1, role: SignerRole.EMPLOYEE, label: "Employee Declaration" },
+      { stageOrder: 2, role: SignerRole.MANAGER, label: "Manager Clearance" },
+      { stageOrder: 3, role: SignerRole.HR, label: "HR Final Clearance" },
+    ],
   })
 
   async function upsertFormInstance(params: {
@@ -2752,6 +2776,513 @@ async function seedEmployeeRelations(employees: {
   console.log(
     "Seeded Employee Relations: 7 sanction types, 5 disciplinary cases across Draft/Under Investigation/Pending Decision (confidential)/Appealed/Closed states, 2 sanctions, 1 appeal, and 2 grievances."
   )
+
+  // ---- Email Notification Templates ----------------------------------------
+  // One row per named email in the Email Notification & Automation spec.
+  // isMandatory templates (welcome + AML reminder) can never be suppressed
+  // via NotificationPreference — see EmailService.enqueue(). All bodies are
+  // wrapped in a shared branded shell so HR can restyle every email at once
+  // by editing this helper, rather than 35 near-duplicate <html> blocks.
+  function emailShell(title: string, innerHtml: string) {
+    return `<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+  <div style="background:#0f4c81; padding: 20px 28px; border-radius: 6px 6px 0 0;">
+    <span style="color:#ffffff; font-size: 18px; font-weight: bold;">NCBA Rwanda &mdash; PeopleSuite</span>
+  </div>
+  <div style="border: 1px solid #e5e7eb; border-top: none; padding: 28px; border-radius: 0 0 6px 6px;">
+    <h2 style="margin-top:0; color:#0f4c81;">${title}</h2>
+    ${innerHtml}
+    <p style="margin-top: 32px; font-size: 13px; color: #6b7280;">
+      Questions? Contact HR at {{hr_contact_email}}.<br />
+      This is an automated message from NCBA Rwanda PeopleSuite &mdash; please do not reply directly to this email.
+    </p>
+  </div>
+</div>`
+  }
+
+  const emailTemplateDefs: Array<{
+    key: string
+    name: string
+    category: string
+    subject: string
+    bodyHtml: string
+    variables: string[]
+    isMandatory?: boolean
+  }> = [
+    // ---- Onboarding ----------------------------------------------------------
+    {
+      key: "employee_welcome",
+      name: "Employee Welcome Email",
+      category: "onboarding",
+      subject: "Welcome to NCBA Rwanda, {{employee_name}}!",
+      bodyHtml: emailShell(
+        "Welcome to the team, {{employee_name}}!",
+        `<p>We're delighted to confirm you're now an active employee of NCBA Rwanda.</p>
+        <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding:4px 0; color:#6b7280;">Employee Number</td><td style="padding:4px 0; font-weight:bold;">{{employee_number}}</td></tr>
+          <tr><td style="padding:4px 0; color:#6b7280;">Department</td><td style="padding:4px 0; font-weight:bold;">{{department}}</td></tr>
+          <tr><td style="padding:4px 0; color:#6b7280;">Position</td><td style="padding:4px 0; font-weight:bold;">{{position}}</td></tr>
+          <tr><td style="padding:4px 0; color:#6b7280;">Start Date</td><td style="padding:4px 0; font-weight:bold;">{{start_date}}</td></tr>
+        </table>
+        <p><a href="{{login_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Log in to PeopleSuite</a></p>
+        <p>Your temporary login details:</p>
+        <p>Username: <strong>{{username}}</strong><br />Temporary Password: <strong>{{temporary_password}}</strong></p>
+        <p>For security, you'll be asked to change this password and accept the Terms of Use the first time you log in.</p>`
+      ),
+      variables: ["employee_name", "employee_number", "department", "position", "start_date", "login_url", "username", "temporary_password", "hr_contact_email"],
+      isMandatory: true,
+    },
+
+    // ---- Leave -----------------------------------------------------------------
+    {
+      key: "leave_submitted",
+      name: "Leave Request Submitted",
+      category: "leave",
+      subject: "Your leave request has been submitted",
+      bodyHtml: emailShell(
+        "Leave request submitted",
+        `<p>Hi {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} ({{days}} day(s)) has been submitted and is awaiting approval from {{approver_name}}.</p>`
+      ),
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "days", "approver_name"],
+    },
+    {
+      key: "leave_approval_needed",
+      name: "Leave Approval Needed (Manager)",
+      category: "leave",
+      subject: "Leave request awaiting your approval — {{employee_name}}",
+      bodyHtml: emailShell(
+        "A leave request needs your decision",
+        `<p>{{employee_name}} has requested {{leave_type}} leave from {{start_date}} to {{end_date}} ({{days}} day(s)).</p>
+        <p><a href="{{approval_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review request</a></p>`
+      ),
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "days", "approval_url"],
+    },
+    {
+      key: "leave_approved",
+      name: "Leave Request Approved",
+      category: "leave",
+      subject: "Your leave request was approved",
+      bodyHtml: emailShell(
+        "Leave approved",
+        `<p>Good news, {{employee_name}} — your {{leave_type}} request for {{start_date}} to {{end_date}} has been approved by {{approver_name}}.</p>`
+      ),
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name"],
+    },
+    {
+      key: "leave_rejected",
+      name: "Leave Request Rejected",
+      category: "leave",
+      subject: "Your leave request was not approved",
+      bodyHtml: emailShell(
+        "Leave request rejected",
+        `<p>Hi {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was not approved by {{approver_name}}.</p>
+        <p>Reason: {{decision_comment}}</p>`
+      ),
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name", "decision_comment"],
+    },
+    {
+      key: "leave_cancelled",
+      name: "Leave Request Cancelled",
+      category: "leave",
+      subject: "Leave request cancelled — {{employee_name}}",
+      bodyHtml: emailShell(
+        "Leave request cancelled",
+        `<p>{{employee_name}}'s {{leave_type}} request for {{start_date}} to {{end_date}} has been cancelled.</p>`
+      ),
+      variables: ["employee_name", "leave_type", "start_date", "end_date"],
+    },
+    {
+      key: "leave_low_balance",
+      name: "Low Leave Balance Alert",
+      category: "leave",
+      subject: "Your {{leave_type}} balance is running low",
+      bodyHtml: emailShell(
+        "Low leave balance",
+        `<p>Hi {{employee_name}}, your remaining {{leave_type}} balance is now {{balance_days}} day(s). Plan ahead if you have time off coming up.</p>`
+      ),
+      variables: ["employee_name", "leave_type", "balance_days"],
+    },
+    {
+      key: "leave_carry_forward_expiring",
+      name: "Carry-Forward Leave Expiring",
+      category: "leave",
+      subject: "{{carry_forward_days}} carried-forward day(s) expire on {{expiry_date}}",
+      bodyHtml: emailShell(
+        "Carried-forward leave is expiring soon",
+        `<p>Hi {{employee_name}}, you have {{carry_forward_days}} day(s) of carried-forward {{leave_type}} leave that will expire on {{expiry_date}}. Use them before they're forfeited.</p>`
+      ),
+      variables: ["employee_name", "leave_type", "carry_forward_days", "expiry_date"],
+    },
+
+    // ---- Performance -------------------------------------------------------
+    {
+      key: "performance_self_appraisal_open",
+      name: "Self-Appraisal Now Open",
+      category: "performance",
+      subject: "{{review_period}} self-appraisal is now open",
+      bodyHtml: emailShell(
+        "Self-appraisal is open",
+        `<p>Hi {{employee_name}}, the {{review_period}} review period is open. Please complete your self-appraisal by {{deadline}}.</p>
+        <p><a href="{{review_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Start self-appraisal</a></p>`
+      ),
+      variables: ["employee_name", "review_period", "deadline", "review_url"],
+    },
+    {
+      key: "performance_reminder_14_days",
+      name: "Appraisal Reminder — 14 Days Left",
+      category: "performance",
+      subject: "Reminder: {{review_period}} appraisal due in 14 days",
+      bodyHtml: emailShell(
+        "14 days left to complete your appraisal",
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}} — that's 14 days from now.</p>`
+      ),
+      variables: ["employee_name", "review_period", "deadline"],
+    },
+    {
+      key: "performance_reminder_7_days",
+      name: "Appraisal Reminder — 7 Days Left",
+      category: "performance",
+      subject: "Reminder: {{review_period}} appraisal due in 7 days",
+      bodyHtml: emailShell("7 days left to complete your appraisal", `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}}.</p>`),
+      variables: ["employee_name", "review_period", "deadline"],
+    },
+    {
+      key: "performance_reminder_1_day",
+      name: "Appraisal Reminder — 1 Day Left",
+      category: "performance",
+      subject: "Final reminder: {{review_period}} appraisal due tomorrow",
+      bodyHtml: emailShell("Due tomorrow", `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due tomorrow ({{deadline}}).</p>`),
+      variables: ["employee_name", "review_period", "deadline"],
+    },
+    {
+      key: "performance_overdue",
+      name: "Appraisal Overdue",
+      category: "performance",
+      subject: "Overdue: {{review_period}} appraisal",
+      bodyHtml: emailShell(
+        "Your appraisal is now overdue",
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal was due on {{deadline}} and has not yet been submitted. Please complete it as soon as possible.</p>`
+      ),
+      variables: ["employee_name", "review_period", "deadline"],
+    },
+    {
+      key: "performance_manager_reminder",
+      name: "Manager Appraisal Reminder",
+      category: "performance",
+      subject: "Reminder: appraisal(s) awaiting your review",
+      bodyHtml: emailShell(
+        "Appraisals awaiting your review",
+        `<p>Hi {{manager_name}}, {{pending_count}} appraisal(s) in the {{review_period}} cycle are awaiting your review.</p>`
+      ),
+      variables: ["manager_name", "review_period", "pending_count"],
+    },
+
+    // ---- Learning & Development ---------------------------------------------
+    {
+      key: "learning_course_assigned",
+      name: "Course Assigned",
+      category: "learning",
+      subject: "You've been assigned: {{course_name}}",
+      bodyHtml: emailShell(
+        "New course assigned",
+        `<p>Hi {{employee_name}}, you've been assigned "{{course_name}}", due by {{due_date}}.</p>
+        <p><a href="{{course_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Start course</a></p>`
+      ),
+      variables: ["employee_name", "course_name", "due_date", "course_url"],
+    },
+    {
+      key: "learning_not_started_reminder",
+      name: "Course Not Started Reminder",
+      category: "learning",
+      subject: "Reminder: {{course_name}} not yet started",
+      bodyHtml: emailShell("You haven't started this course yet", `<p>Hi {{employee_name}}, "{{course_name}}" is due by {{due_date}} and hasn't been started.</p>`),
+      variables: ["employee_name", "course_name", "due_date"],
+    },
+    {
+      key: "learning_approaching_deadline",
+      name: "Course Deadline Approaching",
+      category: "learning",
+      subject: "{{course_name}} is due soon",
+      bodyHtml: emailShell("Deadline approaching", `<p>Hi {{employee_name}}, "{{course_name}}" is due on {{due_date}}.</p>`),
+      variables: ["employee_name", "course_name", "due_date"],
+    },
+    {
+      key: "learning_overdue",
+      name: "Course Overdue",
+      category: "learning",
+      subject: "Overdue: {{course_name}}",
+      bodyHtml: emailShell("This course is now overdue", `<p>Hi {{employee_name}}, "{{course_name}}" was due on {{due_date}} and is now overdue.</p>`),
+      variables: ["employee_name", "course_name", "due_date"],
+    },
+    {
+      key: "learning_aml_mandatory_reminder",
+      name: "Mandatory AML Training Reminder",
+      category: "learning",
+      subject: "Action required: {{course_name}} (mandatory compliance training)",
+      bodyHtml: emailShell(
+        "Mandatory compliance training reminder",
+        `<p>Hi {{employee_name}}, "{{course_name}}" is mandatory AML/compliance training due by {{due_date}}. This reminder cannot be disabled.</p>`
+      ),
+      variables: ["employee_name", "course_name", "due_date"],
+      isMandatory: true,
+    },
+
+    // ---- Recruitment ---------------------------------------------------------
+    {
+      key: "recruitment_application_received",
+      name: "Application Received",
+      category: "recruitment",
+      subject: "We've received your application — {{job_title}}",
+      bodyHtml: emailShell(
+        "Application received",
+        `<p>Hi {{candidate_name}}, thank you for applying for {{job_title}} at NCBA Rwanda. Our recruitment team will review your application and be in touch.</p>`
+      ),
+      variables: ["candidate_name", "job_title"],
+    },
+    {
+      key: "recruitment_interview_invitation",
+      name: "Interview Invitation",
+      category: "recruitment",
+      subject: "Interview invitation — {{job_title}}",
+      bodyHtml: emailShell(
+        "You're invited to interview",
+        `<p>Hi {{candidate_name}}, we'd like to invite you to interview for {{job_title}} on {{interview_date}} at {{interview_time}} ({{interview_mode}}).</p>`
+      ),
+      variables: ["candidate_name", "job_title", "interview_date", "interview_time", "interview_mode"],
+    },
+    {
+      key: "recruitment_assessment_invitation",
+      name: "Assessment Invitation",
+      category: "recruitment",
+      subject: "Assessment invitation — {{job_title}}",
+      bodyHtml: emailShell(
+        "Please complete your assessment",
+        `<p>Hi {{candidate_name}}, as part of your application for {{job_title}}, please complete the following assessment by {{deadline}}.</p>
+        <p><a href="{{assessment_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Start assessment</a></p>`
+      ),
+      variables: ["candidate_name", "job_title", "deadline", "assessment_url"],
+    },
+    {
+      key: "recruitment_offer_letter",
+      name: "Offer Letter",
+      category: "recruitment",
+      subject: "Your offer from NCBA Rwanda — {{job_title}}",
+      bodyHtml: emailShell(
+        "Congratulations!",
+        `<p>Hi {{candidate_name}}, we're pleased to offer you the position of {{job_title}}. Please find your offer letter attached / linked below.</p>
+        <p><a href="{{offer_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View offer</a></p>`
+      ),
+      variables: ["candidate_name", "job_title", "offer_url"],
+    },
+    {
+      key: "recruitment_rejection",
+      name: "Application Not Successful",
+      category: "recruitment",
+      subject: "Update on your application — {{job_title}}",
+      bodyHtml: emailShell(
+        "Application update",
+        `<p>Hi {{candidate_name}}, thank you for your interest in {{job_title}}. After careful consideration, we've decided not to move forward with your application at this time. We wish you the best in your search.</p>`
+      ),
+      variables: ["candidate_name", "job_title"],
+    },
+    {
+      key: "recruitment_recruiter_new_application",
+      name: "New Application (Recruiter)",
+      category: "recruitment",
+      subject: "New application — {{job_title}}",
+      bodyHtml: emailShell("New application received", `<p>{{candidate_name}} has applied for {{job_title}}.</p>`),
+      variables: ["candidate_name", "job_title"],
+    },
+    {
+      key: "recruitment_interview_scheduled_recruiter",
+      name: "Interview Scheduled (Recruiter)",
+      category: "recruitment",
+      subject: "Interview scheduled — {{candidate_name}} for {{job_title}}",
+      bodyHtml: emailShell(
+        "Interview scheduled",
+        `<p>An interview for {{candidate_name}} ({{job_title}}) has been scheduled for {{interview_date}} at {{interview_time}}.</p>`
+      ),
+      variables: ["candidate_name", "job_title", "interview_date", "interview_time"],
+    },
+
+    // ---- Exit Management -----------------------------------------------------
+    {
+      key: "exit_form_assigned",
+      name: "Exit Form Assigned",
+      category: "exit",
+      subject: "Action required: exit form",
+      bodyHtml: emailShell(
+        "Exit form assigned",
+        `<p>Hi {{employee_name}}, following your exit process (last working day {{last_working_day}}), please complete the exit form below.</p>
+        <p><a href="{{form_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete exit form</a></p>`
+      ),
+      variables: ["employee_name", "last_working_day", "form_url"],
+    },
+    {
+      key: "exit_clearance_checklist",
+      name: "Exit Clearance Checklist",
+      category: "exit",
+      subject: "Your exit clearance checklist",
+      bodyHtml: emailShell(
+        "Clearance checklist",
+        `<p>Hi {{employee_name}}, please complete the clearance checklist items below before your last working day ({{last_working_day}}).</p>`
+      ),
+      variables: ["employee_name", "last_working_day"],
+    },
+    {
+      key: "exit_interview_invitation",
+      name: "Exit Interview Invitation",
+      category: "exit",
+      subject: "Exit interview scheduled",
+      bodyHtml: emailShell(
+        "Exit interview",
+        `<p>Hi {{employee_name}}, your exit interview has been scheduled for {{interview_date}} at {{interview_time}}.</p>`
+      ),
+      variables: ["employee_name", "interview_date", "interview_time"],
+    },
+    {
+      key: "exit_manager_approval_task",
+      name: "Exit Task Awaiting Manager Approval",
+      category: "exit",
+      subject: "Action needed: exit clearance for {{employee_name}}",
+      bodyHtml: emailShell(
+        "Exit clearance awaiting your approval",
+        `<p>Hi {{manager_name}}, {{employee_name}}'s exit clearance item ({{task_name}}) is awaiting your sign-off.</p>`
+      ),
+      variables: ["manager_name", "employee_name", "task_name"],
+    },
+    {
+      key: "exit_hr_workflow_update",
+      name: "Exit Workflow Update (HR)",
+      category: "exit",
+      subject: "Exit workflow update — {{employee_name}}",
+      bodyHtml: emailShell("Exit workflow update", `<p>{{employee_name}}'s exit process status changed to {{status}}.</p>`),
+      variables: ["employee_name", "status"],
+    },
+
+    // ---- Generic Approvals (Leave / Recruitment / Forms / Training / Performance / Employee changes) ----
+    {
+      key: "approval_required",
+      name: "Approval Required",
+      category: "approval",
+      subject: "Approval required: {{item_title}}",
+      bodyHtml: emailShell(
+        "Your approval is needed",
+        `<p>Hi {{approver_name}}, "{{item_title}}" ({{item_type}}) requires your approval.</p>
+        <p><a href="{{approval_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review now</a></p>`
+      ),
+      variables: ["approver_name", "item_title", "item_type", "approval_url"],
+    },
+    {
+      key: "approval_completed",
+      name: "Approval Completed",
+      category: "approval",
+      subject: "Approved: {{item_title}}",
+      bodyHtml: emailShell("Approved", `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) has been approved by {{approver_name}}.</p>`),
+      variables: ["requester_name", "item_title", "item_type", "approver_name"],
+    },
+    {
+      key: "approval_rejected",
+      name: "Approval Rejected",
+      category: "approval",
+      subject: "Rejected: {{item_title}}",
+      bodyHtml: emailShell(
+        "Not approved",
+        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was rejected by {{approver_name}}. Reason: {{decision_comment}}</p>`
+      ),
+      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment"],
+    },
+    {
+      key: "approval_returned_for_correction",
+      name: "Returned for Correction",
+      category: "approval",
+      subject: "Please review: {{item_title}} was returned for correction",
+      bodyHtml: emailShell(
+        "Returned for correction",
+        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was returned by {{approver_name}} for correction. Notes: {{decision_comment}}</p>`
+      ),
+      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment"],
+    },
+  ]
+
+  for (const def of emailTemplateDefs) {
+    await prisma.emailTemplate.upsert({
+      where: { key: def.key },
+      update: {},
+      create: {
+        key: def.key,
+        name: def.name,
+        category: def.category,
+        subject: def.subject,
+        bodyHtml: def.bodyHtml,
+        variables: def.variables,
+        isMandatory: def.isMandatory ?? false,
+        createdById: md.employeeNumber,
+      },
+    })
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`Seeded Email Notification Templates: ${emailTemplateDefs.length} templates across onboarding/leave/performance/learning/recruitment/exit/approval categories.`)
+
+  // ---- Professional Profile module: starter catalogs -----------------------
+  // A handful of real institutions/skills so the searchable dropdowns in the
+  // Education/Skills sections have something to match against out of the
+  // box — HR (or employees, for skills) grow both lists over time.
+  const institutionDefs: { name: string; country: string; city?: string; website?: string }[] = [
+    { name: "University of Rwanda", country: "Rwanda", city: "Kigali", website: "https://ur.ac.rw" },
+    { name: "Rwanda Polytechnic", country: "Rwanda", city: "Kigali", website: "https://rp.ac.rw" },
+    { name: "Carnegie Mellon University Africa", country: "Rwanda", city: "Kigali", website: "https://africa.cmu.edu" },
+    { name: "African Leadership University", country: "Rwanda", city: "Kigali", website: "https://alueducation.com" },
+    { name: "Kepler Rwanda", country: "Rwanda", city: "Kigali" },
+    { name: "Mount Kenya University Rwanda", country: "Rwanda", city: "Kigali" },
+    { name: "University of Nairobi", country: "Kenya", city: "Nairobi", website: "https://uonbi.ac.ke" },
+    { name: "Strathmore University", country: "Kenya", city: "Nairobi", website: "https://strathmore.edu" },
+    { name: "Makerere University", country: "Uganda", city: "Kampala", website: "https://mak.ac.ug" },
+    { name: "University of Cape Town", country: "South Africa", city: "Cape Town", website: "https://uct.ac.za" },
+    { name: "University of London", country: "United Kingdom", city: "London", website: "https://london.ac.uk" },
+    { name: "University of Manchester", country: "United Kingdom", city: "Manchester", website: "https://manchester.ac.uk" },
+    { name: "Harvard University", country: "United States", city: "Cambridge", website: "https://harvard.edu" },
+    { name: "Massachusetts Institute of Technology", country: "United States", city: "Cambridge", website: "https://mit.edu" },
+    { name: "University of Toronto", country: "Canada", city: "Toronto", website: "https://utoronto.ca" },
+  ]
+  for (const def of institutionDefs) {
+    // AcademicInstitution.name isn't @unique (the same institution name can
+    // legitimately appear once per country), so this is a plain
+    // find-then-create rather than a Prisma upsert.
+    const existing = await prisma.academicInstitution.findFirst({ where: { name: def.name, country: def.country } })
+    if (!existing) {
+      await prisma.academicInstitution.create({ data: { ...def, verificationStatus: "VERIFIED" } })
+    }
+  }
+
+  const skillDefs: { name: string; category: string }[] = [
+    { name: "JavaScript", category: "Technical" },
+    { name: "TypeScript", category: "Technical" },
+    { name: "Python", category: "Technical" },
+    { name: "SQL", category: "Technical" },
+    { name: "Cloud Computing", category: "Technical" },
+    { name: "Data Analysis", category: "Technical" },
+    { name: "Cybersecurity", category: "Technical" },
+    { name: "Network Administration", category: "Technical" },
+    { name: "Core Banking Systems", category: "Technical" },
+    { name: "Digital Banking", category: "Technical" },
+    { name: "Anti-Money Laundering (AML)", category: "Technical" },
+    { name: "Credit Risk Analysis", category: "Technical" },
+    { name: "Leadership", category: "Professional" },
+    { name: "Communication", category: "Professional" },
+    { name: "Project Management", category: "Professional" },
+    { name: "Negotiation", category: "Professional" },
+    { name: "Customer Relationship Management", category: "Professional" },
+    { name: "Strategic Planning", category: "Professional" },
+    { name: "Team Management", category: "Professional" },
+    { name: "Public Speaking", category: "Professional" },
+  ]
+  for (const def of skillDefs) {
+    await prisma.skill.upsert({ where: { name: def.name }, update: {}, create: def })
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`Seeded Professional Profile catalogs: ${institutionDefs.length} institutions, ${skillDefs.length} skills.`)
 }
 
 main()

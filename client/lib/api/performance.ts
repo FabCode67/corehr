@@ -29,6 +29,7 @@ export interface RatingScaleEntry {
   label: string
   description: string | null
   isActive: boolean
+  expectedPercentage: number | null
 }
 
 export function fetchRatingScale(includeInactive = false) {
@@ -187,12 +188,15 @@ export interface AnalyticsFilters {
   contractType?: string
   gender?: string
   employeeId?: string
+  functionId?: string
 }
 
 export interface DistributionEntry {
   rank: number
   label: string
   count: number
+  actualPercentage: number
+  expectedPercentage: number | null
 }
 
 export interface GroupPerformance {
@@ -203,6 +207,11 @@ export interface GroupPerformance {
 export interface DepartmentPerformance extends GroupPerformance {
   departmentId: string
   departmentName: string
+}
+
+export interface FunctionPerformance extends GroupPerformance {
+  functionId: string
+  functionName: string
 }
 
 export interface UnitPerformance extends GroupPerformance {
@@ -263,6 +272,24 @@ export interface NeedsImprovementEntry extends TopPerformerEntry {
   reviewerName: string
 }
 
+export interface HeatMapRow {
+  key: string
+  label: string
+  counts: Record<number, number>
+}
+
+export interface PromotionCandidate {
+  employeeId: string
+  employeeName: string
+  departmentName: string
+  bandName: string | null
+  levelName: string | null
+  reviewCount: number
+  latestRating: number | null
+  averageRating: number
+  trend: "improving" | "stable" | "declining"
+}
+
 function analyticsQuery(filters: AnalyticsFilters, extra: Record<string, string | number | undefined> = {}) {
   return toQuery({ ...filters, ...extra })
 }
@@ -273,6 +300,10 @@ export function fetchDistribution(filters: AnalyticsFilters = {}) {
 
 export function fetchByDepartment(filters: AnalyticsFilters = {}) {
   return apiFetchSafe<DepartmentPerformance[]>(`/performance/analytics/by-department${analyticsQuery(filters)}`)
+}
+
+export function fetchByFunction(filters: AnalyticsFilters = {}) {
+  return apiFetchSafe<FunctionPerformance[]>(`/performance/analytics/by-function${analyticsQuery(filters)}`)
 }
 
 export function fetchByUnit(filters: AnalyticsFilters = {}) {
@@ -315,4 +346,16 @@ export function fetchTopPerformers(filters: AnalyticsFilters = {}, limit?: numbe
 
 export function fetchNeedsImprovement(filters: AnalyticsFilters = {}) {
   return apiFetchSafe<NeedsImprovementEntry[]>(`/performance/analytics/needs-improvement${analyticsQuery(filters)}`)
+}
+
+export function fetchHeatMap(filters: AnalyticsFilters = {}, dimension: "department" | "branch" | "band" | "level" = "department") {
+  return apiFetchSafe<HeatMapRow[]>(`/performance/analytics/heat-map${analyticsQuery(filters, { dimension })}`)
+}
+
+export function fetchPromotionReadiness(filters: AnalyticsFilters = {}) {
+  return apiFetchSafe<PromotionCandidate[]>(`/performance/analytics/promotion-readiness${analyticsQuery(filters)}`)
+}
+
+export function fetchHighPotential(filters: AnalyticsFilters = {}) {
+  return apiFetchSafe<PromotionCandidate[]>(`/performance/analytics/high-potential${analyticsQuery(filters)}`)
 }

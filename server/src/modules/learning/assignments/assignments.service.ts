@@ -3,7 +3,9 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { CourseAssignmentPriority, CourseAssignmentStatus, NotificationType, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { LearningAccessService } from "../access/learning-access.service"
 import { CoursesService } from "../courses/courses.service"
@@ -49,8 +51,31 @@ export class AssignmentsService {
     private readonly prisma: PrismaService,
     private readonly accessService: LearningAccessService,
     private readonly coursesService: CoursesService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService
   ) {}
+
+  private async safeSendCourseEmail(templateKey: string, employeeId: string, courseName: string, dueDate: Date | null, relatedEntityId: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { employeeNumber: employeeId }, select: { email: true, firstName: true, lastName: true } })
+    if (!employee) return
+    try {
+      await this.emailService.enqueue({
+        templateKey,
+        recipientEmail: employee.email,
+        recipientEmployeeId: employeeId,
+        relatedModule: "learning",
+        relatedEntityId,
+        variables: {
+          employee_name: `${employee.firstName} ${employee.lastName}`,
+          course_name: courseName,
+          due_date: dueDate ? dueDate.toISOString().slice(0, 10) : "No due date set",
+          course_url: buildClientUrl("/staff/learning"),
+        },
+      })
+    } catch {
+      // best-effort — EmailService.enqueue() already logs internally
+    }
+  }
 
   private buildWhere(filters: AssignmentFilters, scope: Awaited<ReturnType<LearningAccessService["resolveScope"]>>): Prisma.CourseAssignmentWhereInput {
     const accessWhere = this.accessService.buildAssignmentWhere(scope)
@@ -210,6 +235,18 @@ export class AssignmentsService {
         title: "Mandatory training assigned",
         message: `"${course.name}" has been assigned — due ${dueDate.toISOString().slice(0, 10)}.`,
       })
+      // AML/compliance courses use the isMandatory-template (never
+      // suppressible via NotificationPreference — see EmailService), since
+      // this whole code path exists specifically for the "AML rule,
+      // generalized to any course" auto-hire case per this method's doc
+      // comment above.
+      await this.safeSendCourseEmail(
+        course.category.isMandatory ? "learning_aml_mandatory_reminder" : "learning_course_assigned",
+        employeeId,
+        course.name,
+        dueDate,
+        assignment.id
+      )
     }
   }
 
@@ -285,6 +322,7 @@ export class AssignmentsService {
       title: "New course assigned",
       message: `You've been assigned "${course.name}"${dto.dueDate ? ` — due ${dto.dueDate.toISOString().slice(0, 10)}` : ""}.`,
     })
+    await this.safeSendCourseEmail("learning_course_assigned", dto.employeeId, course.name, dto.dueDate ?? null, assignment.id)
 
     return assignment
   }

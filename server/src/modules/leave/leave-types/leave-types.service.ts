@@ -8,12 +8,14 @@ import {
   UpdateLeaveTypeDto,
   UpsertCarryForwardRuleDto,
   UpsertEntitlementRuleDto,
+  UpsertLeaveAttachmentRequirementDto,
 } from "./dto/leave-type.dto"
 
 const LEAVE_TYPE_INCLUDE = {
   entitlementRules: true,
   approvalSteps: { orderBy: { order: "asc" as const } },
   carryForwardRule: true,
+  attachmentRequirements: { orderBy: { name: "asc" as const } },
 }
 
 /**
@@ -112,6 +114,27 @@ export class LeaveTypesService {
       update: dto,
       create: { leaveTypeId, ...dto },
     })
+    return this.findOne(leaveTypeId)
+  }
+
+  /** Named supporting-document requirements (e.g. "Medical Certificate" for
+   *  Sick Leave) — see LeaveRequestsService.create()'s attachment-
+   *  requirement validation for how these are enforced. Upserts by the
+   *  (leaveTypeId, name) unique constraint so re-saving the same name from
+   *  the admin form edits it in place rather than duplicating. */
+  async upsertAttachmentRequirement(leaveTypeId: string, dto: UpsertLeaveAttachmentRequirementDto) {
+    await this.findOne(leaveTypeId)
+    await this.prisma.leaveAttachmentRequirement.upsert({
+      where: { leaveTypeId_name: { leaveTypeId, name: dto.name } },
+      update: { isMandatory: dto.isMandatory ?? true },
+      create: { leaveTypeId, name: dto.name, isMandatory: dto.isMandatory ?? true },
+    })
+    return this.findOne(leaveTypeId)
+  }
+
+  async removeAttachmentRequirement(leaveTypeId: string, requirementId: string) {
+    await this.findOne(leaveTypeId)
+    await this.prisma.leaveAttachmentRequirement.delete({ where: { id: requirementId } })
     return this.findOne(leaveTypeId)
   }
 }

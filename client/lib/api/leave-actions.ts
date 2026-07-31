@@ -14,6 +14,17 @@ function trimmedOrUndefined(value: FormDataEntryValue | null) {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+/** Tri-state override select ("" = inherit bank default, "true"/"false" =
+ *  explicit override) -> boolean | undefined | null. `forUpdate` returns
+ *  `null` instead of `undefined` for the empty case, since PATCH needs to
+ *  be able to explicitly clear a previously-set override. */
+function triStateOverride(value: FormDataEntryValue | null, forUpdate: boolean): boolean | null | undefined {
+  const raw = String(value ?? "")
+  if (raw === "true") return true
+  if (raw === "false") return false
+  return forUpdate ? null : undefined
+}
+
 /** Every mutation below touches data that could be shown on the staff
  *  self-service page, the admin approvals/calendar/analytics dashboards, or
  *  the HR admin panel — revalidate broadly rather than trying to track
@@ -53,6 +64,19 @@ export async function submitLeaveRequest(
     return { error: "Please provide a reason for this leave request." }
   }
 
+  // One hidden input per named attachment requirement, JSON-encoded as
+  // {requirementId, fileUrl}[] since FormData can't carry a nested array
+  // directly — see leave-request-form.tsx for how the hidden input is set.
+  const attachmentsRaw = trimmedOrUndefined(formData.get("attachments"))
+  let attachments: { requirementId: string; fileUrl: string }[] | undefined
+  if (attachmentsRaw) {
+    try {
+      attachments = JSON.parse(attachmentsRaw)
+    } catch {
+      attachments = undefined
+    }
+  }
+
   try {
     await apiFetch("/leave/requests", {
       method: "POST",
@@ -64,6 +88,7 @@ export async function submitLeaveRequest(
         returnDate: trimmedOrUndefined(formData.get("returnDate")),
         reason,
         attachmentUrl: trimmedOrUndefined(formData.get("attachmentUrl")),
+        attachments,
         delegateEmployeeId: trimmedOrUndefined(formData.get("delegateEmployeeId")),
         hrOverride: formData.get("hrOverride") === "on",
       }),
@@ -95,9 +120,26 @@ export async function decideApproval(
   return {}
 }
 
-export async function cancelLeaveRequest(id: string): Promise<LeaveActionState> {
+export async function cancelLeaveRequest(
+  id: string,
+  actingEmployeeId: string,
+  _prevState: LeaveActionState | undefined,
+  formData: FormData
+): Promise<LeaveActionState> {
+  const cancellationReason = trimmedOrUndefined(formData.get("cancellationReason"))
+  if (!cancellationReason || cancellationReason.length < 3) {
+    return { error: "Please provide a reason for cancelling this leave request." }
+  }
+
   try {
-    await apiFetch(`/leave/requests/${id}/cancel`, { method: "POST" })
+    await apiFetch(`/leave/requests/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({
+        actingEmployeeId,
+        cancellationReason,
+        attachmentUrl: trimmedOrUndefined(formData.get("attachmentUrl")),
+      }),
+    })
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to cancel leave request." }
   }
@@ -188,6 +230,8 @@ export async function createLeaveType(
           ? Number(formData.get("documentationThresholdDays"))
           : undefined,
         requiresHrApproval: formData.get("requiresHrApproval") === "on",
+        excludeWeekendsOverride: triStateOverride(formData.get("excludeWeekendsOverride"), false),
+        excludePublicHolidaysOverride: triStateOverride(formData.get("excludePublicHolidaysOverride"), false),
       }),
     })
   } catch (error) {
@@ -227,6 +271,8 @@ export async function updateLeaveType(
           ? formData.get("requiresHrApproval") === "on"
           : undefined,
         isActive: formData.has("isActive") ? formData.get("isActive") === "on" : undefined,
+        excludeWeekendsOverride: triStateOverride(formData.get("excludeWeekendsOverride"), true),
+        excludePublicHolidaysOverride: triStateOverride(formData.get("excludePublicHolidaysOverride"), true),
       }),
     })
   } catch (error) {
@@ -286,12 +332,15 @@ export async function upsertCarryForwardRule(
   leaveTypeId: string,
   enabled: boolean,
   maxDays: number | undefined,
-  expiresAfterDays: number | undefined
+  expiresAfterDays: number | undefined,
+  autoExpiryEnabled?: boolean,
+  exemptDepartmentIds?: string[],
+  exemptEmployeeIds?: string[]
 ): Promise<LeaveActionState> {
   try {
     await apiFetch(`/leave/types/${leaveTypeId}/carry-forward-rule`, {
       method: "PUT",
-      body: JSON.stringify({ enabled, maxDays, expiresAfterDays }),
+      body: JSON.stringify({ enabled, maxDays, expiresAfterDays, autoExpiryEnabled, exemptDepartmentIds, exemptEmployeeIds }),
     })
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to update carry-forward rule." }
@@ -299,6 +348,31 @@ export async function upsertCarryForwardRule(
 
   revalidatePath("/admin/leave/settings")
   return {}
+}
+
+// ---- Leave Attachment Requirements (HR admin) ---------------------------
+
+export async function upsertAttachmentRequirement(
+  leaveTypeId: string,
+  name: string,
+  isMandatory: boolean
+): Promise<LeaveActionState> {
+  try {
+    await apiFetch(`/leave/types/${leaveTypeId}/attachment-requirements`, {
+      method: "PUT",
+      body: JSON.stringify({ name, isMandatory }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save attachment requirement." }
+  }
+
+  revalidatePath("/admin/leave/settings")
+  return {}
+}
+
+export async function removeAttachmentRequirement(leaveTypeId: string, requirementId: string) {
+  await apiFetch(`/leave/types/${leaveTypeId}/attachment-requirements/${requirementId}`, { method: "DELETE" })
+  revalidatePath("/admin/leave/settings")
 }
 
 // ---- Public Holidays (HR admin) -----------------------------------------

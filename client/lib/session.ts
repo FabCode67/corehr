@@ -29,6 +29,11 @@ export interface SessionUser {
   /** Same value as `id`, kept as its own field since Leave pages and other
    *  employee-scoped features read `session.employeeId` specifically. */
   employeeId: string
+  /** First Login Security (Email Notification & Automation module) — true
+   *  for every newly created employee until they successfully change their
+   *  temporary password. middleware.ts redirects anywhere in /staff or
+   *  /admin to /change-password while this is true. */
+  mustChangePassword: boolean
 }
 
 export const SESSION_COOKIE = "ps_session"
@@ -50,7 +55,10 @@ export function decodeSession(value: string | undefined | null): SessionUser | n
       typeof parsed.employeeId === "string" &&
       (parsed.role === "staff" || parsed.role === "admin")
     ) {
-      return parsed as SessionUser
+      // Older sessions encoded before First Login Security shipped won't
+      // have this field at all — default to false rather than force
+      // everyone already logged in to jump through the flow retroactively.
+      return { ...parsed, mustChangePassword: Boolean(parsed.mustChangePassword) } as SessionUser
     }
 
     return null

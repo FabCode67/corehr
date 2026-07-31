@@ -28,6 +28,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/staff", request.url))
   }
 
+  // First Login Security — belt-and-braces alongside the redirect already
+  // done at the end of app/login/actions.ts, in case an old tab still has
+  // a pre-change-password session cookie and tries to deep-link in.
+  if (session.mustChangePassword) {
+    return NextResponse.redirect(new URL("/change-password", request.url))
+  }
+
   return NextResponse.next()
 }
 

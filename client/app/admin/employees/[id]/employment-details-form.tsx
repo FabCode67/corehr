@@ -78,6 +78,21 @@ export function EmploymentDetailsForm({ employee, action }: EmploymentDetailsFor
         </div>
       </div>
 
+      <div className="flex flex-col gap-1.5 sm:w-1/2">
+        <Label htmlFor="previousBankingExperienceYears">Previous banking experience (years)</Label>
+        <Input
+          id="previousBankingExperienceYears"
+          name="previousBankingExperienceYears"
+          type="number"
+          min="0"
+          step="0.5"
+          defaultValue={employee.previousBankingExperienceYears ?? ""}
+        />
+        <p className="text-xs text-muted-foreground">
+          Years of banking experience before joining NCBA — combined with tenure here for the employee list&apos;s Total Banking Experience column.
+        </p>
+      </div>
+
       {contractType === "PERMANENT" ? (
         <div className="flex flex-col gap-1.5 sm:w-1/2">
           <Label htmlFor="probationEndDate">

@@ -18,11 +18,22 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/webp",
   "application/pdf",
+  // Added for the Professional Profile module's Document Upload spec (PDF/
+  // JPG/PNG/DOC/DOCX) — education/certification certificates can now be
+  // Word documents, not just PDFs/images.
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ])
 
 // Whitelisted so the Cloudinary folder path can't be influenced by
 // arbitrary client input.
-const ALLOWED_FOLDERS = new Set(["profile-pictures", "certificates", "leave-attachments"])
+const ALLOWED_FOLDERS = new Set([
+  "profile-pictures",
+  "certificates",
+  "leave-attachments",
+  "onboarding-documents",
+  "professional-profile",
+])
 
 @ApiTags("Uploads")
 @Controller("uploads")
@@ -37,7 +48,7 @@ export class UploadsController {
       throw new BadRequestException("No file uploaded.")
     }
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new BadRequestException("Unsupported file type. Use JPEG, PNG, WebP, or PDF.")
+      throw new BadRequestException("Unsupported file type. Use JPEG, PNG, WebP, PDF, DOC, or DOCX.")
     }
 
     const safeFolder = folder && ALLOWED_FOLDERS.has(folder) ? folder : "misc"

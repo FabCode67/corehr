@@ -1,6 +1,28 @@
+import { join } from "node:path"
+
 import { Injectable } from "@nestjs/common"
 
 import PDFDocument from "pdfkit"
+
+// The cursive script used for the "DocuSigned by:" style stamp below —
+// mirrors client/components/ui/signature-stamp.tsx (Alex Brush) so a signed
+// form looks the same on screen and in the downloaded PDF. Shipped as a
+// static asset copied to dist by nest-cli.json's "assets" config.
+const SIGNATURE_FONT_PATH = join(__dirname, "fonts", "AlexBrush-Regular.woff2")
+const SIGNATURE_FONT_NAME = "SignatureScript"
+
+/** Mirrors client/components/ui/signature-stamp.tsx's signatureReference(). */
+function signatureReference(id: string): string {
+  const stripped = id.replaceAll("-", "").toUpperCase()
+  return `${stripped.slice(0, 14)}…`
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ""
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+}
 
 /** Minimal shape this service needs from a FormInstance — matches
  *  FORM_INSTANCE_INCLUDE in FormInstancesService, kept loose here so this
@@ -25,6 +47,7 @@ interface PdfFormInstance {
   assignedBy: { employeeNumber: string; firstName: string; lastName: string }
   responses: { formFieldId: string; value: unknown }[]
   signatures: {
+    id: string
     status: string
     signedAt: Date | null
     comments: string | null
@@ -46,6 +69,12 @@ export class FormPdfService {
     const chunks: Buffer[] = []
     doc.on("data", (chunk: Buffer) => chunks.push(chunk))
     const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))))
+
+    // registerFont() just records the path lazily — it doesn't read the
+    // file yet, so it can't throw here. If the font asset is ever missing,
+    // the actual failure surfaces the first time doc.font(name) is called
+    // in renderSignatureStamp(), which is wrapped in its own try/catch.
+    doc.registerFont(SIGNATURE_FONT_NAME, SIGNATURE_FONT_PATH)
 
     this.renderHeader(doc, instance)
     this.renderMeta(doc, instance)
@@ -97,21 +126,91 @@ export class FormPdfService {
   }
 
   private renderSignatures(doc: PDFKit.PDFDocument, instance: PdfFormInstance) {
-    doc.fontSize(13).text("Signatures", { underline: true })
+    doc.font("Helvetica").fontSize(13).fillColor("black").text("Signatures", { underline: true })
     doc.moveDown(0.5)
 
     const sorted = [...instance.signatures].sort((a, b) => a.formSignatureStage.stageOrder - b.formSignatureStage.stageOrder)
     for (const signature of sorted) {
       const stageName = signature.formSignatureStage.label ?? signature.formSignatureStage.role
-      const signerName = signature.signer ? `${signature.signer.firstName} ${signature.signer.lastName} (${signature.signer.employeeNumber})` : "Not yet assigned"
-      doc.fontSize(10).fillColor("#555555").text(`Stage ${signature.formSignatureStage.stageOrder} · ${stageName}`)
-      doc.fontSize(11).fillColor("black").text(`${signerName} — ${signature.status}${signature.signedAt ? ` on ${formatDate(signature.signedAt)}` : ""}`)
+      doc.font("Helvetica").fontSize(10).fillColor("#555555").text(`Stage ${signature.formSignatureStage.stageOrder} · ${stageName}`)
+      doc.moveDown(0.2)
+
+      if (signature.status === "SIGNED" && signature.signer) {
+        this.renderSignatureStamp(doc, { id: signature.id, signer: signature.signer })
+      } else {
+        const signerName = signature.signer ? `${signature.signer.firstName} ${signature.signer.lastName} (${signature.signer.employeeNumber})` : "Not yet assigned"
+        doc.font("Helvetica").fontSize(11).fillColor("black").text(`${signerName} — ${signature.status}${signature.signedAt ? ` on ${formatDate(signature.signedAt)}` : ""}`)
+      }
+
       if (signature.comments) {
-        doc.fontSize(10).fillColor("#333333").text(`Comments: ${signature.comments}`)
+        doc.font("Helvetica").fontSize(10).fillColor("#333333").text(`Comments: ${signature.comments}`)
         doc.fillColor("black")
       }
-      doc.moveDown(0.4)
+      doc.moveDown(0.5)
     }
+  }
+
+  // Cached after the first attempt so a missing/corrupt font asset only
+  // costs one failed load per process, not one per stamp rendered.
+  private signatureFontAvailable: boolean | null = null
+
+  private useSignatureFont(doc: PDFKit.PDFDocument) {
+    if (this.signatureFontAvailable !== false) {
+      try {
+        doc.font(SIGNATURE_FONT_NAME)
+        this.signatureFontAvailable = true
+        return
+      } catch {
+        this.signatureFontAvailable = false
+      }
+    }
+    doc.font("Times-Italic")
+  }
+
+  /**
+   * Renders a signed signature as a DocuSign-style stamp — "DocuSigned by:"
+   * label, the signer's name in a cursive script, a small initials box, and
+   * a reference id — matching client/components/ui/signature-stamp.tsx so
+   * the on-screen and downloaded-PDF signatures look the same.
+   */
+  private renderSignatureStamp(doc: PDFKit.PDFDocument, signature: { id: string; signer: { firstName: string; lastName: string } }) {
+    const name = `${signature.signer.firstName} ${signature.signer.lastName}`
+    const initials = initialsOf(name)
+    const reference = signatureReference(signature.id)
+
+    const startX = doc.x
+    const startY = doc.y
+    const boxWidth = 260
+    const boxHeight = 56
+    const initialsBoxSize = 28
+
+    doc.lineWidth(0.75).strokeColor("#0A2647")
+    doc.rect(startX, startY, boxWidth, boxHeight).stroke()
+
+    doc.font("Helvetica-Bold").fontSize(7).fillColor("#333333")
+    doc.text("DocuSigned by:", startX + 8, startY + 6, { lineBreak: false })
+
+    this.useSignatureFont(doc)
+    doc.fontSize(22).fillColor("black")
+    doc.text(name, startX + 8, startY + 15, { width: boxWidth - initialsBoxSize - 24, height: 26, lineBreak: false })
+
+    doc.font("Helvetica").fontSize(6.5).fillColor("#777777")
+    doc.text(reference, startX + 8, startY + boxHeight - 13, { lineBreak: false })
+
+    const initX = startX + boxWidth - initialsBoxSize - 8
+    const initY = startY + 12
+    doc.lineWidth(1).strokeColor("#0A2647")
+    doc.rect(initX, initY, initialsBoxSize, initialsBoxSize).stroke()
+    doc.font("Helvetica-Bold").fontSize(6).fillColor("#0A2647")
+    doc.text("DS", initX + initialsBoxSize - 11, initY - 7, { lineBreak: false })
+
+    this.useSignatureFont(doc)
+    doc.fontSize(13).fillColor("black")
+    doc.text(initials, initX, initY + 7, { width: initialsBoxSize, align: "center", lineBreak: false })
+
+    doc.font("Helvetica").fillColor("black")
+    doc.x = startX
+    doc.y = startY + boxHeight + 6
   }
 }
 

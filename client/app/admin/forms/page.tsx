@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/forms"
 import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../imports/import-manager"
 import { FormsTabs } from "./forms-tabs"
 
 function KpiCard({ label, value }: { label: string; value: string | number }) {
@@ -84,9 +85,12 @@ export default async function FormsDashboardPage() {
             Build, assign, complete, and track HR forms end to end — from a no-code form builder to signed digital records.
           </p>
         </div>
-        <Link href="/admin/forms/assigned/new" className={buttonVariants({ size: "sm" })}>
-          Assign a form
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportManager moduleKey="forms" moduleLabel="Forms Assignment" actingEmployeeId={actingEmployeeId} />
+          <Link href="/admin/forms/assigned/new" className={buttonVariants({ size: "sm" })}>
+            Assign a form
+          </Link>
+        </div>
       </div>
 
       <FormsTabs />

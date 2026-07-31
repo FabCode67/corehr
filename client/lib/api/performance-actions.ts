@@ -67,6 +67,9 @@ export async function updateRatingScaleEntry(
       body: JSON.stringify({
         label: trimmedOrUndefined(formData.get("label")),
         description: trimmedOrUndefined(formData.get("description")),
+        expectedPercentage: trimmedOrUndefined(formData.get("expectedPercentage"))
+          ? Number(formData.get("expectedPercentage"))
+          : undefined,
       }),
     })
   } catch (error) {

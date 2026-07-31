@@ -2,7 +2,9 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 
 import { PerformanceReviewType } from "@prisma/client"
 
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
 
 import { CreateReviewPeriodDto } from "./dto/create-review-period.dto"
 import { UpdateReviewPeriodDto } from "./dto/update-review-period.dto"
@@ -15,7 +17,10 @@ import { UpdateReviewPeriodDto } from "./dto/update-review-period.dto"
  */
 @Injectable()
 export class ReviewPeriodsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService
+  ) {}
 
   findAll() {
     return this.prisma.performanceReviewPeriod.findMany({ orderBy: { year: "desc" } })
@@ -69,19 +74,59 @@ export class ReviewPeriodsService {
       if (period.midYearStatus === "CLOSED") {
         throw new BadRequestException("This Mid-Year cycle has already been closed and cannot be reopened")
       }
-      return this.prisma.performanceReviewPeriod.update({
+      const updated = await this.prisma.performanceReviewPeriod.update({
         where: { id },
         data: { midYearStatus: "OPEN", midYearOpensAt: new Date() },
       })
+      await this.notifyAllEmployeesCycleOpen(updated.name, cycle, updated.midYearDeadline)
+      return updated
     }
 
     if (period.annualStatus === "CLOSED") {
       throw new BadRequestException("This Annual cycle has already been closed and cannot be reopened")
     }
-    return this.prisma.performanceReviewPeriod.update({
+    const updated = await this.prisma.performanceReviewPeriod.update({
       where: { id },
       data: { annualStatus: "OPEN", annualOpensAt: new Date() },
     })
+    await this.notifyAllEmployeesCycleOpen(updated.name, cycle, updated.annualDeadline)
+    return updated
+  }
+
+  /** Fires "self-appraisal is now open" to every active employee — this is
+   *  the one PerformanceReview email trigger that doesn't depend on a
+   *  PerformanceReview row existing yet (those are created lazily, per
+   *  employee, only once someone actually starts their self-appraisal — see
+   *  ReviewsService.create()), so "all active employees" is the only
+   *  correct audience at open time. Best-effort per recipient: one bad
+   *  email address should never block the other 500. */
+  private async notifyAllEmployeesCycleOpen(periodName: string, cycle: PerformanceReviewType, deadline: Date | null) {
+    const employees = await this.prisma.employee.findMany({
+      where: { isActive: true },
+      select: { employeeNumber: true, email: true, firstName: true, lastName: true },
+    })
+    const reviewPeriodLabel = `${periodName} ${cycle === "MID_YEAR" ? "Mid-Year" : "Annual"}`
+    const deadlineLabel = deadline ? deadline.toISOString().slice(0, 10) : "to be confirmed by HR"
+
+    await Promise.all(
+      employees.map((employee) =>
+        this.emailService
+          .enqueue({
+            templateKey: "performance_self_appraisal_open",
+            recipientEmail: employee.email,
+            recipientEmployeeId: employee.employeeNumber,
+            relatedModule: "performance",
+            relatedEntityId: `${periodName}:${cycle}`,
+            variables: {
+              employee_name: `${employee.firstName} ${employee.lastName}`,
+              review_period: reviewPeriodLabel,
+              deadline: deadlineLabel,
+              review_url: buildClientUrl("/staff/performance"),
+            },
+          })
+          .catch(() => undefined)
+      )
+    )
   }
 
   async closeCycle(id: string, cycle: PerformanceReviewType) {

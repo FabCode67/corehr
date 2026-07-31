@@ -8,16 +8,21 @@ import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
+  computeTenure,
+  computeTotalBankingExperienceYears,
   fetchEmployee,
   fetchEmployeeHistory,
   fetchEmployees,
   fetchReportingManager,
   formatEnumLabel,
+  formatTenure,
 } from "@/lib/api/employees"
 import { fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 
 import { EmployeeRelationsHistory } from "./employee-relations-history"
+import { ExitProcessSection } from "./exit-process-section"
+import { OnboardingDocumentsSection } from "./onboarding-documents-section"
 import {
   addChild,
   addEducation,
@@ -133,10 +138,44 @@ export default async function EmployeeDetailPage({
         <p className="text-sm text-muted-foreground">
           {employee.employeeNumber} · {employee.email}
         </p>
+        <Link
+          href={`/admin/professional-profile/${employee.employeeNumber}`}
+          className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+        >
+          View professional profile (experience, education, certifications, skills) →
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-muted/20 p-4 text-sm sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Tenure</p>
+          <p className="font-medium text-foreground">{formatTenure(computeTenure(employee.employmentStartDate))}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Total banking experience</p>
+          <p className="font-medium text-foreground">
+            {(() => {
+              const total = computeTotalBankingExperienceYears(employee)
+              return total === null ? "—" : `${total} Year${total === 1 ? "" : "s"}`
+            })()}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Line manager</p>
+          <p className="font-medium text-foreground">
+            {managerResult.ok && managerResult.data.manager ? (
+              <Link href={`/admin/employees/${managerResult.data.manager.id}`} className="hover:underline">
+                {managerResult.data.manager.firstName} {managerResult.data.manager.lastName}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </p>
+        </div>
       </div>
 
       {employee.employmentStatus === "ACTIVE" ? (
-        <div>
+        <div className="flex flex-wrap items-start gap-3">
           <ExitDialog employee={employee} action={processExit.bind(null, employee.employeeNumber)} />
         </div>
       ) : (
@@ -154,6 +193,8 @@ export default async function EmployeeDetailPage({
           ) : null}
         </div>
       )}
+
+      <ExitProcessSection employee={employee} actingEmployeeId={session?.employeeId ?? ""} />
 
       <RegistrationWizard
         employee={employee}
@@ -183,6 +224,8 @@ export default async function EmployeeDetailPage({
           removeEducation: removeEducation.bind(null, employee.employeeNumber),
         }}
       />
+
+      <OnboardingDocumentsSection employee={employee} actingEmployeeId={session?.employeeId ?? ""} />
 
       <EmployeeRelationsHistory employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
     </div>

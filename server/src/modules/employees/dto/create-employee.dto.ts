@@ -52,6 +52,12 @@ export class CreateEmployeeDto {
   @IsString()
   nationalIdNumber!: string
 
+  @ApiPropertyOptional()
+  @MaxLength(40)
+  @IsString()
+  @IsOptional()
+  passportNumber?: string
+
   @MaxLength(60)
   @IsString()
   nationality!: string
@@ -72,6 +78,16 @@ export class CreateEmployeeDto {
   @IsString()
   @IsOptional()
   profilePictureUrl?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  address?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  emergencyContact?: string
 
   @ApiPropertyOptional({
     description:

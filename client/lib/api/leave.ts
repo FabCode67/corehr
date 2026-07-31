@@ -31,6 +31,7 @@ export type NotificationType =
   | "RETURNING_TOMORROW"
   | "LOW_BALANCE"
   | "APPROVAL_NEEDED"
+  | "LEAVE_CARRY_FORWARD_EXPIRING"
 
 export const LEAVE_ENTITLEMENT_CATEGORIES: LeaveEntitlementCategory[] = [
   "PERMANENT",
@@ -71,10 +72,24 @@ export interface LeaveCarryForwardRule {
   enabled: boolean
   maxDays: number | null
   expiresAfterDays: number | null
+  autoExpiryEnabled: boolean
+  exemptDepartmentIds: string[]
+  exemptEmployeeIds: string[]
 }
 
-/** Base LeaveType fields only — what you get embedded in a LeaveRequest or
- *  LeaveBalance (Prisma's `leaveType: true` include, no nested relations). */
+export interface LeaveAttachmentRequirement {
+  id: string
+  leaveTypeId: string
+  name: string
+  isMandatory: boolean
+}
+
+/** Base LeaveType fields — what you get embedded in a LeaveRequest or
+ *  LeaveBalance (Prisma's `leaveType: true` include). `attachmentRequirements`
+ *  is optional here (not present on LeaveRequest.leaveType's plain include,
+ *  but present on LeaveBalance.leaveType's richer include — see
+ *  LeaveBalancesService.getSummary()) — always guard with `?? []` when
+ *  reading it off a LeaveTypeBase. */
 export interface LeaveTypeBase {
   id: string
   name: string
@@ -87,6 +102,9 @@ export interface LeaveTypeBase {
   requiresDocumentation: boolean
   documentationThresholdDays: number | null
   requiresHrApproval: boolean
+  excludeWeekendsOverride: boolean | null
+  excludePublicHolidaysOverride: boolean | null
+  attachmentRequirements?: LeaveAttachmentRequirement[]
   createdAt: string
   updatedAt: string
 }
@@ -130,6 +148,11 @@ export interface LeaveBalance {
   takenDays: number
   pendingDays: number
   remainingDays: number
+  /** Computed on read — see LeaveBalancesService.getSummary(). Null unless
+   *  this leave type's carry-forward rule has an expiresAfterDays set and
+   *  there are carried-forward days on this balance. */
+  carryForwardExpiresAt: string | null
+  carryForwardExpired: boolean
   leaveType: LeaveTypeBase
   createdAt: string
   updatedAt: string
@@ -165,6 +188,18 @@ export interface LeaveApproval {
   approver: { employeeNumber: string; firstName: string; lastName: string } | null
 }
 
+export type LeaveAttachmentPurpose = "SUBMISSION" | "CANCELLATION"
+
+export interface LeaveRequestAttachment {
+  id: string
+  leaveRequestId: string
+  requirementId: string | null
+  purpose: LeaveAttachmentPurpose
+  fileUrl: string
+  requirement: LeaveAttachmentRequirement | null
+  createdAt: string
+}
+
 export interface LeaveRequest {
   id: string
   employeeId: string
@@ -179,12 +214,17 @@ export interface LeaveRequest {
   status: LeaveRequestStatus
   currentStepOrder: number | null
   hrOverride: boolean
+  cancellationReason: string | null
+  cancelledAt: string | null
+  cancelledById: string | null
   createdAt: string
   updatedAt: string
   employee: LeaveRequestEmployee
   leaveType: LeaveTypeBase
   delegate: { employeeNumber: string; firstName: string; lastName: string } | null
   approvals: LeaveApproval[]
+  attachments: LeaveRequestAttachment[]
+  cancelledBy: { employeeNumber: string; firstName: string; lastName: string } | null
 }
 
 export interface PreviewLeaveDaysResult {

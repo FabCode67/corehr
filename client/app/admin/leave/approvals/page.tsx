@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/leave"
 import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../../imports/import-manager"
 import { LeaveTabs } from "../leave-tabs"
 import { DecideRequestForm } from "./decide-request-form"
 
@@ -85,13 +86,18 @@ export default async function AdminLeaveApprovalsPage({
   const pending = pendingResult.ok ? pendingResult.data.data : []
   const all = allResult.ok ? allResult.data.data : []
 
+  const actingEmployeeId = session?.employeeId ?? ""
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Leave Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Approve or reject leave requests, review policy, and track the leave calendar.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Leave Management</h1>
+          <p className="text-sm text-muted-foreground">
+            Approve or reject leave requests, review policy, and track the leave calendar.
+          </p>
+        </div>
+        <ImportManager moduleKey="leave" moduleLabel="Leave" actingEmployeeId={actingEmployeeId} />
       </div>
 
       <LeaveTabs />

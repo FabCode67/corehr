@@ -1,9 +1,23 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
-import { ContractType, LeaveEntitlementCategory, Prisma } from "@prisma/client"
+import { ContractType, LeaveEntitlementCategory, NotificationType, Prisma } from "@prisma/client"
 
 import { PrismaService } from "../../../prisma/prisma.service"
+import { EmailService } from "../../email/email.service"
+import { NotificationsService } from "../notifications/notifications.service"
 
 import { AdjustBalanceDto } from "./dto/adjust-balance.dto"
+
+// Carry-forward-expiring notifications fire whenever getSummary() is called
+// within this window of the expiry date — see that method's doc comment
+// for why this is "on page visit" rather than a scheduled job.
+const CARRY_FORWARD_EXPIRY_WARNING_DAYS = 30
+
+// Same "on page visit, not a timer" approach as carry-forward-expiring
+// above — LOW_BALANCE (an existing but previously-unused NotificationType)
+// and the leave_low_balance email both fire here too. No dedup: a balance
+// under threshold will re-notify on every getSummary() call while it stays
+// under threshold, same trade-off already accepted for carry-forward.
+const LOW_BALANCE_THRESHOLD_DAYS = 3
 
 /**
  * Owns LeaveBalance: resolving what an employee is entitled to (per the
@@ -18,7 +32,11 @@ import { AdjustBalanceDto } from "./dto/adjust-balance.dto"
  */
 @Injectable()
 export class LeaveBalancesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService
+  ) {}
 
   /**
    * (Re)computes entitledDays for every leave type this employee is
@@ -78,22 +96,124 @@ export class LeaveBalancesService {
     }
   }
 
+  /**
+   * Carry-forward expiry is computed here on every read rather than by a
+   * scheduled job (this codebase has no background scheduler anywhere —
+   * see runCarryForward()'s doc comment) — expiresAt is Jan 1 of `year`
+   * plus the rule's expiresAfterDays, and `carryForwardExpired` only ever
+   * becomes true if the rule has autoExpiryEnabled. When expired, the
+   * carried-forward days are excluded from remainingDays (the original
+   * carriedForwardDays value is still returned for transparency) — a
+   * simplification that doesn't account for how much of the carry-forward
+   * portion specifically was already taken before it expired.
+   *
+   * Also fires a one-off LEAVE_CARRY_FORWARD_EXPIRING notification
+   * whenever a balance is found to be within the warning window and not
+   * yet expired — intentionally naive ("fires on page visit, not on a
+   * timer" per the no-scheduler design decision), so it may repeat on
+   * every call rather than being deduplicated.
+   */
   async getSummary(employeeId: string, year = new Date().getFullYear()) {
     await this.ensureBalancesForEmployee(employeeId, year)
 
     const balances = await this.prisma.leaveBalance.findMany({
       where: { employeeId, year },
-      include: { leaveType: true },
+      include: { leaveType: { include: { carryForwardRule: true, attachmentRequirements: true } } },
       orderBy: { leaveType: { name: "asc" } },
     })
 
-    return balances.map((balance) => ({
-      ...balance,
-      remainingDays:
-        balance.entitledDays + balance.carriedForwardDays + balance.adjustmentDays -
-        balance.takenDays -
-        balance.pendingDays,
-    }))
+    const now = new Date()
+    // Only fetched if at least one balance actually needs a name/email for
+    // a notification below — most getSummary() calls trigger neither.
+    let employeeContact: { firstName: string; lastName: string; email: string } | null | undefined
+
+    const getEmployeeContact = async () => {
+      if (employeeContact === undefined) {
+        employeeContact = await this.prisma.employee.findUnique({
+          where: { employeeNumber: employeeId },
+          select: { firstName: true, lastName: true, email: true },
+        })
+      }
+      return employeeContact
+    }
+
+    return Promise.all(
+      balances.map(async (balance) => {
+        const rule = balance.leaveType.carryForwardRule
+        let carryForwardExpiresAt: Date | null = null
+        let carryForwardExpired = false
+
+        if (rule?.expiresAfterDays != null && balance.carriedForwardDays > 0) {
+          carryForwardExpiresAt = new Date(Date.UTC(year, 0, 1))
+          carryForwardExpiresAt.setUTCDate(carryForwardExpiresAt.getUTCDate() + rule.expiresAfterDays)
+          carryForwardExpired = rule.autoExpiryEnabled && now.getTime() > carryForwardExpiresAt.getTime()
+
+          const daysUntilExpiry = Math.ceil((carryForwardExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          if (!carryForwardExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= CARRY_FORWARD_EXPIRY_WARNING_DAYS) {
+            await this.notificationsService.create({
+              recipientEmployeeId: employeeId,
+              type: NotificationType.LEAVE_CARRY_FORWARD_EXPIRING,
+              title: "Carried-forward leave expiring soon",
+              message: `${balance.carriedForwardDays} carried-forward day(s) of ${balance.leaveType.name} expire on ${carryForwardExpiresAt.toISOString().slice(0, 10)}.`,
+            })
+            const contact = await getEmployeeContact()
+            if (contact) {
+              await this.emailService.enqueue({
+                templateKey: "leave_carry_forward_expiring",
+                recipientEmail: contact.email,
+                recipientEmployeeId: employeeId,
+                relatedModule: "leave",
+                relatedEntityId: balance.id,
+                variables: {
+                  employee_name: `${contact.firstName} ${contact.lastName}`,
+                  leave_type: balance.leaveType.name,
+                  carry_forward_days: balance.carriedForwardDays,
+                  expiry_date: carryForwardExpiresAt.toISOString().slice(0, 10),
+                },
+              })
+            }
+          }
+        }
+
+        const effectiveCarriedForwardDays = carryForwardExpired ? 0 : balance.carriedForwardDays
+
+        const remainingDays =
+          balance.entitledDays + effectiveCarriedForwardDays + balance.adjustmentDays -
+          balance.takenDays -
+          balance.pendingDays
+
+        if (remainingDays > 0 && remainingDays <= LOW_BALANCE_THRESHOLD_DAYS) {
+          await this.notificationsService.create({
+            recipientEmployeeId: employeeId,
+            type: NotificationType.LOW_BALANCE,
+            title: "Low leave balance",
+            message: `Your remaining ${balance.leaveType.name} balance is now ${remainingDays} day(s).`,
+          })
+          const contact = await getEmployeeContact()
+          if (contact) {
+            await this.emailService.enqueue({
+              templateKey: "leave_low_balance",
+              recipientEmail: contact.email,
+              recipientEmployeeId: employeeId,
+              relatedModule: "leave",
+              relatedEntityId: balance.id,
+              variables: {
+                employee_name: `${contact.firstName} ${contact.lastName}`,
+                leave_type: balance.leaveType.name,
+                balance_days: remainingDays,
+              },
+            })
+          }
+        }
+
+        return {
+          ...balance,
+          carryForwardExpiresAt,
+          carryForwardExpired,
+          remainingDays,
+        }
+      })
+    )
   }
 
   async getOrCreate(employeeId: string, leaveTypeId: string, year: number) {
@@ -162,9 +282,16 @@ export class LeaveBalancesService {
    * (creating it first via ensureBalancesForEmployee if needed). Overwrites
    * rather than increments, so the run is safe to repeat for the same
    * fromYear/toYear pair. Expiry of carried-forward days
-   * (LeaveCarryForwardRule.expiresAfterDays) is stored for the admin UI to
-   * surface but is not yet auto-zeroed by a scheduled job — noted here for
-   * future work.
+   * (LeaveCarryForwardRule.expiresAfterDays) is not applied here — it's
+   * computed on read by getSummary() instead, per the "computed on-demand,
+   * no scheduler" design decision (see that method's doc comment).
+   *
+   * `exemptDepartmentIds`/`exemptEmployeeIds` are interpreted as exempting
+   * that department/employee from the rule's `maxDays` cap specifically
+   * (their full remaining balance carries forward uncapped) rather than
+   * excluding them from carry-forward altogether — the spec doesn't say
+   * which direction "exception" runs, and this reading (a named exception
+   * to an otherwise-capped policy) is the more common real-world meaning.
    */
   async runCarryForward(fromYear: number, toYear: number) {
     const rules = await this.prisma.leaveCarryForwardRule.findMany({
@@ -184,6 +311,16 @@ export class LeaveBalancesService {
         where: { leaveTypeId: rule.leaveTypeId, year: fromYear },
       })
 
+      const employeeIds = balances.map((balance) => balance.employeeId)
+      const employees =
+        employeeIds.length > 0
+          ? await this.prisma.employee.findMany({
+              where: { employeeNumber: { in: employeeIds } },
+              select: { employeeNumber: true, position: { select: { departmentId: true } } },
+            })
+          : []
+      const departmentByEmployeeId = new Map(employees.map((employee) => [employee.employeeNumber, employee.position?.departmentId ?? null]))
+
       for (const balance of balances) {
         const remaining =
           balance.entitledDays + balance.carriedForwardDays + balance.adjustmentDays -
@@ -192,7 +329,12 @@ export class LeaveBalancesService {
 
         if (remaining <= 0) continue
 
-        const carriedDays = rule.maxDays != null ? Math.min(remaining, rule.maxDays) : remaining
+        const departmentId = departmentByEmployeeId.get(balance.employeeId) ?? null
+        const isExempt =
+          rule.exemptEmployeeIds.includes(balance.employeeId) ||
+          (departmentId !== null && rule.exemptDepartmentIds.includes(departmentId))
+
+        const carriedDays = !isExempt && rule.maxDays != null ? Math.min(remaining, rule.maxDays) : remaining
 
         await this.ensureBalancesForEmployee(balance.employeeId, toYear)
         await this.prisma.leaveBalance.update({
