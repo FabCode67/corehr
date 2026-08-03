@@ -43,15 +43,22 @@ export function PortalShell({
   return (
     <div className="flex min-h-svh bg-muted/30">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-            NP
-          </div>
+        <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
+          <img src="/ncba-mark.svg" alt="NCBA" className="size-8 shrink-0" />
           <div className="min-w-0 leading-tight">
             <p className="truncate text-sm font-semibold">PeopleSuite</p>
             <p className="truncate text-xs text-muted-foreground">{portalLabel}</p>
           </div>
         </div>
+        <div
+          aria-hidden="true"
+          className="h-1.5 w-full shrink-0"
+          style={{
+            backgroundImage: "url(/patterns/kitenge-dark.svg)",
+            backgroundSize: "90px 106px",
+            backgroundRepeat: "repeat",
+          }}
+        />
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {nav.map((item) => {

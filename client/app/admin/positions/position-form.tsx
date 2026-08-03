@@ -35,6 +35,7 @@ export function PositionForm({
 
   const [departmentId, setDepartmentId] = useState(position?.departmentId ?? "")
   const [unitId, setUnitId] = useState(position?.unitId ?? "")
+  const [levelId, setLevelId] = useState(position?.levelId ?? "")
   const [reportsToPositionId, setReportsToPositionId] = useState(
     position?.reportsToPositionId ?? ""
   )
@@ -47,15 +48,19 @@ export function PositionForm({
     (unit) => unit.isActive || unit.id === position?.unitId
   )
 
+  const selectedLevel = levels.find((level) => level.id === levelId)
+
   // A position can't report to itself (and PositionsService rejects any
-  // change that would create a cycle further down the chain too). Restrict
-  // the list to people in the selected department, but keep the
-  // already-assigned manager selectable even if they sit elsewhere, so
+  // change that would create a cycle, or a manager at a lower level, further
+  // down the chain too). The manager can sit in any department, but must be
+  // at the same level or more senior — keep the already-assigned manager
+  // selectable even if a later level change would no longer qualify them, so
   // editing an existing position doesn't silently drop it.
   const reportsToOptions = positions.filter(
     (candidate) =>
       candidate.id !== position?.id &&
-      (candidate.departmentId === departmentId || candidate.id === position?.reportsToPositionId)
+      (candidate.id === position?.reportsToPositionId ||
+        (selectedLevel ? (candidate.level?.rank ?? 0) >= selectedLevel.rank : false))
   )
 
   return (
@@ -75,7 +80,6 @@ export function PositionForm({
             onChange={(event) => {
               setDepartmentId(event.target.value)
               setUnitId("")
-              setReportsToPositionId("")
             }}
             required
           >
@@ -115,7 +119,16 @@ export function PositionForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="levelId">Level</Label>
-          <Select id="levelId" name="levelId" defaultValue={position?.levelId ?? ""} required>
+          <Select
+            id="levelId"
+            name="levelId"
+            value={levelId}
+            onChange={(event) => {
+              setLevelId(event.target.value)
+              setReportsToPositionId("")
+            }}
+            required
+          >
             <option value="" disabled>
               Select a level…
             </option>
@@ -134,7 +147,7 @@ export function PositionForm({
             name="reportsToPositionId"
             value={reportsToPositionId}
             onChange={(event) => setReportsToPositionId(event.target.value)}
-            disabled={!departmentId}
+            disabled={!levelId}
           >
             <option value="">No one — top of the org tree</option>
             {reportsToOptions.map((candidate) => (
@@ -143,11 +156,14 @@ export function PositionForm({
                 {candidate.department
                   ? ` (${candidate.unit?.name ?? candidate.department.name})`
                   : ""}
+                {candidate.level?.code ? ` — ${candidate.level.code}` : ""}
               </option>
             ))}
           </Select>
           <p className="text-xs text-muted-foreground">
-            {departmentId ? "Only people in the selected department are shown." : "Select a department first."}
+            {levelId
+              ? "Anyone bank-wide at the same level or more senior is shown."
+              : "Select a level first."}
           </p>
         </div>
       </div>

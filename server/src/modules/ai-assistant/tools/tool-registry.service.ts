@@ -1,5 +1,4 @@
 import { Injectable } from "@nestjs/common"
-import type Anthropic from "@anthropic-ai/sdk"
 
 import { AiAuditLogService } from "../ai-audit-log.service"
 
@@ -39,10 +38,6 @@ export class ToolRegistryService {
       ...this.reportTools.getTools(),
       ...(ctx.isAdmin ? this.actionTools.getTools(conversationId) : []),
     ]
-  }
-
-  toAnthropicTools(tools: AiToolDefinition[]): Anthropic.Tool[] {
-    return tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Tool.InputSchema }))
   }
 
   async execute(tools: AiToolDefinition[], name: string, input: Record<string, unknown>, ctx: ToolContext, conversationId: string): Promise<AiToolResult> {

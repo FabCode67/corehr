@@ -45,7 +45,9 @@ export interface ConversationDetail extends ConversationSummary {
 }
 
 export function fetchAssistantStatus() {
-  return apiFetchSafe<{ configured: boolean; model: string | null }>("/ai-assistant/status")
+  return apiFetchSafe<{ configured: boolean; provider: string | null; model: string | null }>(
+    "/ai-assistant/status"
+  )
 }
 
 export async function sendChatMessage(actingEmployeeId: string, message: string, conversationId?: string): Promise<ChatResponse> {

@@ -5,12 +5,13 @@ import { AssignmentsModule } from "../learning/assignments/assignments.module"
 import { EmailModule } from "../email/email.module"
 
 import { EmployeesController } from "./employees.controller"
+import { EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
 
 @Module({
   imports: [LeaveBalancesModule, AssignmentsModule, EmailModule],
   controllers: [EmployeesController],
-  providers: [EmployeesService],
+  providers: [EmployeesService, EmployeesExportService],
   exports: [EmployeesService],
 })
 export class EmployeesModule {}

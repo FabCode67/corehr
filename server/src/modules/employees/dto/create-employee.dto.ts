@@ -16,11 +16,20 @@ import {
  * Step 1 of the Employee Registration wizard — Basic Information. This is
  * the ONLY required step; every other field on Employee (employment
  * details, position/band, family, education) is filled in later via its
- * own endpoint and can be left blank indefinitely. employeeNumber is
- * intentionally absent — EmployeesService generates it, it's never
- * client-supplied.
+ * own endpoint and can be left blank indefinitely.
  */
 export class CreateEmployeeDto {
+  /** Normally left unset — EmployeesService auto-generates EMP-#### in that
+   *  case. Only meant for migrating employees from a previous system who
+   *  already have a known staff ID that needs to be preserved (see the
+   *  Employees bulk import, which is the main caller of this). Rejected
+   *  with a clear conflict error if it's already taken — see
+   *  EmployeesService.create(). */
+  @ApiPropertyOptional({ description: "Only for preserving a known staff ID when migrating from a previous system. Leave unset to auto-generate EMP-####." })
+  @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/, { message: "employeeNumber must start with a letter/number and be at most 30 characters (letters, numbers, '.', '_', '-')." })
+  @IsOptional()
+  employeeNumber?: string
+
   @MaxLength(80)
   @IsString()
   firstName!: string

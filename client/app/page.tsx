@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import {
   CalendarClock,
@@ -10,6 +11,11 @@ import {
 
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+
+export const metadata = {
+  title: "NCBA Rwanda PeopleSuite",
+  description: "Human Capital Management, built for NCBA Bank Rwanda.",
+}
 
 const FEATURES = [
   {
@@ -50,16 +56,30 @@ const FEATURES = [
   },
 ]
 
+function KitengeDivider() {
+  return (
+    <div
+      aria-hidden="true"
+      className="h-6 w-full sm:h-8"
+      style={{
+        backgroundColor: "#3B2412",
+        backgroundImage: "url(/patterns/kitenge-dark.svg)",
+        backgroundSize: "110px 130px",
+        backgroundRepeat: "repeat",
+        backgroundPosition: "center",
+      }}
+    />
+  )
+}
+
 export default function LandingPage() {
   return (
     <div className="min-h-svh bg-background">
       <header className="flex h-16 items-center justify-between border-b border-border px-6">
-        <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
-            NP
-          </div>
-          <span className="text-sm font-semibold text-foreground">
-            NCBA Rwanda PeopleSuite
+        <div className="flex items-center gap-2.5">
+          <img src="/ncba-logo-dark.svg" alt="NCBA" className="h-7 w-auto" />
+          <span className="hidden text-sm font-semibold text-foreground sm:inline">
+            Rwanda PeopleSuite
           </span>
         </div>
         <Link href="/login" className={buttonVariants({ size: "sm" })}>
@@ -70,21 +90,22 @@ export default function LandingPage() {
       <section className="relative overflow-hidden bg-primary">
         <div
           aria-hidden="true"
-          className="absolute inset-0 opacity-80"
+          className="absolute inset-0 opacity-95"
           style={{
             backgroundImage: "url(/patterns/kitenge-dark.svg)",
-            backgroundSize: "140px 200px",
+            backgroundSize: "220px 260px",
             backgroundRepeat: "repeat",
           }}
         />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/70 via-primary/55 to-primary" />
         <div className="relative mx-auto flex max-w-5xl flex-col items-center gap-6 px-6 py-24 text-center">
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-secondary">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-secondary backdrop-blur-sm">
             Human Capital Management, built for the bank
           </span>
           <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
             One platform for every HR process at NCBA Bank Rwanda
           </h1>
-          <p className="max-w-2xl text-balance text-white/80">
+          <p className="max-w-2xl text-balance text-white/85">
             NCBA Rwanda PeopleSuite centralizes the employee lifecycle, recruitment, leave,
             attendance, performance, and learning &amp; development — replacing spreadsheets and
             disconnected systems with one secure, auditable system of record.
@@ -106,11 +127,53 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <KitengeDivider />
+
+      <section className="mx-auto max-w-5xl px-6 py-16">
+        <div className="mx-auto mb-8 max-w-2xl text-center">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+            Built for how NCBA Rwanda actually works
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            From head office to every branch counter — one system HR and staff can trust.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="group relative overflow-hidden rounded-2xl border border-border">
+            <Image
+              src="/ncba.jpg"
+              alt="An NCBA Bank Rwanda branch"
+              width={1000}
+              height={664}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+              <p className="text-sm font-medium text-white">A branch you know</p>
+            </div>
+          </div>
+          <div className="group relative overflow-hidden rounded-2xl border border-border">
+            <Image
+              src="/IMG_5753.jpg"
+              alt="NCBA Bank Rwanda serving customers"
+              width={2560}
+              height={1578}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+              <p className="text-sm font-medium text-white">People behind every process</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="mx-auto grid max-w-5xl grid-cols-1 gap-4 px-6 pb-24 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map((feature) => {
           const Icon = feature.icon
           return (
-            <div key={feature.title} className="rounded-xl border border-border p-5">
+            <div
+              key={feature.title}
+              className="rounded-xl border border-border p-5 transition-shadow hover:shadow-md"
+            >
               <Icon className="mb-3 size-5 text-secondary" />
               <h3 className="mb-1 font-semibold text-foreground">{feature.title}</h3>
               <p className="text-sm text-muted-foreground">{feature.description}</p>
@@ -119,8 +182,11 @@ export default function LandingPage() {
         })}
       </section>
 
-      <footer className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} NCBA Bank Rwanda. Internal use only.
+      <KitengeDivider />
+
+      <footer className="flex flex-col items-center gap-2 border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
+        <img src="/ncba-logo-dark.svg" alt="NCBA" className="h-5 w-auto opacity-70" />
+        <span>© {new Date().getFullYear()} NCBA Bank Rwanda. Internal use only.</span>
       </footer>
     </div>
   )

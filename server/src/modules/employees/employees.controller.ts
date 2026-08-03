@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  StreamableFile,
 } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
 
@@ -21,12 +22,16 @@ import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
 import { UpdateEmploymentDetailsDto } from "./dto/update-employment-details.dto"
+import { EMPLOYEE_EXPORT_COLUMNS, EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
 
 @ApiTags("Employees")
 @Controller("employees")
 export class EmployeesController {
-  constructor(private readonly employeesService: EmployeesService) {}
+  constructor(
+    private readonly employeesService: EmployeesService,
+    private readonly exportService: EmployeesExportService
+  ) {}
 
   @Get()
   findAll(
@@ -68,6 +73,50 @@ export class EmployeesController {
   @Get("line-managers")
   getLineManagersBatch() {
     return this.employeesService.getLineManagersBatch()
+  }
+
+  // ---- Column-picker export (must stay above the `:id` route below, same
+  // reasoning as line-managers — otherwise Nest matches "export" as an id) --
+
+  /** The full catalog of columns the client renders as checkboxes — single
+   *  source of truth lives in employees-export.service.ts. */
+  @Get("export/columns")
+  getExportColumns() {
+    return EMPLOYEE_EXPORT_COLUMNS
+  }
+
+  @Get("export")
+  async exportEmployees(
+    @Query("columns") columns?: string,
+    @Query("format") format?: string,
+    @Query("departmentId") departmentId?: string,
+    @Query("unitId") unitId?: string,
+    @Query("positionId") positionId?: string,
+    @Query("includeInactive") includeInactive?: string
+  ) {
+    const requestedKeys = (columns ?? "").split(",").map((k) => k.trim()).filter(Boolean)
+    const resolvedColumns = this.exportService.resolveColumns(requestedKeys)
+
+    const [employees, lineManagers] = await Promise.all([
+      this.employeesService.findAllForExport({
+        departmentId,
+        unitId,
+        positionId,
+        includeInactive: includeInactive === "true",
+      }),
+      this.employeesService.getLineManagersBatch(),
+    ])
+
+    const isCsv = format === "csv"
+    const buffer = isCsv
+      ? this.exportService.generateCsv(employees, lineManagers, resolvedColumns)
+      : this.exportService.generateXlsx(employees, lineManagers, resolvedColumns)
+    const extension = isCsv ? "csv" : "xlsx"
+
+    return new StreamableFile(buffer, {
+      type: isCsv ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: `attachment; filename="employees-${Date.now()}.${extension}"`,
+    })
   }
 
   @Get(":id")

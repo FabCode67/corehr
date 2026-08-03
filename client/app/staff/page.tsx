@@ -2,37 +2,75 @@ import { CalendarDays, CheckCircle2, Clock3, Target } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
+import { fetchLeaveBalances, fetchLeaveRequests } from "@/lib/api/leave"
+import { fetchReviewPeriods, type ReviewPeriod } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
 
-const STATS = [
-  {
-    label: "Leave balance",
-    value: "14 days",
-    hint: "Annual leave remaining",
-    icon: CalendarDays,
-  },
-  {
-    label: "Attendance",
-    value: "98%",
-    hint: "This month",
-    icon: Clock3,
-  },
-  {
-    label: "Next review",
-    value: "Q3 2026",
-    hint: "Performance cycle",
-    icon: Target,
-  },
-  {
-    label: "Pending requests",
-    value: "1",
-    hint: "Awaiting approval",
-    icon: CheckCircle2,
-  },
-]
+/** Picks the review period/cycle worth surfacing on the dashboard: an
+ *  in-progress ("OPEN") cycle takes priority since that's the one the
+ *  employee might actually need to act on; otherwise falls back to the
+ *  current calendar year's period (even if not open yet), then the most
+ *  recent period on record. */
+function pickNextReview(periods: ReviewPeriod[]): { label: string; hint: string } {
+  if (periods.length === 0) return { label: "—", hint: "No review cycle scheduled" }
+
+  const openMidYear = periods.find((p) => p.midYearStatus === "OPEN")
+  if (openMidYear) return { label: openMidYear.name, hint: "Mid-Year cycle open" }
+
+  const openAnnual = periods.find((p) => p.annualStatus === "OPEN")
+  if (openAnnual) return { label: openAnnual.name, hint: "Annual cycle open" }
+
+  const currentYear = new Date().getUTCFullYear()
+  const thisYear = periods.find((p) => p.year === currentYear)
+  if (thisYear) return { label: thisYear.name, hint: "No cycle open yet" }
+
+  const mostRecent = [...periods].sort((a, b) => b.year - a.year)[0]
+  return { label: mostRecent.name, hint: `${mostRecent.year} — no cycle open yet` }
+}
 
 export default async function StaffDashboardPage() {
   const session = await getSession()
+  const employeeId = session?.employeeId ?? ""
+  const currentYear = new Date().getUTCFullYear()
+
+  const [balancesResult, pendingRequestsResult, reviewPeriodsResult] = await Promise.all([
+    fetchLeaveBalances(employeeId, currentYear),
+    fetchLeaveRequests({ employeeId, status: "PENDING_APPROVAL" }),
+    fetchReviewPeriods(),
+  ])
+
+  const annualBalance = balancesResult.ok
+    ? balancesResult.data.filter((b) => b.leaveType.category === "ANNUAL").reduce((sum, b) => sum + b.remainingDays, 0)
+    : null
+  const pendingRequestsCount = pendingRequestsResult.ok ? pendingRequestsResult.data.length : null
+  const nextReview = reviewPeriodsResult.ok ? pickNextReview(reviewPeriodsResult.data) : { label: "—", hint: "Couldn't load review periods" }
+
+  const stats = [
+    {
+      label: "Leave balance",
+      value: annualBalance === null ? "—" : `${annualBalance} days`,
+      hint: annualBalance === null ? "Couldn't load your leave balance" : `Annual leave remaining (${currentYear})`,
+      icon: CalendarDays,
+    },
+    {
+      label: "Attendance",
+      value: "Not tracked yet",
+      hint: "Attendance module is coming soon",
+      icon: Clock3,
+    },
+    {
+      label: "Next review",
+      value: nextReview.label,
+      hint: nextReview.hint,
+      icon: Target,
+    },
+    {
+      label: "Pending requests",
+      value: pendingRequestsCount === null ? "—" : String(pendingRequestsCount),
+      hint: "Your leave requests awaiting approval",
+      icon: CheckCircle2,
+    },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,7 +84,7 @@ export default async function StaffDashboardPage() {
       <MandatoryTrainingBanner actingEmployeeId={session?.employeeId ?? ""} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STATS.map((stat) => {
+        {stats.map((stat) => {
           const Icon = stat.icon
           return (
             <Card key={stat.label}>

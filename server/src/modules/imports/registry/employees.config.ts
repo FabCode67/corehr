@@ -20,9 +20,20 @@ const GENDER_VALUES = Object.values(Gender)
 const MARITAL_STATUS_VALUES = Object.values(MaritalStatus)
 const CONTRACT_TYPE_VALUES = Object.values(ContractType)
 const STATUS_VALUES = ["ACTIVE", "EXIT"] as const
+// Mirrors CreateEmployeeDto.employeeNumber's @Matches rule — kept in sync
+// manually since the DTO lives in a different module and importing it here
+// just for the regex would be overkill.
+const EMPLOYEE_NUMBER_FORMAT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/
 
 const COLUMNS: ImportTemplateColumn[] = [
-  { key: "employeeNumber", header: "Employee Number", required: false, example: "", description: "Leave blank to create a new employee. Provide an existing number to update that employee." },
+  {
+    key: "employeeNumber",
+    header: "Employee Number",
+    required: false,
+    example: "",
+    description:
+      "Leave blank to auto-generate one for a new employee. Provide an EXISTING number to update that employee. Provide a number that doesn't exist yet to create a new employee while preserving that exact staff ID — useful when migrating employees from a previous system.",
+  },
   { key: "firstName", header: "First Name", required: true, example: "Aline" },
   { key: "middleName", header: "Middle Name", required: false, example: "" },
   { key: "lastName", header: "Last Name", required: true, example: "Uwase" },
@@ -35,9 +46,14 @@ const COLUMNS: ImportTemplateColumn[] = [
   { key: "nationality", header: "Nationality", required: true, example: "Rwandan" },
   { key: "maritalStatus", header: "Marital Status", required: true, example: "SINGLE", description: MARITAL_STATUS_VALUES.join(" | ") },
   { key: "branch", header: "Branch", required: true, example: "Headquarters" },
-  { key: "function", header: "Function", required: false, example: "Retail Banking", description: "Required if Department is set." },
+  // Kept mutually consistent with real seeded org data (Human Resources
+  // department sits under the Support Functions function, and "Officer –
+  // HR Data Analytics" is a real position in that department) — an
+  // internally-inconsistent example row here would fail validation on the
+  // template's own example, which is exactly what it's meant to prevent.
+  { key: "function", header: "Function", required: false, example: "Support Functions", description: "Required if Department is set." },
   { key: "department", header: "Department", required: false, example: "Human Resources" },
-  { key: "position", header: "Position", required: false, example: "HR Officer" },
+  { key: "position", header: "Position", required: false, example: "Officer – HR Data Analytics" },
   { key: "employmentType", header: "Employment Type", required: false, example: "PERMANENT", description: CONTRACT_TYPE_VALUES.join(" | ") },
   { key: "grade", header: "Grade", required: false, example: "Band 5" },
   { key: "joinedDate", header: "Joined Date", required: false, example: "2022-01-10" },
@@ -81,6 +97,14 @@ async function buildContext(deps: ImportDeps): Promise<ImportContext> {
     // Mutable — incremented as new-employee rows are validated, so two new
     // rows in the same file never collide on the same preview-assigned number.
     nextEmployeeNumberCounter: { value: maxEmployeeNumber },
+    // Tracks custom (non-auto-generated) Employee Numbers claimed by a
+    // "new" row earlier in THIS file — see the "migrating from a previous
+    // system" branch in validateRow below. Without this, two rows in the
+    // same upload reusing the same legacy staff ID would both look valid
+    // individually and only collide later at the database, as an opaque
+    // unique-constraint failure during commit instead of a clear row error
+    // at preview time.
+    newCustomEmployeeNumbersSeen: new Set<string>(),
   }
 }
 
@@ -97,12 +121,29 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
   const bands = ctx.bands as LookupRow[]
   const existingEmployeeNumbers = ctx.existingEmployeeNumbers as Set<string>
   const counter = ctx.nextEmployeeNumberCounter as { value: number }
+  const newCustomEmployeeNumbersSeen = ctx.newCustomEmployeeNumbersSeen as Set<string>
 
-  const employeeNumberRaw = normalizeString(raw["Employee Number"])
-  const isUpdate = !isBlank(employeeNumberRaw)
+  const employeeNumberRaw = normalizeString(raw["Employee Number"]) ?? ""
+  const hasEmployeeNumber = !isBlank(employeeNumberRaw)
+  const matchesExistingEmployee = hasEmployeeNumber && existingEmployeeNumbers.has(employeeNumberRaw)
+  const isUpdate = matchesExistingEmployee
 
-  if (isUpdate && employeeNumberRaw && !existingEmployeeNumbers.has(employeeNumberRaw)) {
-    errors.push(`Employee Number "${employeeNumberRaw}" does not correspond to an existing employee — leave this column blank to create a new employee instead.`)
+  // A non-blank Employee Number that DOESN'T match an existing employee
+  // isn't an error — it's how you migrate an employee from a previous
+  // system while keeping their known staff ID. Validate the format (same
+  // rule EmployeesService.create() enforces) and make sure no two rows in
+  // this same file try to claim the same new ID.
+  const isNewWithCustomNumber = hasEmployeeNumber && !matchesExistingEmployee
+  if (isNewWithCustomNumber) {
+    if (!EMPLOYEE_NUMBER_FORMAT.test(employeeNumberRaw)) {
+      errors.push(
+        `Employee Number "${employeeNumberRaw}" isn't a valid staff ID — use only letters, numbers, '.', '_', '-' (max 30 characters), or leave this column blank to auto-generate one.`
+      )
+    } else if (newCustomEmployeeNumbersSeen.has(employeeNumberRaw)) {
+      errors.push(`Employee Number "${employeeNumberRaw}" is used by more than one row in this file.`)
+    } else {
+      newCustomEmployeeNumbersSeen.add(employeeNumberRaw)
+    }
   }
 
   for (const [label, field] of [
@@ -236,15 +277,25 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
     previousBankingExperienceYears: normalizeNumber(raw["Banking Experience (Previous)"]),
     emergencyContact: normalizeString(raw["Emergency Contact"]),
     address: normalizeString(raw["Address"]),
+    // Tells applyRow() whether data.employeeNumber below is a real,
+    // caller-chosen ID to pass through to EmployeesService.create() (a
+    // migrated staff ID) vs. just a preview-time placeholder that commit
+    // should ignore in favor of a freshly-generated EMP-#### — see that
+    // function's own comment for why the preview-assigned number can't be
+    // reused as-is at commit time.
+    isCustomEmployeeNumber: isNewWithCustomNumber,
   }
 
   let status: ImportRowResult["status"] = errors.length > 0 ? "invalid" : isDuplicateInFile ? "duplicate" : isUpdate ? "updated" : "new"
 
-  // Preview-assign the next EMP-#### number for new, otherwise-valid rows so
-  // the preview table can show a real value instead of "(auto)" — commit()
-  // re-derives this the same deterministic way, so it stays correct even if
-  // another job's rows are committed in between preview and this job's commit.
-  if (status === "new") {
+  // Preview-assign the next EMP-#### number for brand-new, otherwise-valid
+  // rows that DIDN'T specify their own ID, so the preview table can show a
+  // real value instead of "(auto)" — commit() re-derives this the same
+  // deterministic way, so it stays correct even if another job's rows are
+  // committed in between preview and this job's commit. Rows that supplied
+  // their own Employee Number (isNewWithCustomNumber) already have it set
+  // in `data` above and keep it as-is.
+  if (status === "new" && !hasEmployeeNumber) {
     counter.value += 1
     data.employeeNumber = `EMP-${String(counter.value).padStart(4, "0")}`
   }
@@ -272,6 +323,13 @@ async function applyRow(row: ImportRowResult, _tx: unknown, _ctx: ImportContext,
 
   if (row.status === "new") {
     const created = await employeesService.create({
+      // Only set when this row explicitly provided its own Employee Number
+      // (a migrated staff ID) — see validateRow's isNewWithCustomNumber and
+      // the note on data.isCustomEmployeeNumber above. Otherwise omitted so
+      // EmployeesService.create() generates a fresh EMP-#### itself, rather
+      // than reusing the preview-time placeholder this row's `data` may
+      // still be carrying from an earlier preview pass.
+      employeeNumber: data.isCustomEmployeeNumber ? (data.employeeNumber as string) : undefined,
       firstName: data.firstName as string,
       middleName: data.middleName as string | undefined,
       lastName: data.lastName as string,

@@ -42,7 +42,17 @@ export function parseSpreadsheet(buffer: Buffer, fileName: string): { headers: s
     throw new SpreadsheetParseError("The file is empty.")
   }
 
-  const headers = (asArrays[0] ?? []).map((header: unknown) => String(header ?? "").trim()).filter((header: string) => header.length > 0)
+  // buildTemplateWorkbook() (below) appends " *" to required columns' header
+  // text so the downloaded template visually marks them — but that means
+  // the header cell in a filled-out template is literally "First Name *",
+  // not "First Name". Strip that marker back off here so parsed headers
+  // always match ImportTemplateColumn.header exactly, whether the upload is
+  // the official template (with markers) or a hand-built file (without) —
+  // otherwise every required-column check in ImportsService.previewFromBuffer
+  // fails against the very template this function generates.
+  const headers = (asArrays[0] ?? [])
+    .map((header: unknown) => String(header ?? "").trim().replace(/\s*\*\s*$/, ""))
+    .filter((header: string) => header.length > 0)
   if (headers.length === 0) {
     throw new SpreadsheetParseError("The file has no header row.")
   }

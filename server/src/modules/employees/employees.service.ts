@@ -38,6 +38,15 @@ const EMPLOYEE_DETAIL_INCLUDE = {
   education: { orderBy: { startDate: "desc" } },
 } as const
 
+/** Same shape as EMPLOYEE_LIST_INCLUDE, plus Position -> Department ->
+ *  Function nested one level deeper than the admin table needs — only the
+ *  column-picker export (EmployeesExportService) reads the Function name. */
+export const EMPLOYEE_EXPORT_INCLUDE = {
+  position: { include: { department: { include: { function: true } }, unit: true, level: true } },
+  band: true,
+  branch: true,
+} as const
+
 export interface ReportingManagerResult {
   manager: { id: string; firstName: string; lastName: string; positionId: string } | null
   source: "OVERRIDE" | "POSITION_HIERARCHY" | "NONE"
@@ -126,6 +135,23 @@ export class EmployeesService {
     return buildPaginatedResult(data, total, normalizedPage, normalizedPageSize)
   }
 
+  /** Full, unpaginated list with the deeper (Function-inclusive) include —
+   *  backs the Employees table's column-picker export. Not paginated: an
+   *  export is meant to cover every row matching the current filters, same
+   *  reasoning as findAll() above. */
+  findAllForExport(params: {
+    departmentId?: string
+    unitId?: string
+    positionId?: string
+    includeInactive?: boolean
+  } = {}) {
+    return this.prisma.employee.findMany({
+      where: this.buildFindAllWhere(params),
+      include: EMPLOYEE_EXPORT_INCLUDE,
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    })
+  }
+
   async findOne(id: string) {
     const employee = await this.prisma.employee.findUnique({
       where: { employeeNumber: id },
@@ -159,7 +185,9 @@ export class EmployeesService {
    * Step 1 (Basic Information) — the only required step. Creates the
    * Employee row with no position/band yet; every other field/step is
    * filled in afterwards via its own endpoint. employeeNumber is generated
-   * here, never client-supplied.
+   * here unless the caller explicitly supplied one (see
+   * CreateEmployeeDto.employeeNumber's doc comment — that's only meant for
+   * preserving a legacy staff ID during a bulk migration import).
    *
    * This is also the trigger point for the Employee Welcome Email and
    * First Login Security (mustChangePassword/temporaryPasswordExpiresAt).
@@ -178,14 +206,16 @@ export class EmployeesService {
     // expected to be changed from their profile page (see AuthService).
     const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10)
     const temporaryPasswordExpiresAt = computeTemporaryPasswordExpiry()
+    const requestedEmployeeNumber = dto.employeeNumber?.trim()
+    const { employeeNumber: _requestedEmployeeNumberField, ...createFields } = dto
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const employee = await this.prisma.$transaction(async (tx) => {
-          const employeeNumber = await this.generateEmployeeNumber(tx)
+          const employeeNumber = requestedEmployeeNumber || (await this.generateEmployeeNumber(tx))
           return tx.employee.create({
             data: {
-              ...dto,
+              ...createFields,
               employeeNumber,
               passwordHash,
               mustChangePassword: true,
@@ -228,6 +258,12 @@ export class EmployeesService {
         return employee
       } catch (error) {
         if (this.isUniqueConflict(error, "employeeNumber")) {
+          if (requestedEmployeeNumber) {
+            // A caller-supplied number, not a generated one — retrying
+            // would fail identically every time, so fail fast with a
+            // message that actually explains what to do.
+            throw new ConflictException(`Employee number "${requestedEmployeeNumber}" is already in use.`)
+          }
           continue // race on the generated number — regenerate and retry
         }
         throw this.translateUniqueConflict(error)

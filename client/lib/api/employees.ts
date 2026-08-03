@@ -193,6 +193,38 @@ export function fetchReportingManager(id: string) {
   return apiFetchSafe<ReportingManagerResult>(`/employees/${id}/reporting-manager`)
 }
 
+// ---- Column-picker export (Employees table "Export" button) ----------------
+
+export interface EmployeeExportColumn {
+  key: string
+  label: string
+  group: "Personal Information" | "Employment" | "Exit Management" | "System Access"
+}
+
+/** The full catalog of exportable columns — fetched server-side (this
+ *  function uses apiFetchSafe, so it only runs in a Server Component/Action)
+ *  and passed down as a prop to the client-side export dialog, same pattern
+ *  as departments/levels/positions being fetched in a page and handed to
+ *  PositionForm. */
+export function fetchEmployeeExportColumns() {
+  return apiFetchSafe<EmployeeExportColumn[]>("/employees/export/columns")
+}
+
+/** Points at the Next.js proxy route (app/api/employees/export/route.ts),
+ *  not the NestJS API directly — API_URL is server-only, so a browser
+ *  download link can't hit the API directly (same reasoning as
+ *  lib/api/hr-analytics.ts's exportUrl()). `includeInactive` always sends
+ *  true: the admin table itself always shows exited employees (with a
+ *  status badge, never hidden), so the export should match what's on screen
+ *  rather than silently dropping them. */
+export function employeeExportUrl(columnKeys: string[], format: "xlsx" | "csv") {
+  const params = new URLSearchParams()
+  params.set("columns", columnKeys.join(","))
+  params.set("format", format)
+  params.set("includeInactive", "true")
+  return `/api/employees/export?${params.toString()}`
+}
+
 export interface LineManagerSummary {
   id: string
   firstName: string

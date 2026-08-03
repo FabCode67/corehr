@@ -105,6 +105,7 @@ export class PositionsService {
 
     if (dto.reportsToPositionId) {
       await this.assertPositionExists(dto.reportsToPositionId)
+      await this.assertReportsToLevelSufficient(dto.levelId, dto.reportsToPositionId)
     }
 
     await this.assertTitleAvailable(dto.departmentId, dto.unitId ?? null, dto.title)
@@ -136,6 +137,16 @@ export class PositionsService {
       if (dto.reportsToPositionId) {
         await this.assertPositionExists(dto.reportsToPositionId)
         await this.assertNoCycle(id, dto.reportsToPositionId)
+        await this.assertReportsToLevelSufficient(
+          dto.levelId ?? current.levelId,
+          dto.reportsToPositionId
+        )
+      }
+    } else if (dto.levelId) {
+      // Level is changing but reportsTo isn't being touched in this call —
+      // re-check the existing manager still outranks (or matches) the new level.
+      if (current.reportsToPositionId) {
+        await this.assertReportsToLevelSufficient(dto.levelId, current.reportsToPositionId)
       }
     }
 
@@ -224,6 +235,35 @@ export class PositionsService {
 
     if (existing) {
       throw new ConflictException(`A position titled "${title}" already exists in this scope`)
+    }
+  }
+
+  /**
+   * A position may report to anyone in the bank, regardless of department —
+   * but only to someone at the same level or more senior. Rank increases
+   * with seniority (see prisma/seed.ts: Intern=1 ... CEO/CFO/COO/CTO in the
+   * teens), so this rejects reporting to a strictly-lower-ranked position.
+   */
+  private async assertReportsToLevelSufficient(levelId: string, reportsToPositionId: string) {
+    const [level, targetPosition] = await Promise.all([
+      this.prisma.positionLevel.findUnique({ where: { id: levelId } }),
+      this.prisma.position.findUnique({
+        where: { id: reportsToPositionId },
+        include: { level: true },
+      }),
+    ])
+
+    if (!level || !targetPosition?.level) {
+      // Missing level/position is reported by the existing assertLevelExists /
+      // assertPositionExists checks that run alongside this one — nothing
+      // further to validate here.
+      return
+    }
+
+    if (targetPosition.level.rank < level.rank) {
+      throw new BadRequestException(
+        `"${targetPosition.title}" (${targetPosition.level.name}) is a lower level than the position being saved (${level.name}) — a position can only report to someone at the same level or more senior.`
+      )
     }
   }
 

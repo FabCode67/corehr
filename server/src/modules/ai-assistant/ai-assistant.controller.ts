@@ -1,5 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query } from "@nestjs/common"
+import { Body, Controller, ForbiddenException, Get, Inject, Param, Post, Query } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
+import { IsOptional, IsString } from "class-validator"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
@@ -7,15 +8,30 @@ import { AiAssistantOrchestratorService } from "./ai-assistant-orchestrator.serv
 import { AiAuditLogService } from "./ai-audit-log.service"
 import { AiConversationService } from "./ai-conversation.service"
 import { AiPendingActionService } from "./ai-pending-action.service"
-import { AnthropicClientService } from "./llm/anthropic-client.service"
+import type { AiChatProvider } from "./llm/ai-chat-provider.interface"
+import { AI_CHAT_PROVIDER } from "./llm/ai-chat-provider.token"
 
+// The global ValidationPipe is configured with { whitelist: true,
+// forbidNonWhitelisted: true } (see main.ts) — any DTO property with zero
+// class-validator decorators is invisible to whitelisting and gets
+// stripped/rejected, even though it's typed correctly. Every field below
+// needs at least one decorator purely to be "seen", same fix as
+// FieldResponseInputDto.value earlier in this app (forms/instances/dto/
+// save-responses.dto.ts).
 class ChatDto {
+  @IsString()
   actingEmployeeId!: string
+
+  @IsString()
   message!: string
+
+  @IsOptional()
+  @IsString()
   conversationId?: string
 }
 
 class ConfirmActionDto {
+  @IsString()
   actingEmployeeId!: string
 }
 
@@ -28,12 +44,16 @@ export class AiAssistantController {
     private readonly pendingActions: AiPendingActionService,
     private readonly auditLog: AiAuditLogService,
     private readonly prisma: PrismaService,
-    private readonly llm: AnthropicClientService
+    @Inject(AI_CHAT_PROVIDER) private readonly llm: AiChatProvider
   ) {}
 
   @Get("status")
   status() {
-    return { configured: this.llm.isConfigured, model: this.llm.isConfigured ? this.llm.model : null }
+    return {
+      configured: this.llm.isConfigured,
+      provider: this.llm.isConfigured ? this.llm.providerName : null,
+      model: this.llm.isConfigured ? this.llm.model : null,
+    }
   }
 
   @Post("chat")

@@ -1,17 +1,17 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
-import type Anthropic from "@anthropic-ai/sdk"
+import { Inject, Injectable, NotFoundException } from "@nestjs/common"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
 import { AiAuditLogService } from "./ai-audit-log.service"
 import { AiConversationService } from "./ai-conversation.service"
-import { AnthropicClientService } from "./llm/anthropic-client.service"
+import type { AiChatMessage, AiChatProvider, AiToolResultMessage } from "./llm/ai-chat-provider.interface"
+import { AI_CHAT_PROVIDER } from "./llm/ai-chat-provider.token"
 import { buildSystemPrompt } from "./system-prompt.util"
 import { ToolRegistryService } from "./tools/tool-registry.service"
 import type { ToolContext } from "./tools/types"
 
 const NOT_CONFIGURED_NOTICE =
-  "The AI HR Administration Assistant isn't fully set up yet — an administrator needs to add an ANTHROPIC_API_KEY to the server's environment before I can answer questions. Once that's configured, I'll be able to pull live workforce, leave, performance, recruitment, learning, and employee relations data for you, generate reports, and (for HR administrators) propose administrative actions for your confirmation."
+  "The AI HR Administration Assistant isn't fully set up yet — an administrator needs to configure an AI provider on the server (ANTHROPIC_API_KEY for Claude, or AI_PROVIDER=ollama plus a reachable local model) before I can answer questions. Once that's configured, I'll be able to pull live workforce, leave, performance, recruitment, learning, and employee relations data for you, generate reports, and (for HR administrators) propose administrative actions for your confirmation."
 
 const MAX_TOOL_LOOPS = 6
 
@@ -28,15 +28,17 @@ export interface ChatResult {
 }
 
 /**
- * The chat loop: load/create a conversation, call Claude with the tool set
- * this actor is allowed to use, execute any tool_use blocks it requests,
- * feed results back, repeat until it produces a final text answer (or the
- * loop cap is hit), then persist everything.
+ * The chat loop: load/create a conversation, call whichever AiChatProvider is
+ * active (see llm/ai-chat-provider.token.ts) with the tool set this actor is
+ * allowed to use, execute any tool calls it requests, feed results back,
+ * repeat until it produces a final text answer (or the loop cap is hit), then
+ * persist everything. This file is provider-agnostic by design — it never
+ * imports an SDK type, only the neutral shapes in llm/ai-chat-provider.interface.ts.
  */
 @Injectable()
 export class AiAssistantOrchestratorService {
   constructor(
-    private readonly llm: AnthropicClientService,
+    @Inject(AI_CHAT_PROVIDER) private readonly llm: AiChatProvider,
     private readonly toolRegistry: ToolRegistryService,
     private readonly conversations: AiConversationService,
     private readonly auditLog: AiAuditLogService,
@@ -61,46 +63,46 @@ export class AiAssistantOrchestratorService {
 
     const ctx: ToolContext = { actingEmployeeId, isAdmin: actor.isAdmin }
     const tools = this.toolRegistry.getToolsFor(ctx, conversation.id)
-    const anthropicTools = this.toolRegistry.toAnthropicTools(tools)
     const systemPrompt = buildSystemPrompt(actor, actingEmployeeId)
 
     // Conversation memory: prior turns are replayed as plain user/assistant
-    // text (not raw tool_use content blocks). This keeps context across
-    // turns simple and always-valid (no risk of an orphaned tool_use/
-    // tool_result pairing after a schema change) — the model still has
-    // every number it previously reported, just as prose rather than
-    // structured blocks, which is enough for natural follow-up questions.
+    // text (not raw tool-call content). This keeps context across turns
+    // simple and always-valid (no risk of an orphaned tool_use/tool_result
+    // pairing after a schema or provider change) — the model still has every
+    // number it previously reported, just as prose rather than structured
+    // blocks, which is enough for natural follow-up questions.
     const history = await this.conversations.history(conversation.id)
-    const runningMessages: Anthropic.MessageParam[] = history.slice(0, -1).map((m) => ({
-      role: m.role === "USER" ? "user" : "assistant",
-      content: m.content,
-    }))
-    runningMessages.push({ role: "user", content: message })
+    // Built as an explicit per-branch literal (not a computed `role`
+    // property) so each object matches one exact AiChatMessage union member
+    // rather than the widened `{ role: "user" | "assistant"; text: string }`
+    // shape, which TS can't match back to the discriminated union.
+    const runningMessages: AiChatMessage[] = history.slice(0, -1).map(
+      (m): AiChatMessage => (m.role === "USER" ? { role: "user", text: m.content } : { role: "assistant", text: m.content })
+    )
+    runningMessages.push({ role: "user", text: message })
 
     const artifacts: ChatArtifact[] = []
     const toolTrace: Array<{ tool: string; input: unknown }> = []
     let finalText = ""
 
     for (let loop = 0; loop < MAX_TOOL_LOOPS; loop++) {
-      const response = await this.llm.createMessage({
+      const response = await this.llm.createChat({
         system: systemPrompt,
-        max_tokens: 2048,
+        maxTokens: 2048,
         messages: runningMessages,
-        tools: anthropicTools,
+        tools,
       })
 
-      const textBlocks = response.content.filter((block): block is Anthropic.TextBlock => block.type === "text")
-      finalText = textBlocks.map((b) => b.text).join("\n\n") || finalText
+      finalText = response.text || finalText
 
-      const toolUseBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
-      if (response.stop_reason !== "tool_use" || toolUseBlocks.length === 0) break
+      if (response.stopReason !== "tool_use" || response.toolCalls.length === 0) break
 
-      runningMessages.push({ role: "assistant", content: response.content })
+      runningMessages.push({ role: "assistant", toolCalls: response.toolCalls })
 
-      const toolResultBlocks: Anthropic.ToolResultBlockParam[] = []
-      for (const block of toolUseBlocks) {
-        const result = await this.toolRegistry.execute(tools, block.name, (block.input as Record<string, unknown>) ?? {}, ctx, conversation.id)
-        toolTrace.push({ tool: block.name, input: block.input })
+      const toolResults: AiToolResultMessage[] = []
+      for (const call of response.toolCalls) {
+        const result = await this.toolRegistry.execute(tools, call.name, call.input, ctx, conversation.id)
+        toolTrace.push({ tool: call.name, input: call.input })
 
         // Note: ChartArtifact's own `type` field (bar/pie/donut/line/area) is
         // renamed to `chartType` here so it doesn't collide with this
@@ -110,13 +112,9 @@ export class AiAssistantOrchestratorService {
         if (result.reportLink) artifacts.push({ type: "report_link", ...result.reportLink })
         if (result.pendingAction) artifacts.push({ type: "pending_action", ...result.pendingAction })
 
-        toolResultBlocks.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result.forModel ?? null).slice(0, 8000),
-        })
+        toolResults.push({ toolUseId: call.id, content: JSON.stringify(result.forModel ?? null).slice(0, 8000) })
       }
-      runningMessages.push({ role: "user", content: toolResultBlocks })
+      runningMessages.push({ role: "tool_result", results: toolResults })
     }
 
     if (!finalText.trim()) {

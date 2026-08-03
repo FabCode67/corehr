@@ -14,7 +14,10 @@ import { AiAssistantOrchestratorService } from "./ai-assistant-orchestrator.serv
 import { AiAuditLogService } from "./ai-audit-log.service"
 import { AiConversationService } from "./ai-conversation.service"
 import { AiPendingActionService } from "./ai-pending-action.service"
+import type { AiChatProvider } from "./llm/ai-chat-provider.interface"
+import { AI_CHAT_PROVIDER } from "./llm/ai-chat-provider.token"
 import { AnthropicClientService } from "./llm/anthropic-client.service"
+import { OllamaClientService } from "./llm/ollama-client.service"
 import { AnalyticsToolsProvider } from "./tools/analytics.tools"
 import { EmployeeToolsProvider } from "./tools/employee.tools"
 import { ReportToolsProvider } from "./tools/report.tools"
@@ -28,9 +31,17 @@ import { ToolRegistryService } from "./tools/tool-registry.service"
  * why administrative actions are structurally two-phase).
  *
  * Scope decisions made building this module (disclosed once here):
- *   - LLM provider: Anthropic Claude via @anthropic-ai/sdk, gated behind
- *     ANTHROPIC_API_KEY (AnthropicClientService.isConfigured), same pattern
- *     as MailerService for SMTP. The spec allowed either OpenAI or Claude.
+ *   - LLM provider: pluggable via the AI_CHAT_PROVIDER token below. Two
+ *     implementations exist — AnthropicClientService (hosted Claude, gated
+ *     behind ANTHROPIC_API_KEY, same "report unconfigured" pattern as
+ *     MailerService for SMTP) and OllamaClientService (a self-hosted
+ *     open-source model via Ollama's OpenAI-compatible API, for teams that
+ *     don't want to depend on/pay for a proprietary model API at all).
+ *     AI_PROVIDER=anthropic (default) or AI_PROVIDER=ollama picks between
+ *     them at boot; see each service's doc comment for its own env vars and
+ *     tradeoffs. Everything else in this module (orchestrator, tool
+ *     registry) is written against the neutral AiChatProvider interface in
+ *     llm/ai-chat-provider.interface.ts and has no idea which one is active.
  *   - No pgvector/Pinecone: there is no HR policy-document corpus in this
  *     app to embed, and every example question in the spec maps directly
  *     onto an existing analytics/service method — tool-calling covers it.
@@ -64,6 +75,15 @@ import { ToolRegistryService } from "./tools/tool-registry.service"
   controllers: [AiAssistantController],
   providers: [
     AnthropicClientService,
+    OllamaClientService,
+    {
+      provide: AI_CHAT_PROVIDER,
+      useFactory: (anthropic: AnthropicClientService, ollama: OllamaClientService): AiChatProvider => {
+        const selected = (process.env.AI_PROVIDER ?? "anthropic").toLowerCase()
+        return selected === "ollama" ? ollama : anthropic
+      },
+      inject: [AnthropicClientService, OllamaClientService],
+    },
     AiConversationService,
     AiAuditLogService,
     AiPendingActionService,

@@ -1,38 +1,62 @@
+import Link from "next/link"
 import { Briefcase, CalendarClock, TrendingUp, Users } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
+import { fetchEmployees } from "@/lib/api/employees"
+import { fetchAttritionRate, fetchRecruitmentAnalytics, fetchTotalStaff } from "@/lib/api/hr-analytics"
 import { getSession } from "@/lib/get-session"
 
-const STATS = [
-  {
-    label: "Total headcount",
-    value: "1,248",
-    hint: "Across all branches",
-    icon: Users,
-  },
-  {
-    label: "Open requisitions",
-    value: "23",
-    hint: "Active job openings",
-    icon: Briefcase,
-  },
-  {
-    label: "Turnover rate",
-    value: "4.2%",
-    hint: "Trailing 12 months",
-    icon: TrendingUp,
-  },
-  {
-    label: "Contracts expiring",
-    value: "17",
-    hint: "Next 90 days",
-    icon: CalendarClock,
-  },
-]
+const CONTRACT_EXPIRY_WINDOW_DAYS = 90
 
 export default async function AdminDashboardPage() {
   const session = await getSession()
+  const actingEmployeeId = session?.employeeId ?? ""
+
+  const [totalStaffResult, attritionRateResult, recruitmentResult, employeesResult] = await Promise.all([
+    fetchTotalStaff({}, actingEmployeeId),
+    fetchAttritionRate({}, actingEmployeeId),
+    fetchRecruitmentAnalytics(actingEmployeeId),
+    fetchEmployees(),
+  ])
+
+  let contractsExpiringCount: number | null = null
+  if (employeesResult.ok) {
+    const now = new Date()
+    const windowEnd = new Date(now.getTime() + CONTRACT_EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    contractsExpiringCount = employeesResult.data.filter((e) => {
+      if (!e.contractEndDate) return false
+      const end = new Date(e.contractEndDate)
+      return end >= now && end <= windowEnd
+    }).length
+  }
+
+  const stats = [
+    {
+      label: "Total headcount",
+      value: totalStaffResult.ok ? totalStaffResult.data.activeCount.toLocaleString() : "—",
+      hint: "Active employees, all branches",
+      icon: Users,
+    },
+    {
+      label: "Open requisitions",
+      value: recruitmentResult.ok ? String(recruitmentResult.data.overview.openRequisitions) : "—",
+      hint: "Active job openings",
+      icon: Briefcase,
+    },
+    {
+      label: "Turnover rate",
+      value: attritionRateResult.ok ? `${attritionRateResult.data.rate}%` : "—",
+      hint: "Trailing 12 months",
+      icon: TrendingUp,
+    },
+    {
+      label: "Contracts expiring",
+      value: contractsExpiringCount === null ? "—" : String(contractsExpiringCount),
+      hint: `Next ${CONTRACT_EXPIRY_WINDOW_DAYS} days`,
+      icon: CalendarClock,
+    },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,7 +70,7 @@ export default async function AdminDashboardPage() {
       <MandatoryTrainingBanner actingEmployeeId={session?.employeeId ?? ""} myLearningHref="/staff/learning" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STATS.map((stat) => {
+        {stats.map((stat) => {
           const Icon = stat.icon
           return (
             <Card key={stat.label}>
@@ -67,15 +91,16 @@ export default async function AdminDashboardPage() {
         <CardHeader>
           <CardTitle>Analytics & charts</CardTitle>
           <CardDescription>
-            Employee distribution, gender & age analysis, turnover, and department/branch
-            comparisons will render here using Apache ECharts once wired to live data from the
-            NestJS API.
+            Employee distribution, gender &amp; age analysis, turnover, and department/branch comparisons are all available on the full HR Analytics dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-            Chart placeholder
-          </div>
+          <Link
+            href="/admin/hr-analytics"
+            className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-sm font-medium text-primary hover:bg-muted"
+          >
+            Open HR Analytics Dashboard →
+          </Link>
         </CardContent>
       </Card>
     </div>

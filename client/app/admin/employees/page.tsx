@@ -4,10 +4,18 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
-import { computeTenure, computeTotalBankingExperienceYears, fetchEmployeesPaginated, fetchLineManagersBatch, formatTenure } from "@/lib/api/employees"
+import {
+  computeTenure,
+  computeTotalBankingExperienceYears,
+  fetchEmployeeExportColumns,
+  fetchEmployeesPaginated,
+  fetchLineManagersBatch,
+  formatTenure,
+} from "@/lib/api/employees"
 import { getSession } from "@/lib/get-session"
 
 import { ImportManager } from "../imports/import-manager"
+import { ExportColumnsDialog } from "./export-columns-dialog"
 
 const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
   ACTIVE: "success",
@@ -27,13 +35,15 @@ export default async function AdminEmployeesPage({
 
   // Employee records are never deleted — exited employees stay visible
   // (with a status badge) for historical reporting, per the spec.
-  const [result, lineManagersResult, session] = await Promise.all([
+  const [result, lineManagersResult, session, exportColumnsResult] = await Promise.all([
     fetchEmployeesPaginated({ includeInactive: true, page: page ? Number(page) : 1 }),
     fetchLineManagersBatch(),
     getSession(),
+    fetchEmployeeExportColumns(),
   ])
   const lineManagers = lineManagersResult.ok ? lineManagersResult.data : {}
   const actingEmployeeId = session?.employeeId ?? ""
+  const exportColumns = exportColumnsResult.ok ? exportColumnsResult.data : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,6 +56,7 @@ export default async function AdminEmployeesPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ImportManager moduleKey="employees" moduleLabel="Employees" actingEmployeeId={actingEmployeeId} />
+          {exportColumns.length > 0 ? <ExportColumnsDialog columns={exportColumns} /> : null}
           <Link href="/admin/employees/new" className={buttonVariants({ size: "sm" })}>
             New employee
           </Link>
