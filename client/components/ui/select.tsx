@@ -19,7 +19,16 @@ function Select({ className, children, ...props }: React.ComponentProps<"select"
       <select
         data-slot="select"
         className={cn(
-          "flex h-9 w-full appearance-none rounded-lg border border-input bg-transparent px-3 py-1 pr-8 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/20",
+          // [color-scheme:light] / dark:[color-scheme:dark] set directly on
+          // the element (not just inherited from <html>.dark in
+          // globals.css) — this is what actually controls whether the
+          // browser renders this <select>'s native popup list with dark
+          // background/light text or the OS's light default. Setting it
+          // here too, rather than relying purely on inheritance, is the
+          // more reliable fix across browsers (some don't propagate
+          // color-scheme's effect on a form control's own popup from an
+          // ancestor as consistently as they do for the control itself).
+          "flex h-9 w-full appearance-none rounded-lg border border-input bg-transparent px-3 py-1 pr-8 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [color-scheme:light] dark:bg-input/20 dark:[color-scheme:dark]",
           className
         )}
         {...props}

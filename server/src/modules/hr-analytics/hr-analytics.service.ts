@@ -297,6 +297,17 @@ export class HrAnalyticsService {
     const year = filters.year ?? new Date().getFullYear()
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
 
+    // "On leave right now" — same APPROVED + startDate<=today<=endDate rule
+    // as LeaveAnalyticsService.currentlyOnLeave(), computed independently
+    // here (rather than injecting that service) since this method already
+    // owns its own employee scoping via dimensionWhere and this is a single
+    // count, not worth a cross-module dependency for.
+    const today = new Date()
+    today.setUTCHours(0, 0, 0, 0)
+    const currentlyOnLeaveCount = await this.prisma.leaveRequest.count({
+      where: { status: "APPROVED", startDate: { lte: today }, endDate: { gte: today }, employee: dimensionWhere },
+    })
+
     const balances = await this.prisma.leaveBalance.findMany({
       where: { year, employee: dimensionWhere, leaveType: { category: "ANNUAL" } },
       select: {
@@ -349,6 +360,7 @@ export class HrAnalyticsService {
       totalTaken,
       totalRemaining,
       utilizationPercent,
+      currentlyOnLeaveCount,
       byDepartment: toRows(byDept, "departmentId"),
       byBranch: toRows(byBranch, "branchId"),
     }
@@ -413,6 +425,40 @@ export class HrAnalyticsService {
     }))
 
     return { totalExits: exited.length, byReason, byType, byDepartment, byBranch, byContractType, trend }
+  }
+
+  /** Hiring vs Exit Trend — one point per year, hires (employmentStartDate)
+   *  against exits (exitDate). Defaults to every year the actual data spans
+   *  (earliest recorded hire through the current year, capped at 10 years
+   *  back so one bad legacy-import date can't blow out the chart's x-axis)
+   *  rather than a fixed lookback window, since this is meant to show "all
+   *  years" of real hiring/exit history — not just a recent-years compare
+   *  like exitSummary()'s own trend. An explicit `years` filter still wins. */
+  async hiringExitTrend(filters: HrAnalyticsFilters) {
+    const dimensionWhere = buildEmployeeDimensionWhere(filters)
+    const employees = await this.prisma.employee.findMany({
+      where: dimensionWhere,
+      select: { employmentStartDate: true, exitDate: true },
+    })
+
+    const currentYear = new Date().getUTCFullYear()
+    let trendYears: number[]
+    if (filters.years?.length) {
+      trendYears = filters.years
+    } else {
+      const hireYears = employees
+        .map((e) => e.employmentStartDate?.getUTCFullYear())
+        .filter((y): y is number => y !== undefined && y !== null)
+      const earliestYear = hireYears.length > 0 ? Math.min(...hireYears) : currentYear
+      const startYear = Math.max(earliestYear, currentYear - 10)
+      trendYears = Array.from({ length: currentYear - startYear + 1 }, (_, i) => startYear + i)
+    }
+
+    return trendYears.map((year) => ({
+      year,
+      hires: employees.filter((e) => e.employmentStartDate?.getUTCFullYear() === year).length,
+      exits: employees.filter((e) => e.exitDate?.getUTCFullYear() === year).length,
+    }))
   }
 
   /** Employee Demographics — age histogram, gender, contract type. */

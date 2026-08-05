@@ -13,6 +13,10 @@ import type { ActionState } from "./actions"
 
 interface DepartmentFormProps {
   functions: OrgFunction[]
+  /** Every other department, for the optional Parent Department picker —
+   *  callers should exclude `department` itself (obvious self-reference;
+   *  the server also rejects it and any cycle regardless). */
+  departments?: Department[]
   department?: Department
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
   submitLabel: string
@@ -20,6 +24,7 @@ interface DepartmentFormProps {
 
 export function DepartmentForm({
   functions,
+  departments = [],
   department,
   action,
   submitLabel,
@@ -53,6 +58,21 @@ export function DepartmentForm({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="code">Code (optional)</Label>
         <Input id="code" name="code" defaultValue={department?.code ?? ""} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="parentDepartmentId">Parent Department (optional)</Label>
+        <Select id="parentDepartmentId" name="parentDepartmentId" defaultValue={department?.parentDepartmentId ?? ""}>
+          <option value="">None</option>
+          {departments.map((candidate) => (
+            <option key={candidate.id} value={candidate.id}>
+              {candidate.name}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          A genuine Department-to-Department hierarchy, separate from Function above. Org chart and dashboards still key off Function only.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

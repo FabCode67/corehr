@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common"
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
 import { Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
@@ -7,7 +7,11 @@ import { PrismaService } from "../../../prisma/prisma.service"
 import { CreateDepartmentDto } from "./dto/create-department.dto"
 import { UpdateDepartmentDto } from "./dto/update-department.dto"
 
-const DEPARTMENT_LIST_INCLUDE = { function: true, units: { where: { isActive: true } } } as const
+const DEPARTMENT_LIST_INCLUDE = {
+  function: true,
+  units: { where: { isActive: true } },
+  parentDepartment: { select: { id: true, name: true } },
+} as const
 
 @Injectable()
 export class DepartmentsService {
@@ -69,6 +73,7 @@ export class DepartmentsService {
         function: true,
         units: { where: { isActive: true } },
         positions: { where: { isActive: true, unitId: null } },
+        parentDepartment: { select: { id: true, name: true } },
       },
     })
 
@@ -82,6 +87,7 @@ export class DepartmentsService {
   async create(dto: CreateDepartmentDto) {
     await this.assertFunctionExists(dto.functionId)
     await this.assertNameAvailable(dto.functionId, dto.name)
+    await this.assertParentDepartmentValid(dto.parentDepartmentId)
 
     return this.prisma.department.create({ data: dto })
   }
@@ -96,6 +102,10 @@ export class DepartmentsService {
 
     if (dto.name) {
       await this.assertNameAvailable(functionId, dto.name, id)
+    }
+
+    if (dto.parentDepartmentId !== undefined) {
+      await this.assertParentDepartmentValid(dto.parentDepartmentId, id)
     }
 
     return this.prisma.department.update({ where: { id }, data: dto })
@@ -115,6 +125,38 @@ export class DepartmentsService {
 
     if (!fn) {
       throw new NotFoundException(`Function ${functionId} not found`)
+    }
+  }
+
+  /** Validates a chosen Parent Department: must exist, can't be the
+   *  department itself, and can't create a cycle (i.e. the department being
+   *  saved can't already be an ancestor of the parent it's being assigned).
+   *  `currentId` is omitted on create — a brand-new department can't yet be
+   *  anyone's ancestor, so only the "does it exist" check applies. */
+  private async assertParentDepartmentValid(parentDepartmentId: string | undefined, currentId?: string) {
+    if (!parentDepartmentId) return
+
+    if (parentDepartmentId === currentId) {
+      throw new BadRequestException("A department cannot be its own parent department.")
+    }
+
+    const parent = await this.prisma.department.findUnique({ where: { id: parentDepartmentId } })
+    if (!parent) {
+      throw new NotFoundException(`Parent department ${parentDepartmentId} not found`)
+    }
+
+    if (currentId) {
+      const seen = new Set<string>([parentDepartmentId])
+      let cursor = parent.parentDepartmentId
+      while (cursor) {
+        if (cursor === currentId) {
+          throw new BadRequestException("That would create a circular department hierarchy.")
+        }
+        if (seen.has(cursor)) break // defensive: don't loop forever over pre-existing bad data
+        seen.add(cursor)
+        const ancestor = await this.prisma.department.findUnique({ where: { id: cursor }, select: { parentDepartmentId: true } })
+        cursor = ancestor?.parentDepartmentId ?? null
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
-import { EmploymentStatus, Prisma, PositionChangeType } from "@prisma/client"
+import { EmploymentStatus, FamilyRelationship, Prisma, PositionChangeType } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
@@ -31,6 +31,10 @@ const EMPLOYEE_LIST_INCLUDE = {
 // default interactive-transaction timeout is too tight for a pooled Neon
 // connection under cold-start latency.
 const TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 }
+
+// Sentinel "no contract end date" value — see updateEmploymentDetails()'s
+// doc comment for why this is filled in rather than left null.
+const FAR_FUTURE_CONTRACT_END_DATE = new Date(Date.UTC(9999, 11, 31))
 
 const EMPLOYEE_DETAIL_INCLUDE = {
   ...EMPLOYEE_LIST_INCLUDE,
@@ -309,6 +313,15 @@ export class EmployeesService {
       !employee.probationEndDate &&
       effectiveStartDate !== null
 
+    // "No contract end date" convention: rather than leaving this null
+    // forever, it's defaulted to a far-future sentinel (9999-12-31) the
+    // first time it's ever saved — same "fill gaps, never overwrite" rule
+    // as probationEndDate just above. A real end date (e.g. a fixed-term
+    // TEMPORARY contract) always wins whenever it's actually supplied, and
+    // once set is never silently reset back to the sentinel by a later
+    // call that simply doesn't mention this field.
+    const shouldDefaultContractEnd = dto.contractEndDate === undefined && !employee.contractEndDate
+
     const updated = await this.prisma.employee.update({
       where: { employeeNumber: id },
       data: {
@@ -316,6 +329,7 @@ export class EmployeesService {
         ...(shouldDefaultProbation
           ? { probationEndDate: this.addMonths(effectiveStartDate!, 3) }
           : {}),
+        ...(shouldDefaultContractEnd ? { contractEndDate: FAR_FUTURE_CONTRACT_END_DATE } : {}),
       },
       include: EMPLOYEE_DETAIL_INCLUDE,
     })
@@ -583,6 +597,64 @@ export class EmployeesService {
   async removeChild(employeeId: string, childId: string) {
     await this.assertChildBelongsToEmployee(employeeId, childId)
     await this.prisma.employeeChild.delete({ where: { id: childId } })
+  }
+
+  /**
+   * Visual "Family Tree" data — this is the first read path this app has
+   * ever had for EmployeeFamilyMember (spouse/parent/sibling/other), which
+   * until now could only be created via the Bulk Import framework's Family
+   * Members module and had no page anywhere that displayed it back. Merges
+   * two sources per relationship, since the schema deliberately keeps them
+   * separate (see EmployeeFamilyMember's doc comment):
+   *   - "primary" = the Step 4 registration wizard's own fields
+   *     (Employee.partnerName/... for spouse, EmployeeChild for children).
+   *   - "additional" = EmployeeFamilyMember rows of the matching
+   *     relationship (bulk-imported, or any relationship the wizard has no
+   *     field for at all — parents/siblings/other).
+   */
+  async getFamilyTree(id: string) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { employeeNumber: id },
+      select: {
+        employeeNumber: true,
+        firstName: true,
+        lastName: true,
+        profilePictureUrl: true,
+        partnerName: true,
+        partnerPhone: true,
+        partnerDateOfBirth: true,
+        children: { orderBy: { dateOfBirth: "asc" } },
+        familyMembers: { orderBy: { createdAt: "asc" } },
+      },
+    })
+
+    if (!employee) {
+      throw new NotFoundException(`Employee ${id} not found`)
+    }
+
+    const byRelationship = (relationship: FamilyRelationship) => employee.familyMembers.filter((member) => member.relationship === relationship)
+
+    return {
+      employee: {
+        id: employee.employeeNumber,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        profilePictureUrl: employee.profilePictureUrl,
+      },
+      parents: byRelationship("PARENT"),
+      siblings: byRelationship("SIBLING"),
+      other: byRelationship("OTHER"),
+      spouse: {
+        primary: employee.partnerName
+          ? { name: employee.partnerName, phone: employee.partnerPhone, dateOfBirth: employee.partnerDateOfBirth }
+          : null,
+        additional: byRelationship("SPOUSE"),
+      },
+      children: {
+        primary: employee.children,
+        additional: byRelationship("CHILD"),
+      },
+    }
   }
 
   // ---- Step 5: Education & Professional Development ----------------------

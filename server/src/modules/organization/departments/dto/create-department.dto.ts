@@ -24,4 +24,9 @@ export class CreateDepartmentDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean
+
+  @ApiPropertyOptional({ description: "Genuine Department-to-Department hierarchy — distinct from functionId. See Department.parentDepartmentId's schema doc comment." })
+  @IsUUID()
+  @IsOptional()
+  parentDepartmentId?: string
 }

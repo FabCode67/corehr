@@ -58,6 +58,13 @@ const COLUMNS: ImportTemplateColumn[] = [
   { key: "grade", header: "Grade", required: false, example: "Band 5" },
   { key: "joinedDate", header: "Joined Date", required: false, example: "2022-01-10" },
   { key: "confirmationDate", header: "Confirmation Date", required: false, example: "2022-04-10" },
+  {
+    key: "contractEndDate",
+    header: "End of Contract",
+    required: false,
+    example: "",
+    description: "Mainly meaningful for Temporary contracts. Leave blank for no end date — defaults to 9999-12-31 the first time it's saved (never overwrites an existing value on a later re-upload).",
+  },
   { key: "lineManager", header: "Line Manager (Employee Number)", required: false, example: "EMP-0001" },
   { key: "bankingExperiencePrevious", header: "Banking Experience (Previous)", required: false, example: "3" },
   { key: "bankingExperienceCurrent", header: "Banking Experience (Current)", required: false, example: "", description: "Read-only — automatically calculated from Joined Date. Any value entered here is ignored." },
@@ -183,6 +190,7 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
   for (const [label, field] of [
     ["Joined Date", "Joined Date"],
     ["Confirmation Date", "Confirmation Date"],
+    ["End of Contract", "End of Contract"],
   ] as const) {
     const error = validateDate(raw[label], label)
     if (error) errors.push(error)
@@ -273,6 +281,12 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
     bandId,
     employmentStartDate: parseFlexibleDate(raw["Joined Date"]),
     probationEndDate: parseFlexibleDate(raw["Confirmation Date"]),
+    // null (not just "key absent") when the column is blank — applyRow()
+    // only forwards this to updateEmploymentDetails() when it's a real
+    // Date, so a blank column here doesn't accidentally look like an
+    // explicit `null` to that method and defeat its own "default to
+    // 9999-12-31 the first time it's ever set" fill-gaps logic.
+    contractEndDate: parseFlexibleDate(raw["End of Contract"]),
     reportingManagerOverrideId: lineManagerId,
     previousBankingExperienceYears: normalizeNumber(raw["Banking Experience (Previous)"]),
     emergencyContact: normalizeString(raw["Emergency Contact"]),
@@ -370,11 +384,16 @@ async function applyRow(row: ImportRowResult, _tx: unknown, _ctx: ImportContext,
     } as never)
   }
 
-  if (data.contractType || data.employmentStartDate || data.probationEndDate || data.previousBankingExperienceYears !== undefined) {
+  if (data.contractType || data.employmentStartDate || data.probationEndDate || data.contractEndDate || data.previousBankingExperienceYears !== undefined) {
     await employeesService.updateEmploymentDetails(employeeNumber, {
       contractType: data.contractType as never,
       employmentStartDate: data.employmentStartDate as Date | undefined,
       probationEndDate: data.probationEndDate as Date | undefined,
+      // Omitted entirely (not passed as `null`) when the column was blank —
+      // see the doc comment on data.contractEndDate above — so
+      // EmployeesService.updateEmploymentDetails() can tell "not provided"
+      // apart from "explicitly cleared" and apply its own 9999-12-31 default.
+      ...(data.contractEndDate ? { contractEndDate: data.contractEndDate as Date } : {}),
       previousBankingExperienceYears: data.previousBankingExperienceYears as number | undefined,
     } as never)
   }

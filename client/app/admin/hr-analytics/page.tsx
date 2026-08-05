@@ -13,13 +13,16 @@ import {
   fetchEmployeeDistribution,
   fetchEmployeeExperience,
   fetchExitSummary,
+  fetchHiringExitTrend,
   fetchLearningAnalytics,
   fetchLeaveSummary,
   fetchLeaveUtilization,
   fetchOrgStructure,
+  fetchPerformanceByDepartment,
   fetchPerformanceDistribution,
   fetchPositionFillRate,
   fetchRecruitmentAnalytics,
+  fetchReportSections,
   fetchSavedViews,
   fetchTotalStaff,
   type HrAnalyticsFilters as HrFilters,
@@ -28,7 +31,18 @@ import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 
 import { BarList } from "./bar-list"
-import { AgeHistogramChart, BandDistributionChart, DepartmentDonutChart, ExitTrendChart, PerformanceBellCurveChart } from "./charts"
+import {
+  AgeHistogramChart,
+  BandDistributionChart,
+  DepartmentDonutChart,
+  ExitTrendChart,
+  HiringExitTrendChart,
+  PerformanceBellCurveChart,
+  PerformanceVarianceByDepartmentChart,
+  PositionsByDepartmentChart,
+  RatingsByDepartmentChart,
+} from "./charts"
+import { CustomReportDialog } from "./custom-report-dialog"
 import { KpiCards } from "./kpi-cards"
 import { SavedViewsPanel } from "./saved-views-panel"
 
@@ -79,10 +93,13 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
     orgStructureResult,
     employeeExperienceResult,
     performanceDistributionResult,
+    performanceByDepartmentResult,
+    hiringExitTrendResult,
     leaveSummaryResult,
     recruitmentResult,
     learningResult,
     savedViewsResult,
+    reportSectionsResult,
   ] = await Promise.all([
     fetchFunctions(),
     fetchDepartments(),
@@ -103,10 +120,13 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
     fetchOrgStructure(filters, actingEmployeeId),
     fetchEmployeeExperience(filters, actingEmployeeId),
     fetchPerformanceDistribution(filters, actingEmployeeId),
+    fetchPerformanceByDepartment(filters, actingEmployeeId),
+    fetchHiringExitTrend(filters, actingEmployeeId),
     fetchLeaveSummary(filters, actingEmployeeId),
     fetchRecruitmentAnalytics(actingEmployeeId),
     fetchLearningAnalytics(filters, actingEmployeeId),
     fetchSavedViews(actingEmployeeId),
+    fetchReportSections(actingEmployeeId),
   ])
 
   const functions = functionsResult.ok ? functionsResult.data : []
@@ -117,6 +137,7 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
   const levels = levelsResult.ok ? levelsResult.data : []
   const bands = bandsResult.ok ? bandsResult.data : []
   const savedViews = savedViewsResult.ok ? savedViewsResult.data : []
+  const reportSections = reportSectionsResult.ok ? reportSectionsResult.data : []
 
   const currentYear = new Date().getUTCFullYear()
   const yearOptions = [currentYear - 3, currentYear - 2, currentYear - 1, currentYear, currentYear + 1]
@@ -138,6 +159,7 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
               Export {format.toUpperCase()}
             </a>
           ))}
+          {reportSections.length > 0 ? <CustomReportDialog sections={reportSections} filters={filters} actingEmployeeId={actingEmployeeId} /> : null}
         </div>
       </div>
 
@@ -297,11 +319,22 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
         </CardContent>
       </Card>
 
-      {totalStaffResult.ok && averageAgeResult.ok && attritionRateResult.ok && positionFillRateResult.ok && leaveUtilizationResult.ok ? (
+      {totalStaffResult.ok &&
+      averageAgeResult.ok &&
+      bandDistributionResult.ok &&
+      attritionRateResult.ok &&
+      positionFillRateResult.ok &&
+      leaveUtilizationResult.ok &&
+      demographicsResult.ok &&
+      exitSummaryResult.ok ? (
         <KpiCards
           totalStaff={totalStaffResult.data}
           averageAge={averageAgeResult.data}
+          ageHistogram={demographicsResult.data.ageHistogram}
+          genderDistribution={demographicsResult.data.genderDistribution}
+          bandDistribution={bandDistributionResult.data}
           attritionRate={attritionRateResult.data}
+          voluntaryExits={exitSummaryResult.data.byReason.find((r) => r.key === "RESIGNATION")?.count ?? 0}
           positionFillRate={positionFillRateResult.data}
           leaveUtilization={leaveUtilizationResult.data}
         />
@@ -346,11 +379,63 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
 
         <Card>
           <CardHeader>
+            <CardTitle>Positions by Department</CardTitle>
+            <CardDescription>Total positions (filled + vacant) per department.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {positionFillRateResult.ok ? (
+              <PositionsByDepartmentChart data={positionFillRateResult.data.byDepartment.map((d) => ({ name: d.name as string, total: d.total as number }))} />
+            ) : (
+              <p className="text-sm text-destructive">{positionFillRateResult.error}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Hiring vs. Exit Trend</CardTitle>
+            <CardDescription>Every year on record — hires against exits.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {hiringExitTrendResult.ok ? <HiringExitTrendChart data={hiringExitTrendResult.data} /> : <p className="text-sm text-destructive">{hiringExitTrendResult.error}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Performance Distribution</CardTitle>
             <CardDescription>Actual vs. expected rating curve.</CardDescription>
           </CardHeader>
           <CardContent>
             {performanceDistributionResult.ok ? <PerformanceBellCurveChart data={performanceDistributionResult.data} /> : <p className="text-sm text-destructive">{performanceDistributionResult.error}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ratings by Department</CardTitle>
+            <CardDescription>Average performance rating per department.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {performanceByDepartmentResult.ok ? (
+              <RatingsByDepartmentChart data={performanceByDepartmentResult.data} />
+            ) : (
+              <p className="text-sm text-destructive">{performanceByDepartmentResult.error}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance Variance by Department</CardTitle>
+            <CardDescription>Spread between best- and worst-rated employees — a high bar means inconsistent ratings, even where the average looks fine.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {performanceByDepartmentResult.ok ? (
+              <PerformanceVarianceByDepartmentChart data={performanceByDepartmentResult.data} />
+            ) : (
+              <p className="text-sm text-destructive">{performanceByDepartmentResult.error}</p>
+            )}
           </CardContent>
         </Card>
 

@@ -963,18 +963,23 @@ async function seedPerformanceManagement(employees: {
   const { md, itHoD, claudine, solange, patrick } = employees
 
   // ---- Rating scale (1-5) -------------------------------------------------
-  const scaleDefs: Array<[rank: number, label: string, description: string]> = [
-    [5, "Outstanding", "Performance far exceeds expectations across all objectives."],
-    [4, "Exceeded Expectations", "Performance consistently surpasses expectations."],
-    [3, "Succeeded", "Performance fully meets all expectations."],
-    [2, "Meets Some Expectations", "Performance meets some, but not all, expectations."],
-    [1, "Unsatisfactory", "Performance falls significantly short of expectations."],
+  // expectedPercentage is the classic 10/20/40/20/10 "forced curve" the
+  // field's own schema.prisma comment calls out as the example — a bell
+  // shape peaking at rank 3 (Succeeded). Left unset before this change,
+  // which is why the dashboard's Expected % series rendered as null/flat
+  // instead of a real reference curve.
+  const scaleDefs: Array<[rank: number, label: string, description: string, expectedPercentage: number]> = [
+    [5, "Outstanding", "Performance far exceeds expectations across all objectives.", 10],
+    [4, "Exceeded Expectations", "Performance consistently surpasses expectations.", 20],
+    [3, "Succeeded", "Performance fully meets all expectations.", 40],
+    [2, "Meets Some Expectations", "Performance meets some, but not all, expectations.", 20],
+    [1, "Unsatisfactory", "Performance falls significantly short of expectations.", 10],
   ]
-  for (const [rank, label, description] of scaleDefs) {
+  for (const [rank, label, description, expectedPercentage] of scaleDefs) {
     await prisma.performanceRatingScale.upsert({
       where: { rank },
-      update: { label, description },
-      create: { rank, label, description },
+      update: { label, description, expectedPercentage },
+      create: { rank, label, description, expectedPercentage },
     })
   }
 

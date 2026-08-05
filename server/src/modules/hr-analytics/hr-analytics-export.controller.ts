@@ -4,7 +4,7 @@ import { ApiTags } from "@nestjs/swagger"
 import { HrAnalyticsAccessService } from "./access/hr-analytics-access.service"
 import { HrAnalyticsAccessLogService } from "./hr-analytics-access-log.service"
 import type { HrAnalyticsFilters } from "./hr-analytics-filters.util"
-import { HrAnalyticsExportService } from "./hr-analytics-export.service"
+import { HrAnalyticsExportService, REPORT_SECTIONS, type CustomReportSectionInput } from "./hr-analytics-export.service"
 
 type Query_ = Record<string, string | undefined>
 
@@ -80,5 +80,44 @@ export class HrAnalyticsExportController {
     const buffer = await this.exportService.generatePptx(filters, actingEmployeeId)
     void this.accessLogService.log(actingEmployeeId, "export-pptx", query)
     return new StreamableFile(buffer, { disposition: `attachment; filename="hr-analytics-${Date.now()}.pptx"` })
+  }
+
+  // ==== Custom Report Builder ================================================
+  // See REPORT_SECTIONS in hr-analytics-export.service.ts for the section
+  // catalog this is built around.
+
+  @Get("custom/sections")
+  listCustomReportSections() {
+    return REPORT_SECTIONS
+  }
+
+  /** `sections` is a JSON-encoded array of `{ key, dateFrom?, dateTo? }` —
+   *  passed as a single query param (rather than repeated `sections[]=...`
+   *  entries) since each selected section carries its own optional date
+   *  range alongside its key. Malformed/missing input degrades to an empty
+   *  report (every section unchecked) rather than a 400 — consistent with
+   *  this controller's other export routes, which likewise don't hard-fail
+   *  on a bad filter value. */
+  @Get("custom")
+  async exportCustom(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
+    const filters = await this.resolveFilters(query, actingEmployeeId)
+    const format: "xlsx" | "pptx" = query.format === "pptx" ? "pptx" : "xlsx"
+
+    let sections: CustomReportSectionInput[] = []
+    try {
+      const parsed: unknown = query.sections ? JSON.parse(query.sections) : []
+      if (Array.isArray(parsed)) {
+        sections = parsed.filter((s): s is CustomReportSectionInput => !!s && typeof s === "object" && typeof (s as { key?: unknown }).key === "string")
+      }
+    } catch {
+      sections = []
+    }
+
+    const buffer = await this.exportService.generateCustomReport(sections, filters, format)
+    void this.accessLogService.log(actingEmployeeId, `export-custom-${format}`, query)
+
+    const contentType =
+      format === "pptx" ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return new StreamableFile(buffer, { type: contentType, disposition: `attachment; filename="custom-hr-report-${Date.now()}.${format}"` })
   }
 }

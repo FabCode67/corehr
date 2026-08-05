@@ -46,6 +46,38 @@ export interface EmployeeChild {
   gender: Gender
 }
 
+export type FamilyRelationship = "SPOUSE" | "CHILD" | "PARENT" | "SIBLING" | "OTHER"
+
+export interface EmployeeFamilyMember {
+  id: string
+  name: string
+  relationship: FamilyRelationship
+  gender: Gender | null
+  dateOfBirth: string | null
+  occupation: string | null
+  contactNumber: string | null
+}
+
+/** See server/src/modules/employees/employees.service.ts's getFamilyTree()
+ *  doc comment for why every relationship is split into "primary" (the
+ *  Step 4 registration wizard's own fields/records) and "additional"
+ *  (EmployeeFamilyMember rows — bulk-imported, or a relationship the
+ *  wizard has no field for at all). */
+export interface EmployeeFamilyTree {
+  employee: { id: string; firstName: string; lastName: string; profilePictureUrl: string | null }
+  parents: EmployeeFamilyMember[]
+  siblings: EmployeeFamilyMember[]
+  other: EmployeeFamilyMember[]
+  spouse: {
+    primary: { name: string; phone: string | null; dateOfBirth: string | null } | null
+    additional: EmployeeFamilyMember[]
+  }
+  children: {
+    primary: EmployeeChild[]
+    additional: EmployeeFamilyMember[]
+  }
+}
+
 export interface EmployeeEducation {
   id: string
   type: EducationType
@@ -191,6 +223,10 @@ export function fetchEmployeeHistory(id: string) {
 
 export function fetchReportingManager(id: string) {
   return apiFetchSafe<ReportingManagerResult>(`/employees/${id}/reporting-manager`)
+}
+
+export function fetchEmployeeFamilyTree(id: string) {
+  return apiFetchSafe<EmployeeFamilyTree>(`/employees/${id}/family-tree`)
 }
 
 // ---- Column-picker export (Employees table "Export" button) ----------------

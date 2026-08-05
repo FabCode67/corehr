@@ -126,11 +126,21 @@ export class HrAnalyticsController {
     return this.hrAnalyticsService.employeeExperienceAnalytics(await this.resolveFilters(query, actingEmployeeId))
   }
 
+  @Get("charts/hiring-exit-trend")
+  async hiringExitTrend(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.hrAnalyticsService.hiringExitTrend(await this.resolveFilters(query, actingEmployeeId))
+  }
+
   // ==== Charts — delegated to existing per-module analytics services ===============
 
   @Get("charts/performance-distribution")
   async performanceDistribution(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
     return this.delegated.performanceDistribution(await this.resolveFilters(query, actingEmployeeId))
+  }
+
+  @Get("charts/performance-by-department")
+  async performanceByDepartment(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.delegated.performanceByDepartment(await this.resolveFilters(query, actingEmployeeId))
   }
 
   @Get("charts/leave-summary")

@@ -15,6 +15,58 @@ function tableRow(cells: Array<string | number>): PptxGenJS.TableCell[] {
   return cells.map((cell) => ({ text: String(cell) }))
 }
 
+/** One row of the Custom Report Builder's section checklist (see
+ *  hr-analytics-export.controller.ts's `reports/custom` route and the
+ *  client's custom-report-dialog.tsx). Every section shows a date-range
+ *  picker; `caveat` flags the two (Departments, Positions) whose underlying
+ *  query is a snapshot of current org structure with no date dimension at
+ *  all (positionFillRate/orgStructureAnalytics don't accept dateFrom/dateTo)
+ *  — the range is still collected and passed through for a consistent UI,
+ *  it just won't change those two sections' output, which the dialog
+ *  surfaces via this caveat rather than silently doing nothing. Recruitment
+ *  is deliberately excluded — see HrAnalyticsDelegatedService's class doc
+ *  comment for why it can't be filtered by date/department at all — so it
+ *  wouldn't behave consistently with every other section here. */
+export interface ReportSectionMeta {
+  key: string
+  label: string
+  description: string
+  supportsDateRange: boolean
+  caveat?: string
+}
+
+export const REPORT_SECTIONS: ReportSectionMeta[] = [
+  { key: "overview", label: "Overview & Headcount", description: "Total staff, joiners, exits, and top-line KPIs", supportsDateRange: true },
+  { key: "demographics", label: "Gender Report", description: "Male/female split, age brackets, contract type by gender", supportsDateRange: true },
+  {
+    key: "departments",
+    label: "Departments",
+    description: "Org structure and headcount by department",
+    supportsDateRange: true,
+    caveat: "Current org structure — date range does not change this section",
+  },
+  {
+    key: "positions",
+    label: "Positions",
+    description: "All positions with fill rates by department",
+    supportsDateRange: true,
+    caveat: "Current org structure — date range does not change this section",
+  },
+  { key: "leave", label: "Leave Report", description: "Annual leave, sick, maternity — by department and type", supportsDateRange: true },
+  { key: "performance", label: "Performance Report", description: "Rating distribution (bell curve), ratings & variance by department", supportsDateRange: true },
+  { key: "exit", label: "Exit Report", description: "Departures by reason, type and department", supportsDateRange: true },
+  { key: "turnover", label: "Turnover & Retention", description: "Attrition rate, retention %, year-over-year change", supportsDateRange: true },
+  { key: "learning", label: "Learning & Development", description: "Training completion and AML compliance", supportsDateRange: true },
+]
+
+const REPORT_SECTION_KEYS = new Set(REPORT_SECTIONS.map((s) => s.key))
+
+export interface CustomReportSectionInput {
+  key: string
+  dateFrom?: string
+  dateTo?: string
+}
+
 interface ExportBundle {
   totalStaff: Awaited<ReturnType<HrAnalyticsService["totalStaff"]>>
   averageAge: Awaited<ReturnType<HrAnalyticsService["averageAge"]>>
@@ -27,6 +79,34 @@ interface ExportBundle {
   demographics: Awaited<ReturnType<HrAnalyticsService["employeeDemographics"]>>
   performanceDistribution: Awaited<ReturnType<HrAnalyticsDelegatedService["performanceDistribution"]>>
   learning: Awaited<ReturnType<HrAnalyticsDelegatedService["learningAnalyticsFor"]>>
+}
+
+/** Data shape for the Custom Report Builder — one optional slot per
+ *  REPORT_SECTIONS entry, `null` when that section wasn't selected. Mirrors
+ *  ExportBundle's Awaited<ReturnType<...>> convention above. */
+interface CustomReportBundle {
+  overview: {
+    totalStaff: Awaited<ReturnType<HrAnalyticsService["totalStaff"]>>
+    averageAge: Awaited<ReturnType<HrAnalyticsService["averageAge"]>>
+    bandDistribution: Awaited<ReturnType<HrAnalyticsService["bandDistribution"]>>
+  } | null
+  demographics: Awaited<ReturnType<HrAnalyticsService["employeeDemographics"]>> | null
+  departments: {
+    employeeDistribution: Awaited<ReturnType<HrAnalyticsService["employeeDistributionByDepartment"]>>
+    orgStructure: Awaited<ReturnType<HrAnalyticsService["orgStructureAnalytics"]>>
+  } | null
+  positions: Awaited<ReturnType<HrAnalyticsService["positionFillRate"]>> | null
+  leave: {
+    utilization: Awaited<ReturnType<HrAnalyticsService["leaveUtilizationSummary"]>>
+    summary: Awaited<ReturnType<HrAnalyticsDelegatedService["leaveSummary"]>>
+  } | null
+  performance: {
+    distribution: Awaited<ReturnType<HrAnalyticsDelegatedService["performanceDistribution"]>>
+    byDepartment: Awaited<ReturnType<HrAnalyticsDelegatedService["performanceByDepartment"]>>
+  } | null
+  exit: Awaited<ReturnType<HrAnalyticsService["exitSummary"]>> | null
+  turnover: Awaited<ReturnType<HrAnalyticsService["attritionRate"]>> | null
+  learning: Awaited<ReturnType<HrAnalyticsDelegatedService["learningAnalyticsFor"]>> | null
 }
 
 /**
@@ -313,6 +393,448 @@ export class HrAnalyticsExportService {
         .flatMap((item) => [item]),
       { x: 0.5, y: 1.1, w: 9, h: 5, fontSize: 14, color: "333333" }
     )
+
+    const output = await pptx.write({ outputType: "nodebuffer" })
+    return output as Buffer
+  }
+
+  // ==== Custom Report Builder ======================================================
+  // Lets an admin pick which sections to include (each with its own optional
+  // date-range override) rather than always exporting every fixed section
+  // above — see REPORT_SECTIONS and hr-analytics-export.controller.ts's
+  // `reports/custom` route.
+
+  private mergeDateRange(base: HrAnalyticsFilters, override?: { dateFrom?: string; dateTo?: string }): HrAnalyticsFilters {
+    if (!override || (!override.dateFrom && !override.dateTo)) return base
+    // A section-level date range replaces the whole date dimension (not just
+    // dateFrom/dateTo) so it can't be silently overridden by a leftover
+    // years/year/month/quarter value from the dashboard's global filters —
+    // see resolveDateRange()'s priority order in hr-analytics-filters.util.ts.
+    return { ...base, dateFrom: override.dateFrom, dateTo: override.dateTo, years: undefined, year: undefined, month: undefined, quarter: undefined }
+  }
+
+  private async buildCustomBundle(sections: CustomReportSectionInput[], baseFilters: HrAnalyticsFilters): Promise<CustomReportBundle> {
+    const selected = new Map(sections.filter((s) => REPORT_SECTION_KEYS.has(s.key)).map((s) => [s.key, s]))
+    const filtersFor = (key: string) => this.mergeDateRange(baseFilters, selected.get(key))
+
+    const [overview, demographics, departments, positions, leave, performance, exit, turnover, learning] = await Promise.all([
+      selected.has("overview")
+        ? Promise.all([
+            this.hrAnalyticsService.totalStaff(filtersFor("overview")),
+            this.hrAnalyticsService.averageAge(filtersFor("overview")),
+            this.hrAnalyticsService.bandDistribution(filtersFor("overview")),
+          ]).then(([totalStaff, averageAge, bandDistribution]) => ({ totalStaff, averageAge, bandDistribution }))
+        : Promise.resolve(null),
+      selected.has("demographics") ? this.hrAnalyticsService.employeeDemographics(filtersFor("demographics")) : Promise.resolve(null),
+      selected.has("departments")
+        ? Promise.all([
+            this.hrAnalyticsService.employeeDistributionByDepartment(filtersFor("departments")),
+            this.hrAnalyticsService.orgStructureAnalytics(filtersFor("departments")),
+          ]).then(([employeeDistribution, orgStructure]) => ({ employeeDistribution, orgStructure }))
+        : Promise.resolve(null),
+      selected.has("positions") ? this.hrAnalyticsService.positionFillRate(filtersFor("positions")) : Promise.resolve(null),
+      selected.has("leave")
+        ? Promise.all([this.hrAnalyticsService.leaveUtilizationSummary(filtersFor("leave")), this.delegated.leaveSummary(filtersFor("leave"))]).then(([utilization, summary]) => ({
+            utilization,
+            summary,
+          }))
+        : Promise.resolve(null),
+      selected.has("performance")
+        ? Promise.all([this.delegated.performanceDistribution(filtersFor("performance")), this.delegated.performanceByDepartment(filtersFor("performance"))]).then(
+            ([distribution, byDepartment]) => ({ distribution, byDepartment })
+          )
+        : Promise.resolve(null),
+      selected.has("exit") ? this.hrAnalyticsService.exitSummary(filtersFor("exit")) : Promise.resolve(null),
+      selected.has("turnover") ? this.hrAnalyticsService.attritionRate(filtersFor("turnover")) : Promise.resolve(null),
+      selected.has("learning") ? this.delegated.learningAnalyticsFor(filtersFor("learning")) : Promise.resolve(null),
+    ])
+
+    return { overview, demographics, departments, positions, leave, performance, exit, turnover, learning }
+  }
+
+  /** Same rule-based-summary spirit as buildInsights() above, but one line
+   *  (or a few) per selected section instead of a single flat list, so each
+   *  section of the custom report carries its own narrative takeaway. */
+  private buildCustomInsights(bundle: CustomReportBundle): Record<string, string[]> {
+    const insights: Record<string, string[]> = {}
+
+    if (bundle.overview) {
+      const lines: string[] = [`${bundle.overview.totalStaff.newJoined} joined and ${bundle.overview.totalStaff.exited} exited in the selected period.`]
+      if (bundle.overview.totalStaff.changePercent !== null) {
+        const direction = bundle.overview.totalStaff.changePercent >= 0 ? "grown" : "shrunk"
+        lines.push(`Headcount has ${direction} by ${Math.abs(bundle.overview.totalStaff.changePercent)}% compared to last year.`)
+      }
+      insights.overview = lines
+    }
+
+    if (bundle.demographics) {
+      const male = bundle.demographics.genderDistribution.find((g) => g.key === "MALE")?.count ?? 0
+      const female = bundle.demographics.genderDistribution.find((g) => g.key === "FEMALE")?.count ?? 0
+      const total = male + female
+      insights.demographics =
+        total > 0 ? [`Workforce is ${Math.round((male / total) * 100)}% male / ${Math.round((female / total) * 100)}% female across ${total} employees.`] : ["No gender data available for the selected period."]
+    }
+
+    if (bundle.departments) {
+      const top = [...bundle.departments.employeeDistribution].sort((a, b) => b.count - a.count)[0]
+      insights.departments = top ? [`${top.departmentName} is the largest department at ${top.count} employees (${top.percent}% of headcount).`] : ["No department data available."]
+    }
+
+    if (bundle.positions) {
+      const vacant = bundle.positions.total - bundle.positions.filled
+      insights.positions = [`${bundle.positions.fillRate}% of positions are filled (${vacant} vacant of ${bundle.positions.total} total).`]
+    }
+
+    if (bundle.leave) {
+      insights.leave = [
+        `Leave utilization is at ${bundle.leave.utilization.utilizationPercent}% (${bundle.leave.utilization.totalTaken} of ${bundle.leave.utilization.totalEntitlement} entitled days taken).`,
+      ]
+    }
+
+    if (bundle.performance) {
+      const mostVariance = [...bundle.performance.byDepartment].sort((a, b) => b.ratingStdDev - a.ratingStdDev)[0]
+      insights.performance = mostVariance
+        ? [`${mostVariance.departmentName} shows the widest spread in ratings (std. dev. ${mostVariance.ratingStdDev}), suggesting inconsistent rating calibration.`]
+        : ["No performance review data available for the selected period."]
+    }
+
+    if (bundle.exit) {
+      const top = bundle.exit.byReason[0]
+      insights.exit = top ? [`"${top.label}" is the leading exit reason (${top.count} of ${bundle.exit.totalExits} departures).`] : ["No exits recorded for the selected period."]
+    }
+
+    if (bundle.turnover) {
+      const direction = bundle.turnover.changePercent > 0 ? "increased" : bundle.turnover.changePercent < 0 ? "decreased" : "held steady"
+      const magnitude = bundle.turnover.changePercent !== 0 ? ` by ${Math.abs(bundle.turnover.changePercent)} points` : ""
+      insights.turnover = [`Attrition is at ${bundle.turnover.rate}% and has ${direction}${magnitude} vs. last year.`]
+    }
+
+    if (bundle.learning) {
+      const amlLine = bundle.learning.amlCompletionRate !== null ? ` AML compliance is ${bundle.learning.amlCompletionRate}%.` : ""
+      insights.learning = [`Training completion rate is ${bundle.learning.trainingCompletionRate}%.${amlLine}`]
+    }
+
+    return insights
+  }
+
+  async generateCustomReport(sections: CustomReportSectionInput[], baseFilters: HrAnalyticsFilters, format: "xlsx" | "pptx"): Promise<Buffer> {
+    const bundle = await this.buildCustomBundle(sections, baseFilters)
+    const insights = this.buildCustomInsights(bundle)
+    return format === "pptx" ? this.generateCustomPptx(bundle, insights) : this.generateCustomExcel(bundle, insights)
+  }
+
+  private generateCustomExcel(bundle: CustomReportBundle, insights: Record<string, string[]>): Buffer {
+    const workbook = XLSX.utils.book_new()
+
+    const withInsights = (rows: (string | number)[][], key: string) => {
+      if (insights[key]?.length) rows.push([], ["Insights"], ...insights[key].map((line) => [`• ${line}`]))
+      return rows
+    }
+    const addSheet = (rows: (string | number)[][], key: string, sheetName: string) =>
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(withInsights(rows, key)), sheetName)
+
+    if (bundle.overview) {
+      addSheet(
+        [
+          ["Overview & Headcount"],
+          [],
+          ["Total Active Staff", bundle.overview.totalStaff.activeCount],
+          ["New Joiners (period)", bundle.overview.totalStaff.newJoined],
+          ["Exits (period)", bundle.overview.totalStaff.exited],
+          ["Change vs Last Year", bundle.overview.totalStaff.changePercent !== null ? `${bundle.overview.totalStaff.changePercent}%` : "N/A"],
+          ["Average Age", bundle.overview.averageAge.overall ?? "N/A"],
+          [],
+          ["Band", "Count", "Percent"],
+          ...bundle.overview.bandDistribution.map((b) => [b.bandName, b.count, `${b.percent}%`]),
+        ],
+        "overview",
+        "Overview"
+      )
+    }
+
+    if (bundle.demographics) {
+      addSheet(
+        [
+          ["Gender Report"],
+          [],
+          ["Gender", "Count"],
+          ...bundle.demographics.genderDistribution.map((g) => [g.label, g.count]),
+          [],
+          ["Age Bracket", "Count"],
+          ...bundle.demographics.ageHistogram.map((a) => [a.bucket, a.count]),
+          [],
+          ["Contract Type", "Count"],
+          ...bundle.demographics.contractTypeDistribution.map((c) => [c.label, c.count]),
+        ],
+        "demographics",
+        "Gender Report"
+      )
+    }
+
+    if (bundle.departments) {
+      addSheet(
+        [
+          ["Departments"],
+          [],
+          ["Department", "Count", "Percent"],
+          ...bundle.departments.employeeDistribution.map((d) => [d.departmentName, d.count, `${d.percent}%`]),
+          [],
+          ["Managers", bundle.departments.orgStructure.managersVsIndividualContributors.managers],
+          ["Individual Contributors", bundle.departments.orgStructure.managersVsIndividualContributors.individualContributors],
+          ["Average Span of Control", bundle.departments.orgStructure.averageSpanOfControl],
+        ],
+        "departments",
+        "Departments"
+      )
+    }
+
+    if (bundle.positions) {
+      addSheet(
+        [
+          ["Positions"],
+          [],
+          ["Fill Rate", `${bundle.positions.fillRate}%`],
+          ["Filled / Total", `${bundle.positions.filled} / ${bundle.positions.total}`],
+          [],
+          ["Department", "Filled", "Total", "Fill Rate"],
+          ...bundle.positions.byDepartment.map((d) => [String(d.name), Number(d.filled), Number(d.total), `${d.fillRate}%`]),
+        ],
+        "positions",
+        "Positions"
+      )
+    }
+
+    if (bundle.leave) {
+      addSheet(
+        [
+          ["Leave Report"],
+          [],
+          ["Utilization", `${bundle.leave.utilization.utilizationPercent}%`],
+          ["Total Entitlement (days)", bundle.leave.utilization.totalEntitlement],
+          ["Total Taken (days)", bundle.leave.utilization.totalTaken],
+          ["Currently on Leave", bundle.leave.utilization.currentlyOnLeaveCount],
+          [],
+          ["Leave Type", "Days", "Requests"],
+          ...bundle.leave.summary.byType.map((t) => [t.leaveTypeName, t.days, t.requests]),
+          [],
+          ["Department", "Days", "Requests"],
+          ...bundle.leave.summary.byDepartment.map((d) => [d.departmentName, d.days, d.requests]),
+        ],
+        "leave",
+        "Leave Report"
+      )
+    }
+
+    if (bundle.performance) {
+      addSheet(
+        [
+          ["Performance Report"],
+          [],
+          ["Rating", "Count", "Actual %", "Expected %"],
+          ...bundle.performance.distribution.map((p) => [p.label, p.count, p.actualPercentage, p.expectedPercentage ?? "N/A"]),
+          [],
+          ["Department", "Avg. Rating", "Rating Std. Dev.", "Reviews"],
+          ...bundle.performance.byDepartment.map((d) => [d.departmentName, d.averageRating, d.ratingStdDev, d.reviews]),
+        ],
+        "performance",
+        "Performance Report"
+      )
+    }
+
+    if (bundle.exit) {
+      addSheet(
+        [
+          ["Exit Report"],
+          [],
+          ["Total Exits", bundle.exit.totalExits],
+          [],
+          ["Reason", "Count"],
+          ...bundle.exit.byReason.map((r) => [r.label, r.count]),
+          [],
+          ["Type", "Count"],
+          ...bundle.exit.byType.map((t) => [t.label, t.count]),
+          [],
+          ["Year", "Exits"],
+          ...bundle.exit.trend.map((t) => [t.year, t.exits]),
+        ],
+        "exit",
+        "Exit Report"
+      )
+    }
+
+    if (bundle.turnover) {
+      addSheet(
+        [
+          ["Turnover & Retention"],
+          [],
+          ["Attrition Rate", `${bundle.turnover.rate}%`],
+          ["Previous Year", `${bundle.turnover.previousYearRate}%`],
+          ["Change vs Last Year", `${bundle.turnover.changePercent}%`],
+          ["Exits this Period", bundle.turnover.exits],
+          [],
+          ["Department", "Exits"],
+          ...bundle.turnover.breakdown.byDepartment.map((d) => [d.label, d.count]),
+        ],
+        "turnover",
+        "Turnover & Retention"
+      )
+    }
+
+    if (bundle.learning) {
+      addSheet(
+        [
+          ["Learning & Development"],
+          [],
+          ["Training Completion Rate", `${bundle.learning.trainingCompletionRate}%`],
+          ["AML Compliance", bundle.learning.amlCompletionRate === null ? "Not tracked" : `${bundle.learning.amlCompletionRate}%`],
+          [],
+          ["Department", "Completion Rate", "Avg. Training Hours", "Avg. Training Cost", "Outstanding Mandatory"],
+          ...bundle.learning.trainingCostAndHoursByDepartment.map((d) => [d.departmentName, `${d.completionRate}%`, d.averageTrainingHours, d.averageTrainingCost, d.outstandingMandatoryCourses]),
+        ],
+        "learning",
+        "Learning & Development"
+      )
+    }
+
+    return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer
+  }
+
+  private async generateCustomPptx(bundle: CustomReportBundle, insights: Record<string, string[]>): Promise<Buffer> {
+    const pptx = new PptxGenJS()
+    pptx.defineLayout({ name: "A4", width: 10, height: 7.5 })
+    pptx.layout = "A4"
+
+    const titleSlide = pptx.addSlide()
+    titleSlide.addText("Custom HR Report", { x: 0.5, y: 2.5, w: 9, h: 1, fontSize: 32, bold: true, color: "0A2647" })
+    titleSlide.addText("NCBA Rwanda PeopleSuite", { x: 0.5, y: 3.4, w: 9, h: 0.5, fontSize: 16, color: "555555" })
+    titleSlide.addText(new Date().toLocaleDateString("en-GB", { dateStyle: "long" }), { x: 0.5, y: 4.0, w: 9, h: 0.4, fontSize: 12, color: "888888" })
+
+    /** Every section gets a data slide (table or chart) plus, when a
+     *  narrative insight exists for it, a second slide with bullet points —
+     *  same "Key HR Insights" pattern as the fixed-format export, just
+     *  scoped per-section instead of one shared slide at the end. */
+    const addInsightsSlide = (title: string, key: string) => {
+      const lines = insights[key]
+      if (!lines?.length) return
+      const slide = pptx.addSlide()
+      slide.addText(`${title} — Insights`, { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addText(
+        lines.map((line) => ({ text: line, options: { bullet: true, breakLine: true } })),
+        { x: 0.5, y: 1.1, w: 9, h: 5, fontSize: 14, color: "333333" }
+      )
+    }
+
+    if (bundle.overview) {
+      const slide = pptx.addSlide()
+      slide.addText("Overview & Headcount", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addTable(
+        [
+          tableRow(["Metric", "Value"]),
+          tableRow(["Total Active Staff", String(bundle.overview.totalStaff.activeCount)]),
+          tableRow(["New Joiners (period)", String(bundle.overview.totalStaff.newJoined)]),
+          tableRow(["Exits (period)", String(bundle.overview.totalStaff.exited)]),
+          tableRow(["Average Age", String(bundle.overview.averageAge.overall ?? "N/A")]),
+        ],
+        { x: 0.4, y: 1.0, w: 9, colW: [5, 4], fontSize: 12, border: { type: "solid", color: "CCCCCC", pt: 0.5 } }
+      )
+      addInsightsSlide("Overview & Headcount", "overview")
+    }
+
+    if (bundle.demographics) {
+      const slide = pptx.addSlide()
+      slide.addText("Gender Report", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.doughnut,
+        [{ name: "Employees", labels: bundle.demographics.genderDistribution.map((g) => g.label), values: bundle.demographics.genderDistribution.map((g) => g.count) }],
+        { x: 1.5, y: 1.0, w: 7, h: 5.5 }
+      )
+      addInsightsSlide("Gender Report", "demographics")
+    }
+
+    if (bundle.departments) {
+      const slide = pptx.addSlide()
+      slide.addText("Departments", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.bar,
+        [{ name: "Employees", labels: bundle.departments.employeeDistribution.map((d) => d.departmentName), values: bundle.departments.employeeDistribution.map((d) => d.count) }],
+        { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      )
+      addInsightsSlide("Departments", "departments")
+    }
+
+    if (bundle.positions) {
+      const slide = pptx.addSlide()
+      slide.addText("Positions — Fill Rate by Department", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.bar,
+        [{ name: "Fill Rate %", labels: bundle.positions.byDepartment.map((d) => String(d.name)), values: bundle.positions.byDepartment.map((d) => Number(d.fillRate)) }],
+        { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      )
+      addInsightsSlide("Positions", "positions")
+    }
+
+    if (bundle.leave) {
+      const slide = pptx.addSlide()
+      slide.addText("Leave Report", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.bar,
+        [{ name: "Days Taken", labels: bundle.leave.summary.byType.map((t) => t.leaveTypeName), values: bundle.leave.summary.byType.map((t) => t.days) }],
+        { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      )
+      addInsightsSlide("Leave Report", "leave")
+    }
+
+    if (bundle.performance) {
+      const slide = pptx.addSlide()
+      slide.addText("Performance Report", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.bar,
+        [{ name: "% of reviews", labels: bundle.performance.distribution.map((p) => p.label), values: bundle.performance.distribution.map((p) => p.actualPercentage) }],
+        { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      )
+      addInsightsSlide("Performance Report", "performance")
+    }
+
+    if (bundle.exit) {
+      const slide = pptx.addSlide()
+      slide.addText("Exit Report", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addChart(
+        pptx.ChartType.bar,
+        [{ name: "Exits", labels: bundle.exit.byReason.map((r) => r.label), values: bundle.exit.byReason.map((r) => r.count) }],
+        { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      )
+      addInsightsSlide("Exit Report", "exit")
+    }
+
+    if (bundle.turnover) {
+      const slide = pptx.addSlide()
+      slide.addText("Turnover & Retention", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addTable(
+        [
+          tableRow(["Metric", "Value"]),
+          tableRow(["Attrition Rate", `${bundle.turnover.rate}%`]),
+          tableRow(["Previous Year", `${bundle.turnover.previousYearRate}%`]),
+          tableRow(["Change vs Last Year", `${bundle.turnover.changePercent}%`]),
+          tableRow(["Exits this Period", String(bundle.turnover.exits)]),
+        ],
+        { x: 0.4, y: 1.0, w: 9, colW: [5, 4], fontSize: 12, border: { type: "solid", color: "CCCCCC", pt: 0.5 } }
+      )
+      addInsightsSlide("Turnover & Retention", "turnover")
+    }
+
+    if (bundle.learning) {
+      const slide = pptx.addSlide()
+      slide.addText("Learning & Development", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+      slide.addTable(
+        [
+          tableRow(["Metric", "Value"]),
+          tableRow(["Training Completion Rate", `${bundle.learning.trainingCompletionRate}%`]),
+          tableRow(["AML Compliance", bundle.learning.amlCompletionRate === null ? "Not tracked" : `${bundle.learning.amlCompletionRate}%`]),
+        ],
+        { x: 0.4, y: 1.0, w: 9, colW: [5, 4], fontSize: 12, border: { type: "solid", color: "CCCCCC", pt: 0.5 } }
+      )
+      addInsightsSlide("Learning & Development", "learning")
+    }
 
     const output = await pptx.write({ outputType: "nodebuffer" })
     return output as Buffer

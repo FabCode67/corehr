@@ -202,6 +202,13 @@ export class EmployeesController {
     return this.employeesService.removeChild(id, childId)
   }
 
+  /** Visual Family Tree — see EmployeesService.getFamilyTree()'s doc
+   *  comment for why this is the first read path for EmployeeFamilyMember. */
+  @Get(":id/family-tree")
+  getFamilyTree(@Param("id") id: string) {
+    return this.employeesService.getFamilyTree(id)
+  }
+
   // ---- Step 5: Education & Professional Development ------------------------
 
   @Post(":id/education")

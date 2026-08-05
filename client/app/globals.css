@@ -62,6 +62,16 @@
 }
 
 :root {
+    /* Tells the browser to render native form-control chrome (the <select>
+       dropdown's option list, date/time pickers, scrollbars) using a light
+       palette. Without this, a browser defaults native popups to light
+       regardless of the app's own dark-mode CSS variables below — the
+       <select> element itself picks up --foreground (white text in dark
+       mode) via Tailwind's `text-foreground`, but its native dropdown
+       list stays the OS's white background, producing invisible
+       white-on-white option text. See the matching `.dark` rule below. */
+    color-scheme: light;
+
     /* Brand primitives — reference these directly when a component needs
        the raw brand color rather than a semantic token. */
     --brand-blue: #0a2647;
@@ -104,6 +114,8 @@
 }
 
 .dark {
+    color-scheme: dark;
+
     --background: #0a2647;
     --foreground: #ffffff;
     --card: #123a61;
@@ -147,4 +159,19 @@
   html {
     @apply font-sans;
     }
+}
+
+/* Belt-and-suspenders fix for dark-mode <select> dropdowns (see
+   components/ui/select.tsx's [color-scheme] classes): `color-scheme` alone
+   tells the browser which native palette to prefer for the popup, but some
+   Chromium builds still render the option list's actual background/text
+   using the OS light theme regardless. Setting background-color/color
+   directly on <option> is honored much more consistently across browsers
+   for the popup's real content, so it's kept as the primary fix rather
+   than a fallback — var(--popover)/var(--popover-foreground) already flip
+   between the light/dark values defined above via the .dark class, so no
+   separate dark-mode rule is needed here. */
+select[data-slot="select"] option {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }

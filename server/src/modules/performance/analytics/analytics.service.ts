@@ -115,6 +115,18 @@ export class PerformanceAnalyticsService {
     return Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 100) / 100
   }
 
+  /** Population standard deviation of a department's ratings — how spread
+   *  out performance is, not just its average. A department with the same
+   *  average rating as another but a much higher stdDev has a wider gap
+   *  between its best and worst performers (inconsistent management/
+   *  calibration is a common read on this), which the average alone hides. */
+  private stdDev(values: number[]) {
+    if (values.length === 0) return 0
+    const mean = values.reduce((sum, v) => sum + v, 0) / values.length
+    const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length
+    return Math.round(Math.sqrt(variance) * 100) / 100
+  }
+
   async byDepartment(filters: PerformanceAnalyticsFilters) {
     const reviews = await this.reviews(filters)
     const groups = new Map<string, { departmentId: string; departmentName: string; ratings: number[] }>()
@@ -132,7 +144,13 @@ export class PerformanceAnalyticsService {
     }
 
     return Array.from(groups.values())
-      .map((g) => ({ departmentId: g.departmentId, departmentName: g.departmentName, averageRating: this.average(g.ratings), reviews: g.ratings.length }))
+      .map((g) => ({
+        departmentId: g.departmentId,
+        departmentName: g.departmentName,
+        averageRating: this.average(g.ratings),
+        ratingStdDev: this.stdDev(g.ratings),
+        reviews: g.ratings.length,
+      }))
       .sort((a, b) => b.averageRating - a.averageRating)
   }
 

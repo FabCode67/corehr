@@ -33,6 +33,7 @@ export async function createDepartment(
         name,
         code: trimmedOrUndefined(formData.get("code")),
         description: trimmedOrUndefined(formData.get("description")),
+        parentDepartmentId: trimmedOrUndefined(formData.get("parentDepartmentId")),
       }),
     })
   } catch (error) {
@@ -63,6 +64,7 @@ export async function updateDepartment(
         name,
         code: trimmedOrUndefined(formData.get("code")),
         description: trimmedOrUndefined(formData.get("description")),
+        parentDepartmentId: trimmedOrUndefined(formData.get("parentDepartmentId")),
       }),
     })
   } catch (error) {

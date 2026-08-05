@@ -92,6 +92,7 @@ export interface LeaveUtilizationSummary {
   totalTaken: number
   totalRemaining: number
   utilizationPercent: number
+  currentlyOnLeaveCount: number
   byDepartment: { departmentId: string; name: string; entitlement: number; taken: number; utilizationPercent: number }[]
   byBranch: { branchId: string; name: string; entitlement: number; taken: number; utilizationPercent: number }[]
 }
@@ -143,6 +144,22 @@ export interface PerformanceDistributionRow {
   count: number
   actualPercentage: number
   expectedPercentage: number | null
+}
+
+export interface PerformanceByDepartmentRow {
+  departmentId: string
+  departmentName: string
+  averageRating: number
+  /** Population standard deviation of ratings within the department — see
+   *  PerformanceAnalyticsService.stdDev()'s doc comment. */
+  ratingStdDev: number
+  reviews: number
+}
+
+export interface HiringExitTrendRow {
+  year: number
+  hires: number
+  exits: number
 }
 
 export interface LeaveSummary {
@@ -233,6 +250,12 @@ export function fetchEmployeeExperience(filters: HrAnalyticsFilters, actingEmplo
 export function fetchPerformanceDistribution(filters: HrAnalyticsFilters, actingEmployeeId: string) {
   return apiFetchSafe<PerformanceDistributionRow[]>(base("charts/performance-distribution", filters, actingEmployeeId))
 }
+export function fetchPerformanceByDepartment(filters: HrAnalyticsFilters, actingEmployeeId: string) {
+  return apiFetchSafe<PerformanceByDepartmentRow[]>(base("charts/performance-by-department", filters, actingEmployeeId))
+}
+export function fetchHiringExitTrend(filters: HrAnalyticsFilters, actingEmployeeId: string) {
+  return apiFetchSafe<HiringExitTrendRow[]>(base("charts/hiring-exit-trend", filters, actingEmployeeId))
+}
 export function fetchLeaveSummary(filters: HrAnalyticsFilters, actingEmployeeId: string) {
   return apiFetchSafe<LeaveSummary>(base("charts/leave-summary", filters, actingEmployeeId))
 }
@@ -248,4 +271,41 @@ export function fetchSavedViews(actingEmployeeId: string) {
 
 export function exportUrl(format: "xlsx" | "csv" | "pdf" | "pptx", filters: HrAnalyticsFilters, actingEmployeeId: string) {
   return `/api/hr-analytics/export/${format}?${buildQuery(filters, actingEmployeeId)}`
+}
+
+// ==== Custom Report Builder =====================================================
+// Mirrors server/src/modules/hr-analytics/hr-analytics-export.service.ts's
+// REPORT_SECTIONS catalog + generateCustomReport().
+
+export interface ReportSectionMeta {
+  key: string
+  label: string
+  description: string
+  supportsDateRange: boolean
+  caveat?: string
+}
+
+export function fetchReportSections(actingEmployeeId: string) {
+  return apiFetchSafe<ReportSectionMeta[]>(`/hr-analytics/export/custom/sections?actingEmployeeId=${encodeURIComponent(actingEmployeeId)}`)
+}
+
+export interface CustomReportSectionSelection {
+  key: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+/** Each selected section (with its own optional date range) travels as one
+ *  JSON-encoded query param — see the controller route's doc comment for
+ *  why, vs. e.g. repeated `sections[]=` entries. */
+export function customReportUrl(
+  sections: CustomReportSectionSelection[],
+  format: "xlsx" | "pptx",
+  filters: HrAnalyticsFilters,
+  actingEmployeeId: string
+) {
+  const params = new URLSearchParams(buildQuery(filters, actingEmployeeId))
+  params.set("format", format)
+  params.set("sections", JSON.stringify(sections))
+  return `/api/hr-analytics/export/custom?${params.toString()}`
 }

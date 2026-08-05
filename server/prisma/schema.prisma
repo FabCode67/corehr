@@ -194,9 +194,19 @@ model Department {
   /// Added for the Bulk Import framework's Department module ("Head of
   /// Department" column) — no such field existed before this.
   headOfDepartmentId String?
+  /// Genuine Department-to-Department hierarchy (e.g. a regional department
+  /// nested under a national one) — distinct from Function, which every
+  /// department still requires above. Scope, as decided when this was
+  /// added: import + storage + the department admin page only. The org
+  /// chart, dashboards, and every filter/analytics module elsewhere in this
+  /// app still key off Function, not this field — this is optional metadata
+  /// on top, not a second hierarchy those already understand.
+  parentDepartmentId String? @db.Uuid
 
   function        Function   @relation(fields: [functionId], references: [id])
   headOfDepartment Employee? @relation("DepartmentHead", fields: [headOfDepartmentId], references: [employeeNumber])
+  parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  subDepartments   Department[] @relation("DepartmentHierarchy")
   units     Unit[]
   positions Position[] // positions attached directly (department has no units)
   performanceReviews PerformanceReview[]
@@ -875,6 +885,12 @@ model EmployeeFamilyMember {
   employeeId     String
   name           String
   relationship   FamilyRelationship
+  /// Optional (like dateOfBirth/occupation/contactNumber below) rather than
+  /// required — added after this model/its Bulk Import template already
+  /// shipped, so making it required would break re-uploads of an
+  /// already-downloaded template and would need a backfill default for rows
+  /// imported before this column existed.
+  gender         Gender?
   dateOfBirth    DateTime?
   occupation     String?
   contactNumber  String?

@@ -1,0 +1,129 @@
+/*
+  Same flexbox + dashed-connector technique as components/org-chart's CSS
+  module (see that file's long comment for why flexbox over display:table) —
+  duplicated rather than imported since this is a small, self-contained
+  pattern and the two trees are conceptually unrelated (org reporting lines
+  vs. family relationships), matching this codebase's general preference for
+  a little duplication over a shared abstraction that would couple two
+  unrelated features together.
+
+  Layout (see family-tree.tsx): Parents (if any) sit at the top; their
+  children row is Siblings + the employee side by side; the employee's own
+  <li> nests a further row for their Children. Spouse isn't part of this
+  parent/child connector tree at all — genealogically a spouse is a peer,
+  not a descendant — so it's rendered as a horizontal "married to" pairing
+  inside the employee's own card unit instead of a tree node.
+*/
+
+.chart {
+  display: inline-block;
+  min-width: 100%;
+  padding: 2rem 1.5rem 2.5rem;
+  overflow-x: auto;
+}
+
+.tree {
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+}
+
+.tree ul {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+  position: relative;
+}
+
+.tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 2.25rem 1rem 0;
+}
+
+.tree > li {
+  padding-top: 0;
+}
+
+.tree ul > li::before,
+.tree ul > li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 2.25rem;
+  border-top: 2px dashed rgba(184, 134, 11, 0.45);
+}
+
+.tree ul > li::before {
+  right: 50%;
+}
+
+.tree ul > li::after {
+  left: 50%;
+  border-left: 2px dashed rgba(184, 134, 11, 0.45);
+}
+
+.tree ul > li:first-child::before {
+  border-top: none;
+}
+
+.tree ul > li:last-child::after {
+  border-top: none;
+}
+
+.tree ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px dashed rgba(184, 134, 11, 0.45);
+  width: 0;
+  height: 2.25rem;
+}
+
+.card {
+  width: 168px;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  text-align: left;
+}
+
+.employeeCard {
+  composes: card;
+  border-color: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 10%, var(--card));
+}
+
+/* The employee + spouse "couple" pairing — a peer relationship, drawn as a
+   short solid connector rather than the dashed parent/child lines above. */
+.coupleUnit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.marriedConnector {
+  width: 1.1rem;
+  height: 2px;
+  background: var(--secondary);
+  flex-shrink: 0;
+}
+
+.otherPanel {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--border);
+}

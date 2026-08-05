@@ -57,6 +57,23 @@ export class HrAnalyticsDelegatedService {
     })
   }
 
+  /** Ratings per department (+ rating standard deviation, "performance
+   *  variance") — same filter mapping as performanceDistribution() above. */
+  async performanceByDepartment(filters: HrAnalyticsFilters) {
+    return this.performanceAnalytics.byDepartment({
+      departmentId: filters.departmentId,
+      unitId: filters.unitId,
+      branchId: filters.branchId,
+      positionId: filters.positionId,
+      levelId: filters.levelId,
+      bandId: filters.bandId,
+      contractType: filters.contractType,
+      gender: filters.gender,
+      functionId: filters.functionId,
+      year: filters.year,
+    })
+  }
+
   // ---- Leave Summary -----------------------------------------------------------
 
   async leaveSummary(filters: HrAnalyticsFilters) {

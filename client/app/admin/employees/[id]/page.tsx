@@ -3,7 +3,8 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { FamilyTree } from "@/components/family-tree/family-tree"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
@@ -11,6 +12,7 @@ import {
   computeTenure,
   computeTotalBankingExperienceYears,
   fetchEmployee,
+  fetchEmployeeFamilyTree,
   fetchEmployeeHistory,
   fetchEmployees,
   fetchReportingManager,
@@ -60,6 +62,7 @@ export default async function EmployeeDetailPage({
     employeesResult,
     historyResult,
     managerResult,
+    familyTreeResult,
   ] = await Promise.all([
     fetchEmployee(id),
     fetchDepartments(),
@@ -69,6 +72,7 @@ export default async function EmployeeDetailPage({
     fetchEmployees(true),
     fetchEmployeeHistory(id),
     fetchReportingManager(id),
+    fetchEmployeeFamilyTree(id),
   ])
 
   if (!employeeResult.ok) {
@@ -224,6 +228,18 @@ export default async function EmployeeDetailPage({
           removeEducation: removeEducation.bind(null, employee.employeeNumber),
         }}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Family Tree</CardTitle>
+          <CardDescription>
+            Partner/children entered above, plus any parents, siblings, and other family members on file (including anyone bulk-imported via the Family Members module).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {familyTreeResult.ok ? <FamilyTree tree={familyTreeResult.data} /> : <p className="text-sm text-destructive">{familyTreeResult.error}</p>}
+        </CardContent>
+      </Card>
 
       <OnboardingDocumentsSection employee={employee} actingEmployeeId={session?.employeeId ?? ""} />
 

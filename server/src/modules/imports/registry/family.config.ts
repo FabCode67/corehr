@@ -1,14 +1,16 @@
-import { FamilyRelationship, type Prisma } from "@prisma/client"
+import { FamilyRelationship, Gender, type Prisma } from "@prisma/client"
 
 import type { ImportContext, ImportDeps, ImportModuleConfig, ImportRowResult, ImportTemplateColumn } from "./types"
 import { normalizeEnum, normalizeString, parseFlexibleDate, requireField, rowFingerprint, validateDate, validateEnum } from "../validators.util"
 
 const RELATIONSHIP_VALUES = Object.values(FamilyRelationship)
+const GENDER_VALUES = Object.values(Gender)
 
 const COLUMNS: ImportTemplateColumn[] = [
   { key: "employeeNumber", header: "Employee Number", required: true, example: "EMP-0001" },
   { key: "name", header: "Name", required: true, example: "Jean Uwase" },
   { key: "relationship", header: "Relationship", required: true, example: "SPOUSE", description: RELATIONSHIP_VALUES.join(" | ") },
+  { key: "gender", header: "Gender", required: false, example: "FEMALE", description: GENDER_VALUES.join(" | ") },
   { key: "dateOfBirth", header: "Date of Birth", required: false, example: "1990-03-20" },
   { key: "occupation", header: "Occupation", required: false, example: "Teacher" },
   { key: "contactNumber", header: "Contact Number", required: false, example: "+250788000000" },
@@ -36,6 +38,9 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
   const relationshipError = validateEnum(raw["Relationship"], "Relationship", RELATIONSHIP_VALUES)
   if (relationshipError) errors.push(relationshipError)
 
+  const genderError = validateEnum(raw["Gender"], "Gender", GENDER_VALUES)
+  if (genderError) errors.push(genderError)
+
   const dobError = validateDate(raw["Date of Birth"], "Date of Birth")
   if (dobError) errors.push(dobError)
 
@@ -47,6 +52,7 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
     employeeId: employeeNumber,
     name: normalizeString(raw["Name"]),
     relationship: normalizeEnum(raw["Relationship"], RELATIONSHIP_VALUES),
+    gender: normalizeEnum(raw["Gender"], GENDER_VALUES),
     dateOfBirth: parseFlexibleDate(raw["Date of Birth"]),
     occupation: normalizeString(raw["Occupation"]),
     contactNumber: normalizeString(raw["Contact Number"]),
@@ -57,12 +63,21 @@ function validateRow(raw: Record<string, string>, rowNumber: number, ctx: Import
 }
 
 async function applyRow(row: ImportRowResult, tx: Prisma.TransactionClient) {
-  const data = row.data as { employeeId: string; name: string; relationship: string; dateOfBirth?: Date; occupation?: string; contactNumber?: string }
+  const data = row.data as {
+    employeeId: string
+    name: string
+    relationship: string
+    gender?: string
+    dateOfBirth?: Date
+    occupation?: string
+    contactNumber?: string
+  }
   await tx.employeeFamilyMember.create({
     data: {
       employeeId: data.employeeId,
       name: data.name,
       relationship: data.relationship as never,
+      gender: data.gender as never,
       dateOfBirth: data.dateOfBirth,
       occupation: data.occupation,
       contactNumber: data.contactNumber,
