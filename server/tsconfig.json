@@ -20,5 +20,13 @@
     "noFallthroughCasesInSwitch": false,
     "resolveJsonModule": true,
     "esModuleInterop": true
-  }
+  },
+  // hello-prisma is a separate, standalone leftover Nest scaffold project
+  // (its own package.json/node_modules/nest-cli.json) that happens to sit
+  // inside this folder — without this, tsc sweeps its .ts files into this
+  // project's compilation too, which shifts TypeScript's inferred rootDir
+  // up from src/ to the project root and breaks the build output layout
+  // (dist/main.js becomes dist/src/main.js instead) — exactly the cause of
+  // the "Cannot find module dist/main" error seen on Render.
+  "exclude": ["node_modules", "hello-prisma"]
 }
