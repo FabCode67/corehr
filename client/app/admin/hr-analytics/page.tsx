@@ -1,6 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchFunctions, fetchUnits } from "@/lib/api/departments"
@@ -182,8 +181,6 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
           {reportSections.length > 0 ? <CustomReportDialog sections={reportSections} filters={filters} actingEmployeeId={actingEmployeeId} /> : null}
         </div>
       </div>
-
-      <MandatoryTrainingBanner actingEmployeeId={actingEmployeeId} myLearningHref="/staff/learning" />
 
       <Card>
         <CardHeader>
