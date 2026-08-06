@@ -88,6 +88,24 @@ export function BasicInfoForm({ employee, branches, action, submitLabel }: Basic
         </div>
       </div>
 
+      {!employee ? (
+        <div className="flex flex-col gap-1.5 sm:w-1/3">
+          <Label htmlFor="employeeNumber">Staff ID (optional)</Label>
+          <Input
+            id="employeeNumber"
+            name="employeeNumber"
+            placeholder="e.g. EMP-0123 — leave blank to auto-generate"
+            pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,29}"
+            maxLength={30}
+            title="Start with a letter or number; letters, numbers, '.', '_', '-' only; up to 30 characters."
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave blank to auto-generate the next EMP-#### number. Only set this to preserve a known staff ID —
+            e.g. one carried over from a previous system.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="firstName">First name</Label>

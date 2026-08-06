@@ -16,6 +16,12 @@ function trimmedOrUndefined(value: FormDataEntryValue | null) {
 
 function basicInfoPayload(formData: FormData) {
   return {
+    // Only ever present on the create form — the edit form (BasicInfoForm
+    // with an `employee` prop) doesn't render this field at all, so
+    // updateBasicInfo() always sends `undefined` here, which JSON.stringify
+    // drops from the request body. employeeNumber is the Employee table's
+    // primary key; it must never be touched by an update.
+    employeeNumber: trimmedOrUndefined(formData.get("employeeNumber")),
     firstName: trimmedOrUndefined(formData.get("firstName")),
     middleName: trimmedOrUndefined(formData.get("middleName")),
     lastName: trimmedOrUndefined(formData.get("lastName")),

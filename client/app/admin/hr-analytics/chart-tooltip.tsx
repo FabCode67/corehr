@@ -1,15 +1,28 @@
 "use client"
 
-import type { TooltipProps } from "recharts"
-import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent"
+import type { NameType, Payload, ValueType } from "recharts/types/component/DefaultTooltipContent"
 
 /**
  * Shared dark-card tooltip used by every chart on this page, replacing
  * recharts' plain white default box — which looked like a foreign element
  * dropped onto a themed card — with something that matches the rest of the
  * design system (same border/shadow/radius as Popover/Dialog content).
+ *
+ * Props are declared locally (not recharts' own TooltipContentProps) and
+ * all optional on purpose: this component is passed as
+ * `<Tooltip content={<ChartTooltip />} />` with zero props written at that
+ * call site — recharts clones the element and injects active/payload/label
+ * itself at runtime, but TypeScript only sees the bare `<ChartTooltip />`
+ * JSX literal, so every prop TooltipContentProps marks as required would
+ * fail to type-check there even though it's always populated in practice.
  */
-export function ChartTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
+interface ChartTooltipProps {
+  active?: boolean
+  payload?: ReadonlyArray<Payload<ValueType, NameType>>
+  label?: string | number
+}
+
+export function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
 
   return (

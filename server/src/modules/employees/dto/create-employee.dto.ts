@@ -20,12 +20,13 @@ import {
  */
 export class CreateEmployeeDto {
   /** Normally left unset — EmployeesService auto-generates EMP-#### in that
-   *  case. Only meant for migrating employees from a previous system who
-   *  already have a known staff ID that needs to be preserved (see the
-   *  Employees bulk import, which is the main caller of this). Rejected
-   *  with a clear conflict error if it's already taken — see
-   *  EmployeesService.create(). */
-  @ApiPropertyOptional({ description: "Only for preserving a known staff ID when migrating from a previous system. Leave unset to auto-generate EMP-####." })
+   *  case. Settable by an admin creating an employee one at a time (the
+   *  "Staff ID" field on the New Employee form) or via the Employees bulk
+   *  import, for the same reason: preserving a known staff ID (e.g. one
+   *  carried over from a previous system) instead of letting a new one be
+   *  generated. Rejected with a clear conflict error if it's already taken
+   *  — see EmployeesService.create(). */
+  @ApiPropertyOptional({ description: "Optional — set to preserve a known staff ID. Leave unset to auto-generate EMP-####." })
   @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/, { message: "employeeNumber must start with a letter/number and be at most 30 characters (letters, numbers, '.', '_', '-')." })
   @IsOptional()
   employeeNumber?: string
