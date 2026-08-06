@@ -85,3 +85,8 @@ export async function deactivateBranch(id: string) {
   await apiFetch(`/branches/${id}`, { method: "DELETE" })
   revalidatePath("/admin/branches")
 }
+
+export async function activateBranch(id: string) {
+  await apiFetch(`/branches/${id}/activate`, { method: "PATCH" })
+  revalidatePath("/admin/branches")
+}

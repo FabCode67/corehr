@@ -338,6 +338,11 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
         </CardContent>
       </Card>
 
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Key Metrics</h2>
+        <p className="text-sm text-muted-foreground">Headline workforce numbers for the filters above.</p>
+      </div>
+
       {totalStaffResult.ok &&
       averageAgeResult.ok &&
       bandDistributionResult.ok &&
@@ -381,6 +386,13 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
           </CardHeader>
         </Card>
       )}
+
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Charts &amp; Trends</h2>
+        <p className="text-sm text-muted-foreground">
+          Department and demographic breakdowns, plus multi-year hiring, exit, and performance trends.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="lg:col-span-2">

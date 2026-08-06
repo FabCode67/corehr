@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Pagination } from "@/components/ui/pagination"
 import { fetchBranches, fetchBranchesPaginated } from "@/lib/api/branches"
 
-import { deactivateBranch } from "./actions"
+import { activateBranch, deactivateBranch } from "./actions"
 import { LocationsMapLoader } from "./locations-map-client"
 
 export default async function AdminBranchesPage({
@@ -111,6 +111,16 @@ export default async function AdminBranchesPage({
                               className="text-xs font-medium text-destructive hover:underline"
                             >
                               Deactivate
+                            </button>
+                          </form>
+                        ) : null}
+                        {!branch.isActive ? (
+                          <form action={activateBranch.bind(null, branch.id)}>
+                            <button
+                              type="submit"
+                              className="text-xs font-medium text-primary hover:underline"
+                            >
+                              Activate
                             </button>
                           </form>
                         ) : null}

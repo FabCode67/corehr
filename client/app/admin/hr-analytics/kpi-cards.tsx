@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Briefcase, CalendarClock, Layers, TrendingUp, UserRound, Users } from "lucide-react"
+import { ArrowDownRight, ArrowUpRight, Briefcase, CalendarClock, Layers, TrendingUp, UserRound, Users } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import type {
@@ -15,25 +15,55 @@ import type {
 
 /**
  * Richer KPI card treatment: a colored accent strip + icon badge identify
- * each metric at a glance, a big headline number leads, then a small
- * data-dense visualization (segmented bar, mini bar list, or stat rows)
- * and — where a threshold judgment genuinely helps HR triage something —
- * a status pill. Colors reuse the app's existing brand + "extended chart
- * palette" accents (see globals.css / HR Analytics charts elsewhere in this
- * module) rather than introducing new hues, so this stays visually
- * consistent with the rest of the light-themed admin portal.
+ * each metric at a glance, a big headline number leads (paired with a
+ * radial gauge for the two "percent of a whole" metrics — Fill Rate and
+ * Leave Utilization — so those read at a glance without parsing digits),
+ * then a small data-dense visualization (segmented bar, mini bar list, or
+ * stat rows) and — where a threshold judgment genuinely helps HR triage
+ * something — a status pill. Colors reuse the app's existing brand +
+ * "extended chart palette" accents (see globals.css / HR Analytics charts
+ * elsewhere in this module) rather than introducing new hues, so this stays
+ * visually consistent with the rest of the light-themed admin portal.
  */
 
 const ACCENTS = {
-  gold: { bar: "bg-[#B8860B]", text: "text-[#B8860B]", bg: "bg-[#B8860B]/10" },
-  purple: { bar: "bg-[#7F77DD]", text: "text-[#7F77DD]", bg: "bg-[#7F77DD]/10" },
-  mint: { bar: "bg-[#5DCAA5]", text: "text-[#5DCAA5]", bg: "bg-[#5DCAA5]/10" },
-  pink: { bar: "bg-[#D4537E]", text: "text-[#D4537E]", bg: "bg-[#D4537E]/10" },
-  orange: { bar: "bg-[#D85A30]", text: "text-[#D85A30]", bg: "bg-[#D85A30]/10" },
-  navy: { bar: "bg-primary", text: "text-primary", bg: "bg-primary/10" },
+  gold: { bar: "bg-[#B8860B]", text: "text-[#B8860B]", bg: "bg-[#B8860B]/10", hex: "#B8860B" },
+  purple: { bar: "bg-[#7F77DD]", text: "text-[#7F77DD]", bg: "bg-[#7F77DD]/10", hex: "#7F77DD" },
+  mint: { bar: "bg-[#5DCAA5]", text: "text-[#5DCAA5]", bg: "bg-[#5DCAA5]/10", hex: "#5DCAA5" },
+  pink: { bar: "bg-[#D4537E]", text: "text-[#D4537E]", bg: "bg-[#D4537E]/10", hex: "#D4537E" },
+  orange: { bar: "bg-[#D85A30]", text: "text-[#D85A30]", bg: "bg-[#D85A30]/10", hex: "#D85A30" },
+  navy: { bar: "bg-primary", text: "text-primary", bg: "bg-primary/10", hex: "#0A2647" },
 } as const
 
 type Accent = keyof typeof ACCENTS
+
+/** Compact circular progress ring — used wherever a KPI card's headline
+ *  number is itself a percentage, so the shape of "how full/used is this"
+ *  registers before you've even read the digits. Plain SVG (no chart
+ *  library) since it's just two arcs. */
+function RadialGauge({ percent, color, size = 60, strokeWidth = 6 }: { percent: number; color: string; size?: number; strokeWidth?: number }) {
+  const clamped = Math.min(100, Math.max(0, percent))
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference * (1 - clamped / 100)
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90 shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} className="stroke-muted" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        className="transition-[stroke-dashoffset] duration-700 ease-out"
+      />
+    </svg>
+  )
+}
 
 function KpiShell({
   accent,
@@ -42,6 +72,7 @@ function KpiShell({
   value,
   subtitle,
   caveat,
+  gaugePercent,
   children,
   pill,
 }: {
@@ -51,6 +82,7 @@ function KpiShell({
   value: string
   subtitle?: string
   caveat?: string
+  gaugePercent?: number
   children?: ReactNode
   pill?: { tone: "good" | "warn" | "bad"; text: string }
 }) {
@@ -64,20 +96,30 @@ function KpiShell({
     : ""
 
   return (
-    <Card className="gap-0 overflow-hidden py-0">
+    <Card className="group gap-0 overflow-hidden py-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className={`h-1 w-full ${tones.bar}`} />
       <CardContent className="flex flex-col gap-3 pt-4 pb-4">
         <div className="flex items-start justify-between">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</p>
-          <div className={`flex size-7 shrink-0 items-center justify-center rounded-full ${tones.bg}`}>
-            <Icon className={`size-3.5 ${tones.text}`} />
+          <div
+            className={`flex size-8 shrink-0 items-center justify-center rounded-full ${tones.bg} transition-transform duration-200 group-hover:scale-110`}
+          >
+            <Icon className={`size-4 ${tones.text}`} />
           </div>
         </div>
 
-        <div>
-          <p className="text-2xl font-semibold text-foreground">{value}</p>
-          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
-          {caveat ? <p className="text-[11px] text-muted-foreground/70 italic">{caveat}</p> : null}
+        <div className="flex items-center gap-3">
+          {gaugePercent !== undefined ? (
+            <div className="relative flex shrink-0 items-center justify-center">
+              <RadialGauge percent={gaugePercent} color={tones.hex} />
+              <span className="absolute text-xs font-bold text-foreground">{Math.round(gaugePercent)}%</span>
+            </div>
+          ) : null}
+          <div className="min-w-0">
+            <p className="text-3xl leading-tight font-bold tracking-tight text-foreground tabular-nums">{value}</p>
+            {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+            {caveat ? <p className="text-[11px] text-muted-foreground/70 italic">{caveat}</p> : null}
+          </div>
         </div>
 
         {children}
@@ -98,6 +140,23 @@ function SegmentedBar({ segments }: { segments: { value: number; className: stri
         <div key={i} className={s.className} style={{ width: `${total === 0 ? 0 : (s.value / total) * 100}%` }} />
       ))}
     </div>
+  )
+}
+
+function TrendBadge({ changePercent }: { changePercent: number }) {
+  const isUp = changePercent > 0
+  const isFlat = changePercent === 0
+  const Icon = isUp ? ArrowUpRight : ArrowDownRight
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+        isFlat ? "bg-muted text-muted-foreground" : isUp ? "bg-[#D4537E]/15 text-[#b13a5c]" : "bg-[#5DCAA5]/15 text-[#3d8f70]"
+      }`}
+    >
+      {isFlat ? null : <Icon className="size-3" />}
+      {isUp ? "+" : ""}
+      {changePercent}%
+    </span>
   )
 }
 
@@ -227,11 +286,8 @@ export function KpiCards({
             <p className="font-medium text-foreground">{voluntaryExits}</p>
           </div>
           <div>
-            <p className="text-[11px] text-muted-foreground">YoY change</p>
-            <p className={`font-medium ${attritionRate.changePercent > 0 ? "text-[#D4537E]" : "text-foreground"}`}>
-              {attritionRate.changePercent > 0 ? "+" : ""}
-              {attritionRate.changePercent}%
-            </p>
+            <p className="mb-0.5 text-[11px] text-muted-foreground">YoY change</p>
+            <TrendBadge changePercent={attritionRate.changePercent} />
           </div>
         </div>
       </KpiShell>
@@ -243,16 +299,12 @@ export function KpiCards({
         value={`${positionFillRate.fillRate}%`}
         subtitle={`${positionFillRate.filled} of ${positionFillRate.total} positions filled`}
         caveat="Current org structure — not affected by the date filter"
+        gaugePercent={positionFillRate.fillRate}
         pill={fillRatePill(positionFillRate.fillRate)}
       >
-        <div className="flex flex-col gap-1">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-[#D85A30]" style={{ width: `${positionFillRate.fillRate}%` }} />
-          </div>
-          <div className="flex justify-between text-[11px] text-muted-foreground">
-            <span>{positionFillRate.filled} filled</span>
-            <span>{vacant} vacant</span>
-          </div>
+        <div className="flex justify-between text-[11px] text-muted-foreground">
+          <span>{positionFillRate.filled} filled</span>
+          <span>{vacant} vacant</span>
         </div>
       </KpiShell>
 
@@ -262,17 +314,13 @@ export function KpiCards({
         label="Leave Utilization"
         value={`${leaveUtilization.utilizationPercent}%`}
         subtitle={`${leaveUtilization.totalTaken} of ${leaveUtilization.totalEntitlement} days used`}
+        gaugePercent={leaveUtilization.utilizationPercent}
         pill={leaveUtilizationPill(leaveUtilization.utilizationPercent)}
       >
-        <div className="flex flex-col gap-1.5">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary" style={{ width: `${leaveUtilization.utilizationPercent}%` }} />
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            On leave now: <span className="font-medium text-foreground">{leaveUtilization.currentlyOnLeaveCount}</span> employee
-            {leaveUtilization.currentlyOnLeaveCount === 1 ? "" : "s"}
-          </p>
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          On leave now: <span className="font-medium text-foreground">{leaveUtilization.currentlyOnLeaveCount}</span> employee
+          {leaveUtilization.currentlyOnLeaveCount === 1 ? "" : "s"}
+        </p>
       </KpiShell>
     </div>
   )
