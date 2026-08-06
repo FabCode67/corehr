@@ -18,7 +18,7 @@ export default async function AdminSettingsPage() {
           <CardTitle className="text-base">Admin Access</CardTitle>
           <CardDescription>
             Grant or revoke access to the Admin Portal. Admins keep full access to their own Staff Portal too —
-            see “My Staff Dashboard” in the sidebar. At least one admin must always remain.
+            use the “My Profile Portal” switch at the top of the sidebar. At least one admin must always remain.
           </CardDescription>
         </CardHeader>
         <CardContent>

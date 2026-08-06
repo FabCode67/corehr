@@ -47,8 +47,8 @@ export function PortalShell({
   // like "/admin" match every page under it (including other nav items'
   // own subtrees, e.g. "/admin/employees"), highlighting Dashboard
   // everywhere. Only ever matters for hrefs that are a strict prefix of
-  // another nav item's href, but Dashboard's "/admin" now is one, since it
-  // grew its own /admin/executive-dashboard and /admin/hr-analytics tabs.
+  // another nav item's href — "/admin" is one, since /admin/profile,
+  // /admin/hr-analytics, etc. all sit underneath it.
   const activeHref = [...nav]
     .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
@@ -72,6 +72,39 @@ export function PortalShell({
             backgroundRepeat: "repeat",
           }}
         />
+
+        {/* Admins have two portals — this bank-wide Admin Portal and their
+         *  own self-service Staff Portal (same as any employee's "My
+         *  Profile" experience). A regular staff member only ever has the
+         *  one portal, so this switcher only renders for admins — it's not
+         *  gated by which portal is currently open, since Employee.isAdmin
+         *  doesn't change based on which side you're browsing. */}
+        {user.role === "admin" ? (
+          <div className="flex gap-1 border-b border-sidebar-border p-3">
+            <Link
+              href="/admin"
+              className={cn(
+                "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors",
+                portalLabel === "Admin Portal"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              )}
+            >
+              Admin Portal
+            </Link>
+            <Link
+              href="/staff"
+              className={cn(
+                "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors",
+                portalLabel === "Staff Portal"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              )}
+            >
+              My Profile Portal
+            </Link>
+          </div>
+        ) : null}
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {nav.map((item) => {

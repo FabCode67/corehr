@@ -1,14 +1,11 @@
 "use client"
 
 import {
-  ArrowRightLeft,
-  BarChart3,
   Bot,
   Briefcase,
   Building2,
   CalendarDays,
   ClipboardCheck,
-  Clock3,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -29,13 +26,15 @@ import type { SessionUser } from "@/lib/session"
 import { logout } from "../login/actions"
 
 const ADMIN_NAV: PortalNavItem[] = [
-  // Executive Dashboard and HR Analytics used to be their own nav entries —
-  // consolidated under this one "Dashboard" entry, reachable as tabs (see
-  // DashboardTabs) across /admin, /admin/executive-dashboard, and
-  // /admin/hr-analytics, which all still exist as their own routes.
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  // Overview and Executive Summary used to be their own tabs alongside HR
+  // Analytics under this one "Dashboard" entry — both were removed and
+  // folded into HR Analytics per request, so this now points straight at
+  // it ("/admin" itself just redirects here for old links/bookmarks).
+  { label: "HR Analytics", href: "/admin/hr-analytics", icon: LayoutDashboard },
+  // Switching to the Staff Portal ("My Profile") now happens via the
+  // Admin Portal / My Profile Portal toggle at the top of the sidebar, not
+  // a nav entry — see PortalShell.
   { label: "My Profile", href: "/admin/profile", icon: User },
-  { label: "My Staff Dashboard", href: "/staff", icon: ArrowRightLeft },
   { label: "Employees", href: "/admin/employees", icon: Users },
   { label: "Departments", href: "/admin/departments", icon: Building2 },
   { label: "Locations", href: "/admin/branches", icon: MapPin },
@@ -43,7 +42,6 @@ const ADMIN_NAV: PortalNavItem[] = [
   { label: "Recruitment", href: "/admin/recruitment", icon: Briefcase },
   { label: "Onboarding Documents", href: "/admin/onboarding-documents", icon: ClipboardCheck },
   { label: "Leave Management", href: "/admin/leave", icon: CalendarDays },
-  { label: "Attendance", href: "/admin/attendance", icon: Clock3 },
   { label: "Performance", href: "/admin/performance", icon: Target },
   { label: "Learning & Development", href: "/admin/learning", icon: GraduationCap },
   { label: "Forms Management", href: "/admin/forms", icon: FileText },
@@ -53,7 +51,6 @@ const ADMIN_NAV: PortalNavItem[] = [
   { label: "Bulk Imports", href: "/admin/imports", icon: Upload },
   { label: "Email Notifications", href: "/admin/email", icon: Mail },
   { label: "Professional Profiles", href: "/admin/professional-profile/review", icon: UserCircle },
-  { label: "Reports", href: "/admin/reports", icon: BarChart3 },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ]
 

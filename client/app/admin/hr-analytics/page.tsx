@@ -1,9 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
+import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchFunctions, fetchUnits } from "@/lib/api/departments"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { fetchEmployees, formatEnumLabel } from "@/lib/api/employees"
+import { executiveDashboardPdfUrl, fetchExecutiveDashboardOverview } from "@/lib/api/executive-dashboard"
 import {
   exportUrl,
   fetchAttritionRate,
@@ -30,12 +32,11 @@ import {
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 
-import { DashboardTabs } from "../dashboard-tabs"
 import { BarList } from "./bar-list"
 import {
   AgeHistogramChart,
   BandDistributionChart,
-  DepartmentDonutChart,
+  DepartmentBarChart,
   ExitTrendChart,
   HiringExitTrendChart,
   PerformanceBellCurveChart,
@@ -44,8 +45,11 @@ import {
   RatingsByDepartmentChart,
 } from "./charts"
 import { CustomReportDialog } from "./custom-report-dialog"
+import { ExecutiveSummarySection } from "./executive-summary"
 import { KpiCards } from "./kpi-cards"
 import { SavedViewsPanel } from "./saved-views-panel"
+
+const CONTRACT_EXPIRY_WINDOW_DAYS = 90
 
 type SearchParams = Record<string, string | undefined>
 
@@ -101,6 +105,8 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
     learningResult,
     savedViewsResult,
     reportSectionsResult,
+    execOverviewResult,
+    employeesResult,
   ] = await Promise.all([
     fetchFunctions(),
     fetchDepartments(),
@@ -128,6 +134,8 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
     fetchLearningAnalytics(filters, actingEmployeeId),
     fetchSavedViews(actingEmployeeId),
     fetchReportSections(actingEmployeeId),
+    fetchExecutiveDashboardOverview(actingEmployeeId),
+    fetchEmployees(),
   ])
 
   const functions = functionsResult.ok ? functionsResult.data : []
@@ -139,6 +147,17 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
   const bands = bandsResult.ok ? bandsResult.data : []
   const savedViews = savedViewsResult.ok ? savedViewsResult.data : []
   const reportSections = reportSectionsResult.ok ? reportSectionsResult.data : []
+
+  let contractsExpiringCount: number | null = null
+  if (employeesResult.ok) {
+    const now = new Date()
+    const windowEnd = new Date(now.getTime() + CONTRACT_EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    contractsExpiringCount = employeesResult.data.filter((e) => {
+      if (!e.contractEndDate) return false
+      const end = new Date(e.contractEndDate)
+      return end >= now && end <= windowEnd
+    }).length
+  }
 
   const currentYear = new Date().getUTCFullYear()
   const yearOptions = [currentYear - 3, currentYear - 2, currentYear - 1, currentYear, currentYear + 1]
@@ -164,7 +183,7 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
         </div>
       </div>
 
-      <DashboardTabs />
+      <MandatoryTrainingBanner actingEmployeeId={actingEmployeeId} myLearningHref="/staff/learning" />
 
       <Card>
         <CardHeader>
@@ -350,12 +369,28 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
         </Card>
       )}
 
+      {execOverviewResult.ok ? (
+        <ExecutiveSummarySection
+          overview={execOverviewResult.data}
+          pdfUrl={executiveDashboardPdfUrl(actingEmployeeId)}
+          contractsExpiringCount={contractsExpiringCount}
+          contractsExpiringWindowDays={CONTRACT_EXPIRY_WINDOW_DAYS}
+        />
+      ) : (
+        <Card className="border-dashed border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
+            <CardDescription>{execOverviewResult.error}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Employee Distribution by Department</CardTitle>
           </CardHeader>
-          <CardContent>{employeeDistributionResult.ok ? <DepartmentDonutChart data={employeeDistributionResult.data} /> : <p className="text-sm text-destructive">{employeeDistributionResult.error}</p>}</CardContent>
+          <CardContent>{employeeDistributionResult.ok ? <DepartmentBarChart data={employeeDistributionResult.data} /> : <p className="text-sm text-destructive">{employeeDistributionResult.error}</p>}</CardContent>
         </Card>
 
         <Card>
