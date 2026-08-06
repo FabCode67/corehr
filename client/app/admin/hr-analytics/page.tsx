@@ -30,6 +30,7 @@ import {
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 
+import { DashboardTabs } from "../dashboard-tabs"
 import { BarList } from "./bar-list"
 import {
   AgeHistogramChart,
@@ -39,7 +40,7 @@ import {
   HiringExitTrendChart,
   PerformanceBellCurveChart,
   PerformanceVarianceByDepartmentChart,
-  PositionsByDepartmentChart,
+  PositionFillRateChart,
   RatingsByDepartmentChart,
 } from "./charts"
 import { CustomReportDialog } from "./custom-report-dialog"
@@ -162,6 +163,8 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
           {reportSections.length > 0 ? <CustomReportDialog sections={reportSections} filters={filters} actingEmployeeId={actingEmployeeId} /> : null}
         </div>
       </div>
+
+      <DashboardTabs />
 
       <Card>
         <CardHeader>
@@ -348,15 +351,7 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Band Distribution</CardTitle>
-            <CardDescription>Headcount across every band.</CardDescription>
-          </CardHeader>
-          <CardContent>{bandDistributionResult.ok ? <BandDistributionChart data={bandDistributionResult.data} /> : <p className="text-sm text-destructive">{bandDistributionResult.error}</p>}</CardContent>
-        </Card>
-
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Employee Distribution by Department</CardTitle>
           </CardHeader>
@@ -370,7 +365,14 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
           </CardHeader>
           <CardContent>
             {positionFillRateResult.ok ? (
-              <BarList rows={positionFillRateResult.data.byDepartment.map((d) => ({ label: d.name as string, value: d.fillRate as number, sub: `(${d.filled}/${d.total})` }))} />
+              <PositionFillRateChart
+                data={positionFillRateResult.data.byDepartment.map((d) => ({
+                  name: d.name as string,
+                  fillRate: d.fillRate as number,
+                  filled: d.filled as number,
+                  total: d.total as number,
+                }))}
+              />
             ) : (
               <p className="text-sm text-destructive">{positionFillRateResult.error}</p>
             )}
@@ -379,16 +381,10 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
 
         <Card>
           <CardHeader>
-            <CardTitle>Positions by Department</CardTitle>
-            <CardDescription>Total positions (filled + vacant) per department.</CardDescription>
+            <CardTitle>Band Distribution</CardTitle>
+            <CardDescription>Headcount across every band.</CardDescription>
           </CardHeader>
-          <CardContent>
-            {positionFillRateResult.ok ? (
-              <PositionsByDepartmentChart data={positionFillRateResult.data.byDepartment.map((d) => ({ name: d.name as string, total: d.total as number }))} />
-            ) : (
-              <p className="text-sm text-destructive">{positionFillRateResult.error}</p>
-            )}
-          </CardContent>
+          <CardContent>{bandDistributionResult.ok ? <BandDistributionChart data={bandDistributionResult.data} /> : <p className="text-sm text-destructive">{bandDistributionResult.error}</p>}</CardContent>
         </Card>
 
         <Card className="lg:col-span-2">

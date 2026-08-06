@@ -213,6 +213,14 @@ export class ImportsService {
         durationMs,
         rowResults: outcomes as unknown as Prisma.InputJsonValue,
       },
+      // Without this, Prisma's update() only returns scalar fields — the
+      // client's "Imported by {name}" summary (ImportManager, "done" phase)
+      // needs the relation too, same as getJob()/listHistory() below select
+      // it. Missing this is what threw "Cannot read properties of undefined
+      // (reading 'firstName')" client-side right after a successful import.
+      include: {
+        importedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+      },
     })
 
     // Best-effort — an import that succeeded shouldn't be reported as

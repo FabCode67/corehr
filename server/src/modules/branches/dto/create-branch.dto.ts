@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
-import { IsBoolean, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsBoolean, IsLatitude, IsLongitude, IsOptional, IsString, MaxLength } from "class-validator"
 
 export class CreateBranchDto {
   @MaxLength(150)
@@ -21,4 +21,15 @@ export class CreateBranchDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean
+
+  /** Powers the Locations map — see Branch.latitude's schema doc comment. */
+  @ApiPropertyOptional()
+  @IsLatitude()
+  @IsOptional()
+  latitude?: number
+
+  @ApiPropertyOptional()
+  @IsLongitude()
+  @IsOptional()
+  longitude?: number
 }

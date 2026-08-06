@@ -47,11 +47,11 @@ const COLUMNS: ImportTemplateColumn[] = [
   { key: "maritalStatus", header: "Marital Status", required: true, example: "SINGLE", description: MARITAL_STATUS_VALUES.join(" | ") },
   { key: "branch", header: "Branch", required: true, example: "Headquarters" },
   // Kept mutually consistent with real seeded org data (Human Resources
-  // department sits under the Support Functions function, and "Officer –
-  // HR Data Analytics" is a real position in that department) — an
-  // internally-inconsistent example row here would fail validation on the
-  // template's own example, which is exactly what it's meant to prevent.
-  { key: "function", header: "Function", required: false, example: "Support Functions", description: "Required if Department is set." },
+  // department sits under the Support function, and "Officer – HR Data
+  // Analytics" is a real position in that department) — an internally-
+  // inconsistent example row here would fail validation on the template's
+  // own example, which is exactly what it's meant to prevent.
+  { key: "function", header: "Function", required: false, example: "Support", description: "Control | Business | Support. Required if Department is set." },
   { key: "department", header: "Department", required: false, example: "Human Resources" },
   { key: "position", header: "Position", required: false, example: "Officer – HR Data Analytics" },
   { key: "employmentType", header: "Employment Type", required: false, example: "PERMANENT", description: CONTRACT_TYPE_VALUES.join(" | ") },

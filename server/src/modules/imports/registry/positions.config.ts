@@ -15,7 +15,7 @@ import { isBlank, normalizeString, requireField, rowFingerprint } from "../valid
 const COLUMNS: ImportTemplateColumn[] = [
   { key: "code", header: "Position Code", required: true, example: "POS-HR-001" },
   { key: "name", header: "Position Name", required: true, example: "HR Officer" },
-  { key: "function", header: "Function", required: true, example: "Corporate Services" },
+  { key: "function", header: "Function", required: true, example: "Support", description: "Control | Business | Support." },
   { key: "department", header: "Department", required: true, example: "Human Resources" },
   { key: "grade", header: "Grade", required: true, example: "Officer", description: "Maps to Position Level." },
   { key: "reportingPosition", header: "Reporting Position", required: false, example: "HR Manager", description: "Position Code or Position Name of who this position reports to." },

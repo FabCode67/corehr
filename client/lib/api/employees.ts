@@ -199,11 +199,13 @@ export function fetchEmployees(includeInactive = false) {
 /** Paginated version for the Employees admin table — see lib/api/pagination.ts. */
 export function fetchEmployeesPaginated(params: {
   includeInactive?: boolean
+  branchId?: string
   page?: number
   pageSize?: number
 }) {
   const search = new URLSearchParams()
   if (params.includeInactive) search.set("includeInactive", "true")
+  if (params.branchId) search.set("branchId", params.branchId)
   search.set("page", String(params.page ?? 1))
   if (params.pageSize) search.set("pageSize", String(params.pageSize))
   return apiFetchSafe<PaginatedResult<Employee>>(`/employees?${search.toString()}`)

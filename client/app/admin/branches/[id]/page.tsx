@@ -41,7 +41,7 @@ export default async function EditBranchPage({
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
-          Back to branches
+          Back to locations
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">{branch.name}</h1>
       </div>
@@ -51,7 +51,7 @@ export default async function EditBranchPage({
           <CardTitle className="text-base">Details</CardTitle>
           {branch.isHeadquarters ? (
             <CardDescription>
-              This is the headquarters branch — it can&apos;t be deactivated. Mark another branch as
+              This is the headquarters location — it can&apos;t be deactivated. Mark another location as
               headquarters first if you need to retire this one.
             </CardDescription>
           ) : null}

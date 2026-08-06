@@ -141,7 +141,7 @@ export function CourseForm({
           <h3 className="text-sm font-semibold text-foreground">Eligibility restrictions</h3>
           <p className="text-xs text-muted-foreground">
             Leave any of these unset to allow every employee regardless of that dimension. An employee must match
-            every restriction that is set. E.g. Cyber Security Awareness → Technology Function; Leadership Programme
+            every restriction that is set. E.g. Cyber Security Awareness → Support Function; Leadership Programme
             → Manager level and above; Executive Leadership → Managing Director level.
           </p>
         </div>

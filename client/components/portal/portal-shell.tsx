@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { SessionUser } from "@/lib/session"
 
+import { NotificationBell } from "./notification-bell"
+
 export interface PortalNavItem {
   label: string
   href: string
@@ -40,6 +42,17 @@ export function PortalShell({
 }: PortalShellProps) {
   const pathname = usePathname()
 
+  // The single nav item whose href is the longest matching prefix of the
+  // current path — plain per-item startsWith() would make a short href
+  // like "/admin" match every page under it (including other nav items'
+  // own subtrees, e.g. "/admin/employees"), highlighting Dashboard
+  // everywhere. Only ever matters for hrefs that are a strict prefix of
+  // another nav item's href, but Dashboard's "/admin" now is one, since it
+  // grew its own /admin/executive-dashboard and /admin/hr-analytics tabs.
+  const activeHref = [...nav]
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href
+
   return (
     <div className="flex min-h-svh bg-muted/30">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
@@ -62,8 +75,7 @@ export function PortalShell({
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {nav.map((item) => {
-            const active =
-              pathname === item.href || pathname.startsWith(item.href + "/")
+            const active = item.href === activeHref
             const Icon = item.icon
 
             return (
@@ -105,6 +117,7 @@ export function PortalShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
+            <NotificationBell employeeId={user.employeeId} />
             <div className="hidden text-right sm:block">
               <p className="text-sm leading-tight font-medium">{user.name}</p>
               <p className="text-xs leading-tight text-muted-foreground">{user.branch}</p>

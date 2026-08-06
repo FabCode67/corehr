@@ -18,6 +18,7 @@ import { ChangeBandDto } from "./dto/change-band.dto"
 import { CreateEmployeeDto } from "./dto/create-employee.dto"
 import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
+import { SetAdminAccessDto } from "./dto/set-admin-access.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
@@ -38,6 +39,7 @@ export class EmployeesController {
     @Query("departmentId") departmentId?: string,
     @Query("unitId") unitId?: string,
     @Query("positionId") positionId?: string,
+    @Query("branchId") branchId?: string,
     @Query("includeInactive") includeInactive?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string
@@ -46,6 +48,7 @@ export class EmployeesController {
       departmentId,
       unitId,
       positionId,
+      branchId,
       includeInactive: includeInactive === "true",
     }
     // `page` is opt-in: omit it and you get the full array exactly as
@@ -92,6 +95,7 @@ export class EmployeesController {
     @Query("departmentId") departmentId?: string,
     @Query("unitId") unitId?: string,
     @Query("positionId") positionId?: string,
+    @Query("branchId") branchId?: string,
     @Query("includeInactive") includeInactive?: string
   ) {
     const requestedKeys = (columns ?? "").split(",").map((k) => k.trim()).filter(Boolean)
@@ -102,6 +106,7 @@ export class EmployeesController {
         departmentId,
         unitId,
         positionId,
+        branchId,
         includeInactive: includeInactive === "true",
       }),
       this.employeesService.getLineManagersBatch(),
@@ -171,6 +176,13 @@ export class EmployeesController {
   @Post(":id/band")
   changeBand(@Param("id") id: string, @Body() dto: ChangeBandDto) {
     return this.employeesService.changeBand(id, dto)
+  }
+
+  // ---- Admin Access (Settings > Admin Access) -----------------------------
+
+  @Patch(":id/admin-access")
+  setAdminAccess(@Param("id") id: string, @Body() dto: SetAdminAccessDto) {
+    return this.employeesService.setAdminAccess(id, dto.isAdmin)
   }
 
   // ---- Step 4: Family Information -----------------------------------------

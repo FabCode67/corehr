@@ -97,7 +97,7 @@ export function NodeCard({ node, compact = false }: { node: OrgChartNodeData; co
         <span
           className={cn(
             "mb-1 flex w-fit items-center gap-1 rounded-full border border-destructive/50 bg-destructive/20 font-medium tracking-wide text-rose-200 uppercase",
-            compact ? "px-1 py-0.5 text-[8px]" : "absolute -top-2.5 right-2 px-1.5 py-0.5 text-[9px]"
+            compact ? "px-1 py-0.5 text-[8px]" : "px-1.5 py-0.5 text-[9px]"
           )}
         >
           <Circle className="size-1.5 fill-current" />
@@ -134,6 +134,16 @@ export function NodeCard({ node, compact = false }: { node: OrgChartNodeData; co
         {node.level.code ? (
           <span className="rounded bg-[#B8860B]/20 px-1.5 py-0.5 text-[9px] font-semibold text-[#e0b84a]">
             {node.level.code}
+          </span>
+        ) : null}
+        {primaryEmployee?.band ? (
+          <span
+            className={cn(
+              "rounded bg-white/10 px-1.5 py-0.5 font-semibold text-blue-200",
+              compact ? "text-[8px]" : "text-[9px]"
+            )}
+          >
+            {primaryEmployee.band.name}
           </span>
         ) : null}
         {!compact ? (

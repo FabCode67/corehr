@@ -240,7 +240,7 @@ export function ImportManager({ moduleKey, moduleLabel, actingEmployeeId }: { mo
                   <span className="text-right text-foreground">{result.durationMs !== null ? `${(result.durationMs / 1000).toFixed(1)}s` : "—"}</span>
                   <span>Imported by</span>
                   <span className="text-right text-foreground">
-                    {result.importedBy.firstName} {result.importedBy.lastName}
+                    {result.importedBy ? `${result.importedBy.firstName} ${result.importedBy.lastName}` : "—"}
                   </span>
                   <span>Imported on</span>
                   <span className="text-right text-foreground">{new Date(result.completedAt ?? result.createdAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>

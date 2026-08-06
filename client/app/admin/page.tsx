@@ -1,11 +1,12 @@
-import Link from "next/link"
 import { Briefcase, CalendarClock, TrendingUp, Users } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
 import { fetchEmployees } from "@/lib/api/employees"
 import { fetchAttritionRate, fetchRecruitmentAnalytics, fetchTotalStaff } from "@/lib/api/hr-analytics"
 import { getSession } from "@/lib/get-session"
+
+import { DashboardTabs } from "./dashboard-tabs"
 
 const CONTRACT_EXPIRY_WINDOW_DAYS = 90
 
@@ -61,11 +62,14 @@ export default async function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Executive Dashboard</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">
-          Bank-wide HR metrics across employees, recruitment, and workforce trends.
+          Bank-wide HR metrics across employees, recruitment, and workforce trends. See the Executive Summary and
+          HR Analytics tabs below for the full breakdown.
         </p>
       </div>
+
+      <DashboardTabs />
 
       <MandatoryTrainingBanner actingEmployeeId={session?.employeeId ?? ""} myLearningHref="/staff/learning" />
 
@@ -86,23 +90,6 @@ export default async function AdminDashboardPage() {
           )
         })}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Analytics & charts</CardTitle>
-          <CardDescription>
-            Employee distribution, gender &amp; age analysis, turnover, and department/branch comparisons are all available on the full HR Analytics dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link
-            href="/admin/hr-analytics"
-            className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-sm font-medium text-primary hover:bg-muted"
-          >
-            Open HR Analytics Dashboard →
-          </Link>
-        </CardContent>
-      </Card>
     </div>
   )
 }

@@ -24,7 +24,7 @@ import { isBlank, normalizeString, requireField, rowFingerprint } from "../valid
 const COLUMNS: ImportTemplateColumn[] = [
   { key: "code", header: "Department Code", required: true, example: "HR" },
   { key: "name", header: "Department Name", required: true, example: "Human Resources" },
-  { key: "function", header: "Function", required: true, example: "Corporate Services", description: "This schema's grouping directly above Department." },
+  { key: "function", header: "Function", required: true, example: "Support", description: "Control | Business | Support — this schema's grouping directly above Department." },
   {
     key: "parentDepartment",
     header: "Parent Department",

@@ -105,13 +105,22 @@ export function fetchSanctionType(id: string) {
 
 // ---- Disciplinary cases ---------------------------------------------------------
 
+export interface DisciplinaryMeetingInvitee {
+  id: string
+  employee: EmployeeRef
+}
+
 export interface DisciplinaryMeeting {
   id: string
   disciplinaryCaseId: string
+  subject: string | null
   scheduledAt: string
   location: string | null
   notes: string | null
   createdById: string
+  invitees: DisciplinaryMeetingInvitee[]
+  /** When this meeting was scheduled — distinct from `scheduledAt`, the
+   *  meeting's own date/time. */
   createdAt: string
 }
 

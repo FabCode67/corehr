@@ -148,17 +148,9 @@ export async function cancelLeaveRequest(
   return {}
 }
 
-// ---- Notifications --------------------------------------------------------
-
-export async function markNotificationRead(id: string) {
-  await apiFetch(`/notifications/${id}/read`, { method: "PATCH" })
-  revalidateLeavePaths()
-}
-
-export async function markAllNotificationsRead(employeeId: string) {
-  await apiFetch(`/notifications/employee/${employeeId}/read-all`, { method: "POST" })
-  revalidateLeavePaths()
-}
+// Notification mark-read/mark-all-read actions used to live here (leave-scoped
+// only) but were never wired into any UI. Superseded by
+// lib/api/notifications-actions.ts, used by the header notification bell.
 
 // ---- Balances (HR admin) -----------------------------------------------
 

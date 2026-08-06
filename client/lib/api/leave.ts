@@ -22,16 +22,10 @@ export type LeaveRequestStatus =
   | "CANCELLED"
   | "COMPLETED"
 export type ApprovalDecision = "APPROVED" | "REJECTED"
-export type NotificationType =
-  | "LEAVE_SUBMITTED"
-  | "LEAVE_APPROVED"
-  | "LEAVE_REJECTED"
-  | "LEAVE_CANCELLED"
-  | "LEAVE_STARTING_SOON"
-  | "RETURNING_TOMORROW"
-  | "LOW_BALANCE"
-  | "APPROVAL_NEEDED"
-  | "LEAVE_CARRY_FORWARD_EXPIRING"
+// Notification type + fetchers used to live here (leave-scoped only) but
+// were never wired into any UI. Superseded by lib/api/notifications-actions.ts,
+// which covers the full NotificationType enum (leave, learning, ERC, forms,
+// recruitment, exits, imports, professional profile) for the header bell.
 
 export const LEAVE_ENTITLEMENT_CATEGORIES: LeaveEntitlementCategory[] = [
   "PERMANENT",
@@ -237,19 +231,6 @@ export interface LeaveCalendarData {
   holidays: PublicHoliday[]
 }
 
-// ---- Notifications --------------------------------------------------------
-
-export interface LeaveNotification {
-  id: string
-  recipientEmployeeId: string
-  type: NotificationType
-  title: string
-  message: string
-  isRead: boolean
-  relatedLeaveRequestId: string | null
-  createdAt: string
-}
-
 // ---- Analytics --------------------------------------------------------
 
 export interface AnalyticsFilters {
@@ -416,14 +397,6 @@ export function fetchLeaveCalendar(
 ) {
   return apiFetchSafe<LeaveCalendarData>(
     `/leave/requests/calendar${toQuery({ year, month, ...filters })}`
-  )
-}
-
-// ---- Notifications --------------------------------------------------------
-
-export function fetchNotifications(employeeId: string, unreadOnly = false) {
-  return apiFetchSafe<LeaveNotification[]>(
-    `/notifications/employee/${employeeId}${toQuery({ unreadOnly: unreadOnly ? "true" : undefined })}`
   )
 }
 

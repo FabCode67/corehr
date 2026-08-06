@@ -174,14 +174,17 @@ export async function scheduleDisciplinaryMeeting(
   if (!scheduledAt || !createdById) {
     return { error: "A date/time and the scheduler are required." }
   }
+  const inviteeIds = formData.getAll("inviteeIds").map(String).filter(Boolean)
   try {
     await apiFetch(`/employee-relations/cases/${caseId}/meetings`, {
       method: "POST",
       body: JSON.stringify({
+        subject: trimmedOrUndefined(formData.get("subject")),
         scheduledAt,
         createdById,
         location: trimmedOrUndefined(formData.get("location")),
         notes: trimmedOrUndefined(formData.get("notes")),
+        inviteeIds: inviteeIds.length > 0 ? inviteeIds : undefined,
       }),
     })
   } catch (error) {

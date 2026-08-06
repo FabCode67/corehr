@@ -33,6 +33,39 @@ export function BranchForm({ branch, action, submitLabel }: BranchFormProps) {
         <Input id="code" name="code" defaultValue={branch?.code ?? ""} />
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="latitude">Latitude (optional)</Label>
+          <Input
+            id="latitude"
+            name="latitude"
+            type="number"
+            step="any"
+            min={-90}
+            max={90}
+            placeholder="e.g. -1.9536"
+            defaultValue={branch?.latitude ?? ""}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="longitude">Longitude (optional)</Label>
+          <Input
+            id="longitude"
+            name="longitude"
+            type="number"
+            step="any"
+            min={-180}
+            max={180}
+            placeholder="e.g. 30.0605"
+            defaultValue={branch?.longitude ?? ""}
+          />
+        </div>
+      </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Both are needed to plot this location on the map. Right-click a spot on Google Maps and copy the
+        coordinates shown.
+      </p>
+
       <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"

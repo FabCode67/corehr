@@ -169,6 +169,70 @@ async function backfillBranchesFromLegacyWorkLocation(branchesByCode: Map<string
   }
 }
 
+/**
+ * One-time consolidation from the old 6-Function taxonomy down to 3
+ * (Control / Business / Support — see the "Functions & Departments" comment
+ * above). Reassigns any Department still pointing at one of the 6 legacy
+ * Functions to its new home, then soft-deletes the legacy Function row
+ * (mirrors FunctionsService.remove()'s isActive: false — never hard-deleted,
+ * since historical Course/JobRequisition rows may still reference it by id).
+ * Runs BEFORE this seed's own upsertDepartment() calls, so those calls land
+ * on the just-reassigned rows (preserving their id, and therefore every
+ * Position/Employee/PositionHistory already attached to them) instead of
+ * creating empty duplicates. Safe to re-run — a legacy Function with no
+ * Departments left, or already inactive, is a no-op.
+ */
+async function reconcileLegacyFunctions(
+  controlFunction: { id: string },
+  businessFunction: { id: string },
+  supportFunction: { id: string }
+) {
+  const LEGACY_TO_NEW: Record<string, { id: string }> = {
+    "Executive Management": controlFunction,
+    "Risk & Compliance": controlFunction,
+    "Security Functions": controlFunction,
+    "Business Function": businessFunction,
+    "Technology Function": supportFunction,
+    "Support Functions": supportFunction,
+  }
+
+  const legacyFunctions = await prisma.function.findMany({
+    where: { name: { in: Object.keys(LEGACY_TO_NEW) } },
+    include: { departments: true },
+  })
+
+  let reassigned = 0
+  for (const legacy of legacyFunctions) {
+    const target = LEGACY_TO_NEW[legacy.name]
+    if (!target) continue
+
+    for (const dept of legacy.departments) {
+      try {
+        await prisma.department.update({ where: { id: dept.id }, data: { functionId: target.id } })
+        reassigned += 1
+      } catch {
+        // A department of the same name already exists under the target
+        // Function (unique functionId+name) — leave this one under the
+        // legacy Function rather than fail the whole seed run; it needs a
+        // manual rename/merge via the admin Departments page.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `Could not move department "${dept.name}" off legacy Function "${legacy.name}" — a department with that name already exists under the target Function. Reassign it manually.`
+        )
+      }
+    }
+
+    if (legacy.isActive) {
+      await prisma.function.update({ where: { id: legacy.id }, data: { isActive: false } })
+    }
+  }
+
+  if (reassigned > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`Reassigned ${reassigned} department(s) from legacy Functions onto Control/Business/Support.`)
+  }
+}
+
 async function upsertPosition(params: {
   title: string
   departmentId: string
@@ -279,22 +343,32 @@ async function main() {
   }
 
   // ---- Functions & Departments ---------------------------------------------
-  const execFunction = await upsertFunction("Executive Management")
-  const execDept = await upsertDepartment(execFunction.id, "Executive Management")
+  // Only 3 Functions exist now (standard banking "three lines" taxonomy):
+  // Control (oversight/risk/compliance/security), Business (revenue-generating,
+  // customer-facing), Support (back-office enablement). Previously this seed
+  // created 6 separate Functions (Executive Management, Technology Function,
+  // Support Functions, Business Function, Risk & Compliance, Security
+  // Functions) — consolidated per explicit request. `techFunction` is kept as
+  // an alias for `supportFunction` (rather than renaming its many downstream
+  // references below) since Information Technology now rolls up under Support.
+  const controlFunction = await upsertFunction("Control")
+  const businessFunction = await upsertFunction("Business")
+  const supportFunction = await upsertFunction("Support")
+  const techFunction = supportFunction
 
-  const techFunction = await upsertFunction("Technology Function")
-  const itDept = await upsertDepartment(techFunction.id, "Information Technology")
+  // Must run before the upsertDepartment() calls below, so a legacy
+  // Department (with real employees/positions already attached to its id)
+  // gets moved onto the row those calls would otherwise try to (re)create.
+  await reconcileLegacyFunctions(controlFunction, businessFunction, supportFunction)
 
-  const supportFunction = await upsertFunction("Support Functions")
+  const execDept = await upsertDepartment(controlFunction.id, "Executive Management")
+
+  const itDept = await upsertDepartment(supportFunction.id, "Information Technology")
   const hrDept = await upsertDepartment(supportFunction.id, "Human Resources")
   await upsertDepartment(supportFunction.id, "Finance")
 
-  const businessFunction = await upsertFunction("Business Function")
   await upsertDepartment(businessFunction.id, "Retail Banking")
   await upsertDepartment(businessFunction.id, "Corporate Banking")
-
-  await upsertFunction("Risk & Compliance")
-  await upsertFunction("Security Functions")
 
   // ---- IT units --------------------------------------------------------
   const itChannels = await upsertUnit(itDept.id, "IT Channels")
@@ -1498,7 +1572,7 @@ async function seedLearningManagement(params: {
     institutionId: ncbaAcademy.id,
     durationHours: 5,
     deliveryMethod: CourseDeliveryMethod.ONLINE,
-    requiredFunctionId: techFunction.id, // per spec: "Cyber Security Awareness -> Technology Function"
+    requiredFunctionId: techFunction.id, // per spec: "Cyber Security Awareness -> Technology Function" — techFunction now aliases the Support Function (IT rolled up into it), see Control/Business/Support consolidation above
   })
   const workplaceEthicsCourse = await upsertCourse({
     courseCode: "CRS-0006",
@@ -2788,6 +2862,10 @@ async function seedEmployeeRelations(employees: {
   // via NotificationPreference — see EmailService.enqueue(). All bodies are
   // wrapped in a shared branded shell so HR can restyle every email at once
   // by editing this helper, rather than 35 near-duplicate <html> blocks.
+  // The footer's {{hr_contact_phone}} doesn't need to be passed by every
+  // call site — EmailService.enqueue() merges it (and any other future
+  // shared/global variables) into every template's variables automatically,
+  // sourced from HR_CONTACT_PHONE (see .env.example), before rendering.
   function emailShell(title: string, innerHtml: string) {
     return `<div style="font-family: Arial, Helvetica, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
   <div style="background:#0f4c81; padding: 20px 28px; border-radius: 6px 6px 0 0;">
@@ -2797,7 +2875,7 @@ async function seedEmployeeRelations(employees: {
     <h2 style="margin-top:0; color:#0f4c81;">${title}</h2>
     ${innerHtml}
     <p style="margin-top: 32px; font-size: 13px; color: #6b7280;">
-      Questions? Contact HR at {{hr_contact_email}}.<br />
+      Questions? Contact NCBA Rwanda Human Resource at {{hr_contact_phone}}.<br />
       This is an automated message from NCBA Rwanda PeopleSuite &mdash; please do not reply directly to this email.
     </p>
   </div>
@@ -2833,7 +2911,7 @@ async function seedEmployeeRelations(employees: {
         <p>Username: <strong>{{username}}</strong><br />Temporary Password: <strong>{{temporary_password}}</strong></p>
         <p>For security, you'll be asked to change this password and accept the Terms of Use the first time you log in.</p>`
       ),
-      variables: ["employee_name", "employee_number", "department", "position", "start_date", "login_url", "username", "temporary_password", "hr_contact_email"],
+      variables: ["employee_name", "employee_number", "department", "position", "start_date", "login_url", "username", "temporary_password", "hr_contact_phone"],
       isMandatory: true,
     },
 
@@ -3164,6 +3242,25 @@ async function seedEmployeeRelations(employees: {
       variables: ["employee_name", "status"],
     },
 
+    // ---- Employee Relations ---------------------------------------------------
+    {
+      key: "erc_meeting_invitation",
+      name: "Disciplinary Meeting Invitation",
+      category: "employee-relations",
+      subject: "{{meeting_subject}}",
+      bodyHtml: emailShell(
+        "{{meeting_subject}}",
+        `<p>Hi {{invitee_name}}, {{organizer_name}} has invited you to a meeting.</p>
+        <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding:4px 0; color:#6b7280;">Date</td><td style="padding:4px 0; font-weight:bold;">{{meeting_date}}</td></tr>
+          <tr><td style="padding:4px 0; color:#6b7280;">Time</td><td style="padding:4px 0; font-weight:bold;">{{meeting_time}}</td></tr>
+          <tr><td style="padding:4px 0; color:#6b7280;">Location</td><td style="padding:4px 0; font-weight:bold;">{{meeting_location}}</td></tr>
+        </table>
+        <p>{{meeting_description}}</p>`
+      ),
+      variables: ["invitee_name", "organizer_name", "meeting_subject", "meeting_description", "meeting_date", "meeting_time", "meeting_location"],
+    },
+
     // ---- Generic Approvals (Leave / Recruitment / Forms / Training / Performance / Employee changes) ----
     {
       key: "approval_required",
@@ -3227,7 +3324,7 @@ async function seedEmployeeRelations(employees: {
   }
 
   // eslint-disable-next-line no-console
-  console.log(`Seeded Email Notification Templates: ${emailTemplateDefs.length} templates across onboarding/leave/performance/learning/recruitment/exit/approval categories.`)
+  console.log(`Seeded Email Notification Templates: ${emailTemplateDefs.length} templates across onboarding/leave/performance/learning/recruitment/exit/employee-relations/approval categories.`)
 
   // ---- Professional Profile module: starter catalogs -----------------------
   // A handful of real institutions/skills so the searchable dropdowns in the

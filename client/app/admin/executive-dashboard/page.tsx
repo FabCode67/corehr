@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchExecutiveDashboardOverview, executiveDashboardPdfUrl } from "@/lib/api/executive-dashboard"
 import { getSession } from "@/lib/get-session"
 
+import { DashboardTabs } from "../dashboard-tabs"
+
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <Card>
@@ -45,6 +47,7 @@ export default async function ExecutiveDashboardPage() {
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-2xl font-semibold text-foreground">Executive Dashboard</h1>
+        <DashboardTabs />
         <Card className="border-dashed border-destructive/40">
           <CardHeader>
             <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
@@ -73,6 +76,8 @@ export default async function ExecutiveDashboardPage() {
           </Button>
         </a>
       </div>
+
+      <DashboardTabs />
 
       {/* Employee overview */}
       <section className="flex flex-col gap-4">

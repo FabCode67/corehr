@@ -150,12 +150,27 @@ export async function CaseDetail({
           {disciplinaryCase.meetings.length === 0 ? <p className="text-sm text-muted-foreground">No meetings scheduled yet.</p> : null}
           {disciplinaryCase.meetings.map((meeting) => (
             <div key={meeting.id} className="rounded-lg border border-border p-3 text-sm">
-              <p className="font-medium text-foreground">{new Date(meeting.scheduledAt).toLocaleString()}</p>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <p className="font-medium text-foreground">{meeting.subject || "Disciplinary meeting"}</p>
+                <p className="text-xs text-muted-foreground">Scheduled on {new Date(meeting.createdAt).toLocaleString()}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{new Date(meeting.scheduledAt).toLocaleString()}</p>
               {meeting.location ? <p className="text-xs text-muted-foreground">{meeting.location}</p> : null}
               {meeting.notes ? <p className="mt-1 text-sm text-foreground">{meeting.notes}</p> : null}
+              {meeting.invitees.length > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Invited: {meeting.invitees.map((invitee) => `${invitee.employee.firstName} ${invitee.employee.lastName}`).join(", ")}
+                </p>
+              ) : null}
             </div>
           ))}
-          {isHr ? <MeetingForm caseId={disciplinaryCase.id} createdById={actingEmployeeId} /> : null}
+          {isHr ? (
+            <MeetingForm
+              caseId={disciplinaryCase.id}
+              createdById={actingEmployeeId}
+              employees={employees.filter((employee) => employee.employeeNumber !== disciplinaryCase.employeeId)}
+            />
+          ) : null}
         </CardContent>
       </Card>
 

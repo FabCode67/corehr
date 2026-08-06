@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
+import { Select } from "@/components/ui/select"
+import { fetchBranches } from "@/lib/api/branches"
 import {
   computeTenure,
   computeTotalBankingExperienceYears,
@@ -24,6 +26,7 @@ const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
 
 interface SearchParams {
   page?: string
+  branchId?: string
 }
 
 export default async function AdminEmployeesPage({
@@ -31,19 +34,21 @@ export default async function AdminEmployeesPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { page } = await searchParams
+  const { page, branchId } = await searchParams
 
   // Employee records are never deleted — exited employees stay visible
   // (with a status badge) for historical reporting, per the spec.
-  const [result, lineManagersResult, session, exportColumnsResult] = await Promise.all([
-    fetchEmployeesPaginated({ includeInactive: true, page: page ? Number(page) : 1 }),
+  const [result, lineManagersResult, session, exportColumnsResult, branchesResult] = await Promise.all([
+    fetchEmployeesPaginated({ includeInactive: true, branchId, page: page ? Number(page) : 1 }),
     fetchLineManagersBatch(),
     getSession(),
     fetchEmployeeExportColumns(),
+    fetchBranches(),
   ])
   const lineManagers = lineManagersResult.ok ? lineManagersResult.data : {}
   const actingEmployeeId = session?.employeeId ?? ""
   const exportColumns = exportColumnsResult.ok ? exportColumnsResult.data : []
+  const branches = branchesResult.ok ? branchesResult.data : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,6 +67,32 @@ export default async function AdminEmployeesPage({
           </Link>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="py-4">
+          <form method="get" className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Location</label>
+              <Select name="branchId" defaultValue={branchId ?? ""} className="w-48">
+                <option value="">All locations</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
+              Apply
+            </button>
+            {branchId ? (
+              <Link href="/admin/employees" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
+                Reset
+              </Link>
+            ) : null}
+          </form>
+        </CardContent>
+      </Card>
 
       {!result.ok ? (
         <Card className="border-dashed border-destructive/40">
@@ -86,9 +117,11 @@ export default async function AdminEmployeesPage({
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground uppercase">
                 <tr>
+                  <th className="px-4 py-3 font-medium">Staff ID</th>
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Position</th>
                   <th className="px-4 py-3 font-medium">Department / Unit</th>
+                  <th className="px-4 py-3 font-medium">Location Code</th>
                   <th className="px-4 py-3 font-medium">Band</th>
                   <th className="px-4 py-3 font-medium">Line Manager</th>
                   <th className="px-4 py-3 font-medium">Tenure</th>
@@ -102,6 +135,7 @@ export default async function AdminEmployeesPage({
               <tbody className="divide-y divide-border">
                 {result.data.data.map((employee) => (
                   <tr key={employee.employeeNumber} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium text-foreground">{employee.employeeNumber}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">
                         {employee.firstName} {employee.lastName}
@@ -113,6 +147,9 @@ export default async function AdminEmployeesPage({
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {employee.position?.unit?.name ?? employee.position?.department.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {employee.branch?.code ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {employee.band?.name ?? "—"}
@@ -157,6 +194,7 @@ export default async function AdminEmployeesPage({
             total={result.data.total}
             pageSize={result.data.pageSize}
             basePath="/admin/employees"
+            searchParams={{ branchId }}
           />
         </Card>
       )}

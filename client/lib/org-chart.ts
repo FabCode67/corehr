@@ -9,6 +9,9 @@ export interface OrgChartEmployee {
   employeeNumber: string
   firstName: string
   lastName: string
+  /** Band lives on Employee, not Position — see the server's identical
+   *  doc comment on OrgChartNode. */
+  band: { id: string; name: string } | null
 }
 
 export interface OrgChartLevel {

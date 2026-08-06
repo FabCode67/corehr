@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
-import { fetchBranchesPaginated } from "@/lib/api/branches"
+import { fetchBranches, fetchBranchesPaginated } from "@/lib/api/branches"
 
 import { deactivateBranch } from "./actions"
+import { LocationsMapLoader } from "./locations-map-client"
 
 export default async function AdminBranchesPage({
   searchParams,
@@ -14,21 +15,35 @@ export default async function AdminBranchesPage({
   searchParams: Promise<{ page?: string }>
 }) {
   const { page } = await searchParams
-  const result = await fetchBranchesPaginated(page ? Number(page) : 1)
+  const [result, allBranchesResult] = await Promise.all([
+    fetchBranchesPaginated(page ? Number(page) : 1),
+    // Unpaginated — the map plots every location, not just the current page.
+    fetchBranches(),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Branches</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Locations</h1>
           <p className="text-sm text-muted-foreground">
             Headquarters and branch locations employees can be assigned to.
           </p>
         </div>
         <Link href="/admin/branches/new" className={buttonVariants({ size: "sm" })}>
-          New branch
+          New location
         </Link>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Map</CardTitle>
+          <CardDescription>Locations with a latitude/longitude set — edit a location to add coordinates.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LocationsMapLoader branches={allBranchesResult.ok ? allBranchesResult.data : []} />
+        </CardContent>
+      </Card>
 
       {!result.ok ? (
         <Card className="border-dashed border-destructive/40">
@@ -40,7 +55,7 @@ export default async function AdminBranchesPage({
       ) : result.data.data.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No branches yet.{" "}
+            No locations yet.{" "}
             <Link href="/admin/branches/new" className="text-primary underline">
               Create the first one
             </Link>
@@ -73,7 +88,7 @@ export default async function AdminBranchesPage({
                       {branch.isHeadquarters ? (
                         <Badge variant="secondary">Headquarters</Badge>
                       ) : (
-                        <span className="text-muted-foreground">Branch</span>
+                        <span className="text-muted-foreground">Location</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

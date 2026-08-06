@@ -113,16 +113,20 @@ export function AgeHistogramChart({ data }: { data: { bucket: string; count: num
   )
 }
 
-export function PositionsByDepartmentChart({ data }: { data: { name: string; total: number }[] }) {
+/** % of positions filled per department — dataKey is a plain percentage
+ *  (0-100), same rounding as the KPI cards' fill-rate figure. Replaces the
+ *  old "Positions by Department" chart (total headcount only, no sense of
+ *  which departments actually have vacancies) per request. */
+export function PositionFillRateChart({ data }: { data: { name: string; fillRate: number; filled: number; total: number }[] }) {
   if (data.length === 0) return <p className="py-8 text-center text-sm text-muted-foreground">No data yet.</p>
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={50} />
-        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+        <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 100]} />
         <Tooltip />
-        <Bar dataKey="total" name="Positions" fill="#7F77DD" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="fillRate" name="Fill Rate %" fill="#7F77DD" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )

@@ -26,6 +26,18 @@ export interface EnqueueEmailParams {
   relatedEntityId?: string
 }
 
+/** Variables merged into EVERY template's render, on top of whatever the
+ *  caller passed — for values every single email needs regardless of
+ *  which module sent it (currently just the footer's HR contact phone),
+ *  so callers never have to remember to pass them individually. A
+ *  caller-supplied variable of the same name still wins (see
+ *  EmailService.enqueue() below), though no caller does that today. */
+function buildGlobalVariables(): Record<string, string> {
+  return {
+    hr_contact_phone: process.env.HR_CONTACT_PHONE ?? "+250 780 503 242",
+  }
+}
+
 /**
  * The single entry point every module should call to send an HR email —
  * mirrors NotificationsService's create(params, tx?) shape so it's a
@@ -71,8 +83,11 @@ export class EmailService {
       if (!allowed) return null
     }
 
-    const subject = this.render(template.subject, params.variables)
-    const bodyHtml = this.render(template.bodyHtml, params.variables)
+    // Caller-supplied variables win over the global defaults on a name
+    // collision — see buildGlobalVariables()'s doc comment.
+    const variables = { ...buildGlobalVariables(), ...params.variables }
+    const subject = this.render(template.subject, variables)
+    const bodyHtml = this.render(template.bodyHtml, variables)
 
     return client.emailLog.create({
       data: {
@@ -81,7 +96,7 @@ export class EmailService {
         recipientEmployeeId: params.recipientEmployeeId,
         subject,
         bodyHtml,
-        variables: params.variables as Prisma.InputJsonValue,
+        variables: variables as Prisma.InputJsonValue,
         relatedModule: params.relatedModule,
         relatedEntityId: params.relatedEntityId,
         status: "PENDING",

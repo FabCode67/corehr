@@ -14,6 +14,13 @@ function trimmedOrUndefined(value: FormDataEntryValue | null) {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+function numberOrUndefined(value: FormDataEntryValue | null) {
+  const trimmed = String(value ?? "").trim()
+  if (trimmed.length === 0) return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 export async function createBranch(
   _prevState: ActionState | undefined,
   formData: FormData
@@ -21,7 +28,7 @@ export async function createBranch(
   const name = trimmedOrUndefined(formData.get("name"))
 
   if (!name) {
-    return { error: "Branch name is required." }
+    return { error: "Location name is required." }
   }
 
   try {
@@ -31,10 +38,12 @@ export async function createBranch(
         name,
         code: trimmedOrUndefined(formData.get("code")),
         isHeadquarters: formData.get("isHeadquarters") === "on",
+        latitude: numberOrUndefined(formData.get("latitude")),
+        longitude: numberOrUndefined(formData.get("longitude")),
       }),
     })
   } catch (error) {
-    return { error: error instanceof ApiError ? error.message : "Failed to create branch." }
+    return { error: error instanceof ApiError ? error.message : "Failed to create location." }
   }
 
   revalidatePath("/admin/branches")
@@ -49,7 +58,7 @@ export async function updateBranch(
   const name = trimmedOrUndefined(formData.get("name"))
 
   if (!name) {
-    return { error: "Branch name is required." }
+    return { error: "Location name is required." }
   }
 
   try {
@@ -59,10 +68,12 @@ export async function updateBranch(
         name,
         code: trimmedOrUndefined(formData.get("code")),
         isHeadquarters: formData.get("isHeadquarters") === "on",
+        latitude: numberOrUndefined(formData.get("latitude")),
+        longitude: numberOrUndefined(formData.get("longitude")),
       }),
     })
   } catch (error) {
-    return { error: error instanceof ApiError ? error.message : "Failed to update branch." }
+    return { error: error instanceof ApiError ? error.message : "Failed to update location." }
   }
 
   revalidatePath("/admin/branches")

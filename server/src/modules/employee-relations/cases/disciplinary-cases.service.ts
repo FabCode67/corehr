@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { DisciplinaryCaseCategory, DisciplinaryCaseStatus, Prisma } from "@prisma/client"
 
 import { EmployeesService } from "../../employees/employees.service"
+import { EmailService } from "../../email/email.service"
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -23,7 +24,12 @@ const EMPLOYEE_SUMMARY_SELECT = {
 const CASE_INCLUDE = {
   employee: { select: EMPLOYEE_SUMMARY_SELECT },
   reportedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  meetings: { orderBy: { scheduledAt: "desc" as const } },
+  meetings: {
+    orderBy: { scheduledAt: "desc" as const },
+    include: {
+      invitees: { include: { employee: { select: { employeeNumber: true, firstName: true, lastName: true } } } },
+    },
+  },
   investigations: {
     include: { investigator: { select: { employeeNumber: true, firstName: true, lastName: true } } },
     orderBy: { startDate: "desc" as const },
@@ -55,8 +61,20 @@ export class DisciplinaryCasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessService: EmployeeRelationsAccessService,
-    private readonly employeesService: EmployeesService
+    private readonly employeesService: EmployeesService,
+    private readonly emailService: EmailService
   ) {}
+
+  /** Same pattern as InterviewsService — enqueue() already logs internally
+   *  on failure, so a broken/misconfigured mailer should never fail the
+   *  meeting-scheduling request itself. */
+  private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
+    try {
+      await this.emailService.enqueue(params)
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+  }
 
   async findAll(filters: DisciplinaryCaseFilters, actingEmployeeId: string) {
     const scope = await this.accessService.resolveScope(actingEmployeeId)
@@ -168,7 +186,19 @@ export class DisciplinaryCasesService {
   async scheduleMeeting(caseId: string, dto: ScheduleMeetingDto) {
     const disciplinaryCase = await this.findOne(caseId, dto.createdById)
     const meeting = await this.prisma.disciplinaryMeeting.create({
-      data: { disciplinaryCaseId: caseId, scheduledAt: dto.scheduledAt, location: dto.location, notes: dto.notes, createdById: dto.createdById },
+      data: {
+        disciplinaryCaseId: caseId,
+        subject: dto.subject,
+        scheduledAt: dto.scheduledAt,
+        location: dto.location,
+        notes: dto.notes,
+        createdById: dto.createdById,
+        invitees: dto.inviteeIds?.length ? { create: dto.inviteeIds.map((employeeId) => ({ employeeId })) } : undefined,
+      },
+      include: {
+        createdBy: { select: { firstName: true, lastName: true } },
+        invitees: { include: { employee: { select: { employeeNumber: true, firstName: true, lastName: true, email: true } } } },
+      },
     })
     await this.log(caseId, "MEETING_SCHEDULED", dto.createdById, dto.notes)
     await this.notify(
@@ -177,6 +207,33 @@ export class DisciplinaryCasesService {
       "Disciplinary meeting scheduled",
       `A meeting has been scheduled for ${dto.scheduledAt.toLocaleString()} regarding case ${disciplinaryCase.caseNumber}.`
     )
+
+    // Invitee emails deliberately carry only the meeting's own subject/
+    // description/date/location — never the case number, category, or the
+    // employee it concerns — see DisciplinaryMeetingInvitee's schema doc
+    // comment on why. Sent in-app-notified employee is excluded from this
+    // fan-out on purpose: they're already covered by the notify() call above.
+    const meetingSubject = meeting.subject?.trim() || "Disciplinary meeting"
+    const organizerName = `${meeting.createdBy.firstName} ${meeting.createdBy.lastName}`
+    for (const invitee of meeting.invitees) {
+      await this.safeSendEmail({
+        templateKey: "erc_meeting_invitation",
+        recipientEmail: invitee.employee.email,
+        recipientEmployeeId: invitee.employee.employeeNumber,
+        relatedModule: "employee-relations",
+        relatedEntityId: meeting.id,
+        variables: {
+          invitee_name: `${invitee.employee.firstName} ${invitee.employee.lastName}`,
+          organizer_name: organizerName,
+          meeting_subject: meetingSubject,
+          meeting_description: meeting.notes ?? "",
+          meeting_date: meeting.scheduledAt.toISOString().slice(0, 10),
+          meeting_time: meeting.scheduledAt.toISOString().slice(11, 16),
+          meeting_location: meeting.location ?? "Not specified",
+        },
+      })
+    }
+
     return meeting
   }
 

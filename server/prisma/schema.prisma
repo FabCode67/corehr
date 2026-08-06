@@ -258,6 +258,12 @@ model Branch {
   code           String? @unique
   isHeadquarters Boolean @default(false)
   isActive       Boolean @default(true)
+  /// Optional — only set if HR fills in the location's coordinates (e.g.
+  /// copied from Google Maps). Powers the Locations map on the admin
+  /// Locations page (client/app/admin/branches). A location with either of
+  /// these unset simply isn't plotted, no backfill required.
+  latitude       Float?
+  longitude      Float?
 
   employees Employee[]
   performanceReviews PerformanceReview[]
@@ -431,8 +437,11 @@ model Employee {
   /// global `omit` config in PrismaService.
   passwordHash String?
   /// Grants access to the Admin portal (see middleware.ts). Defaults to
-  /// false — HR/IT sets this manually (e.g. via seed) for the handful of
-  /// people who administer the system; every other employee is staff-only.
+  /// false — seeded manually for the first admin(s); from there, any admin
+  /// can grant/revoke it for anyone else via Settings > Admin Access (see
+  /// EmployeesService.setAdminAccess()). Every other employee is staff-only.
+  /// An admin is still also an employee and keeps full access to their own
+  /// Staff Portal — see middleware.ts's admin-into-/staff carve-out.
   isAdmin      Boolean @default(false)
 
   /// First Login Security (Email Notification & Automation module). Set to
@@ -612,6 +621,7 @@ model Employee {
   disciplinaryCasesAsSubject  DisciplinaryCase[]          @relation("DisciplinaryCaseEmployee")
   disciplinaryCasesReported   DisciplinaryCase[]          @relation("DisciplinaryCaseReporter")
   disciplinaryMeetingsCreated DisciplinaryMeeting[]       @relation("MeetingCreator")
+  disciplinaryMeetingInvites  DisciplinaryMeetingInvitee[] @relation("DisciplinaryMeetingInvitee")
   investigationsConducted     Investigation[]             @relation("Investigator")
   sanctionsReceived           Sanction[]                  @relation("SanctionEmployee")
   sanctionsIssued             Sanction[]                  @relation("SanctionIssuer")
@@ -3207,18 +3217,47 @@ model DisciplinaryCase {
 model DisciplinaryMeeting {
   id                 String   @id @default(uuid()) @db.Uuid
   disciplinaryCaseId String   @db.Uuid
+  /// Short title shown in the invitee email's subject line — distinct from
+  /// `notes`, which is the free-text description. Optional so existing
+  /// meetings (scheduled before this field existed) don't need a backfill.
+  subject            String?
   scheduledAt        DateTime
   location           String?
   notes              String?
   createdById        String
 
-  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id])
-  createdBy        Employee         @relation("MeetingCreator", fields: [createdById], references: [employeeNumber])
+  disciplinaryCase DisciplinaryCase             @relation(fields: [disciplinaryCaseId], references: [id])
+  createdBy        Employee                     @relation("MeetingCreator", fields: [createdById], references: [employeeNumber])
+  invitees         DisciplinaryMeetingInvitee[]
 
   createdAt DateTime @default(now())
 
   @@index([disciplinaryCaseId])
   @@map("disciplinary_meetings")
+}
+
+/// Staff invited to a DisciplinaryMeeting beyond the case's own employee
+/// (who's notified separately via the in-app ERC_MEETING_SCHEDULED
+/// notification — see DisciplinaryCasesService.scheduleMeeting()) — e.g.
+/// witnesses, panel members, the line manager. Purely a notification
+/// mechanism: being invited does NOT grant any new visibility into the
+/// underlying DisciplinaryCase (EmployeeRelationsAccessService is
+/// unaffected by this model), and the invitation email only ever includes
+/// the meeting's own subject/description/date/location — never the case
+/// number, category, or the employee it concerns — so inviting someone
+/// without case access can't leak confidential case details.
+model DisciplinaryMeetingInvitee {
+  id         String @id @default(uuid()) @db.Uuid
+  meetingId  String @db.Uuid
+  employeeId String
+
+  meeting  DisciplinaryMeeting @relation(fields: [meetingId], references: [id])
+  employee Employee            @relation("DisciplinaryMeetingInvitee", fields: [employeeId], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, employeeId])
+  @@map("disciplinary_meeting_invitees")
 }
 
 /// Permanently linked to its DisciplinaryCase — see module doc comment.

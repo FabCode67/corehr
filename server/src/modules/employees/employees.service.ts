@@ -73,13 +73,15 @@ export class EmployeesService {
     departmentId?: string
     unitId?: string
     positionId?: string
+    branchId?: string
     includeInactive?: boolean
   }): Prisma.EmployeeWhereInput {
-    const { departmentId, unitId, positionId, includeInactive } = params
+    const { departmentId, unitId, positionId, branchId, includeInactive } = params
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
       ...(positionId ? { positionId } : {}),
+      ...(branchId ? { branchId } : {}),
       ...(departmentId || unitId
         ? {
             position: {
@@ -98,6 +100,7 @@ export class EmployeesService {
     departmentId?: string
     unitId?: string
     positionId?: string
+    branchId?: string
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
@@ -114,6 +117,7 @@ export class EmployeesService {
       departmentId?: string
       unitId?: string
       positionId?: string
+      branchId?: string
       includeInactive?: boolean
     } = {},
     page?: number,
@@ -147,6 +151,7 @@ export class EmployeesService {
     departmentId?: string
     unitId?: string
     positionId?: string
+    branchId?: string
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
@@ -193,17 +198,16 @@ export class EmployeesService {
    * CreateEmployeeDto.employeeNumber's doc comment — that's only meant for
    * preserving a legacy staff ID during a bulk migration import).
    *
-   * This is also the trigger point for the Employee Welcome Email and
-   * First Login Security (mustChangePassword/temporaryPasswordExpiresAt).
-   * The spec frames the welcome email as firing on a "Pending Onboarding ->
-   * Active Employee" status transition, but this schema has no such
-   * intermediate status — EmploymentStatus is just ACTIVE/EXIT, and every
-   * employee is created ACTIVE with a real login from day one (see the
-   * bcrypt.hash call below). So the closest, unambiguous equivalent in
-   * this codebase is "employee record created" — this is a deliberate
-   * scope decision, not an oversight. Position/department are frequently
-   * still unset at this point (they're a later step), so the welcome
-   * email's variable renderer below falls back to "To be assigned".
+   * First Login Security (mustChangePassword/temporaryPasswordExpiresAt) is
+   * set up here, since login credentials exist from day one. The Employee
+   * Welcome Email itself, however, is deliberately NOT sent here anymore —
+   * an earlier version of this method fired it at creation, before
+   * position/department were ever knowable, so it always read "To be
+   * assigned"/"To be confirmed". It's now sent from assignPosition()
+   * instead, the first time a position is actually assigned (see that
+   * method's doc comment) — the tradeoff being login credentials arrive a
+   * step later than before, once the wizard's Position Assignment step is
+   * complete, rather than immediately at creation.
    */
   async create(dto: CreateEmployeeDto) {
     // Every new employee gets a real login from day one — default password,
@@ -233,31 +237,6 @@ export class EmployeesService {
         // Leave follows once a contract type is set (see
         // updateEmploymentDetails below).
         await this.leaveBalancesService.ensureBalancesForEmployee(employee.employeeNumber)
-
-        // Best-effort: a broken email template or transient DB hiccup here
-        // must never roll back a successful employee creation.
-        try {
-          await this.emailService.enqueue({
-            templateKey: "employee_welcome",
-            recipientEmail: employee.email,
-            recipientEmployeeId: employee.employeeNumber,
-            relatedModule: "employees",
-            relatedEntityId: employee.employeeNumber,
-            variables: {
-              employee_name: `${employee.firstName} ${employee.lastName}`,
-              employee_number: employee.employeeNumber,
-              department: employee.position?.department?.name ?? "To be assigned",
-              position: employee.position?.title ?? "To be assigned",
-              start_date: employee.employmentStartDate ? employee.employmentStartDate.toISOString().slice(0, 10) : "To be confirmed",
-              login_url: buildClientUrl("/login"),
-              username: employee.email,
-              temporary_password: DEFAULT_EMPLOYEE_PASSWORD,
-            },
-          })
-        } catch {
-          // EmailService.enqueue() already logs internally; nothing further
-          // to do here except make sure it can't fail employee creation.
-        }
 
         return employee
       } catch (error) {
@@ -365,51 +344,95 @@ export class EmployeesService {
    * wizard step", not a formal transfer. Once the employee is fully
    * onboarded, use transferPosition/changeBand for real position changes,
    * which always open a new history row and close the old one.
+   *
+   * This is also the trigger point for the Employee Welcome Email (moved
+   * here from create() — see that method's doc comment for why): it fires
+   * exactly once per employee, precisely when `openHistory` is null, i.e.
+   * the very first real position assignment. Later calls to this same
+   * method while still revising the wizard step (openHistory already
+   * exists) don't resend it, and neither does a later formal transfer
+   * (that's a different method entirely). By this point department,
+   * position, and start date are always real values — no more "To be
+   * assigned"/"To be confirmed" placeholders.
    */
   async assignPosition(id: string, dto: AssignPositionDto) {
     await this.findOne(id)
     await this.assertPositionExists(dto.positionId)
     await this.assertBandExists(dto.bandId)
 
-    return this.prisma.$transaction(async (tx) => {
-      const openHistory = await tx.positionHistory.findFirst({
-        where: { employeeId: id, effectiveTo: null },
-      })
-
-      if (openHistory) {
-        await tx.positionHistory.update({
-          where: { id: openHistory.id },
-          data: { positionId: dto.positionId, bandId: dto.bandId, effectiveFrom: dto.effectiveFrom },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const openHistory = await tx.positionHistory.findFirst({
+          where: { employeeId: id, effectiveTo: null },
         })
-      } else {
-        await tx.positionHistory.create({
+        const isInitialHire = !openHistory
+
+        if (openHistory) {
+          await tx.positionHistory.update({
+            where: { id: openHistory.id },
+            data: { positionId: dto.positionId, bandId: dto.bandId, effectiveFrom: dto.effectiveFrom },
+          })
+        } else {
+          await tx.positionHistory.create({
+            data: {
+              employeeId: id,
+              positionId: dto.positionId,
+              bandId: dto.bandId,
+              changeType: PositionChangeType.INITIAL_HIRE,
+              effectiveFrom: dto.effectiveFrom,
+            },
+          })
+        }
+
+        const employee = await tx.employee.update({
+          where: { employeeNumber: id },
           data: {
-            employeeId: id,
             positionId: dto.positionId,
             bandId: dto.bandId,
-            changeType: PositionChangeType.INITIAL_HIRE,
-            effectiveFrom: dto.effectiveFrom,
+            ...(dto.reportingManagerOverrideId !== undefined
+              ? { reportingManagerOverrideId: dto.reportingManagerOverrideId }
+              : {}),
           },
+          include: EMPLOYEE_DETAIL_INCLUDE,
         })
-      }
 
-      return tx.employee.update({
-        where: { employeeNumber: id },
-        data: {
-          positionId: dto.positionId,
-          bandId: dto.bandId,
-          ...(dto.reportingManagerOverrideId !== undefined
-            ? { reportingManagerOverrideId: dto.reportingManagerOverrideId }
-            : {}),
-        },
-        include: EMPLOYEE_DETAIL_INCLUDE,
+        return { employee, isInitialHire }
+      }, TRANSACTION_OPTIONS)
+      .then(async ({ employee, isInitialHire }) => {
+        // Being placed in the Managing Director position changes the Annual
+        // Leave entitlement category, so re-resolve it here too.
+        await this.leaveBalancesService.ensureBalancesForEmployee(id)
+
+        if (isInitialHire) {
+          // Best-effort: a broken email template or transient DB hiccup here
+          // must never fail a successful position assignment.
+          try {
+            await this.emailService.enqueue({
+              templateKey: "employee_welcome",
+              recipientEmail: employee.email,
+              recipientEmployeeId: employee.employeeNumber,
+              relatedModule: "employees",
+              relatedEntityId: employee.employeeNumber,
+              variables: {
+                employee_name: `${employee.firstName} ${employee.lastName}`,
+                employee_number: employee.employeeNumber,
+                department: employee.position?.department?.name ?? "To be assigned",
+                position: employee.position?.title ?? "To be assigned",
+                start_date: employee.employmentStartDate ? employee.employmentStartDate.toISOString().slice(0, 10) : "To be confirmed",
+                login_url: buildClientUrl("/login"),
+                username: employee.email,
+                temporary_password: DEFAULT_EMPLOYEE_PASSWORD,
+              },
+            })
+          } catch {
+            // EmailService.enqueue() already logs internally; nothing
+            // further to do here except make sure it can't fail the
+            // position assignment itself.
+          }
+        }
+
+        return employee
       })
-    }, TRANSACTION_OPTIONS).then(async (employee) => {
-      // Being placed in the Managing Director position changes the Annual
-      // Leave entitlement category, so re-resolve it here too.
-      await this.leaveBalancesService.ensureBalancesForEmployee(id)
-      return employee
-    })
   }
 
   async deactivate(id: string) {
@@ -574,6 +597,41 @@ export class EmployeesService {
   }
 
   // ---- Step 4: Family Information ---------------------------------------
+
+  /**
+   * Admin Access management (Settings > Admin Access). isAdmin is a plain
+   * boolean on Employee (see its schema doc comment) that AuthService's
+   * login flow reads to decide session.role — this is the first place in
+   * the app that lets an admin flip it for someone else through the UI
+   * rather than editing the seed/DB directly. Two guardrails:
+   *   - Can't grant admin access to an inactive/exited employee — the
+   *     account would have no password-login path worth protecting anyway.
+   *   - Can't revoke the very last remaining admin — this app has no
+   *     "forgot password"/superuser recovery flow (see AuthService's doc
+   *     comment), so that would permanently lock everyone out of /admin.
+   */
+  async setAdminAccess(id: string, isAdmin: boolean) {
+    const employee = await this.findOne(id)
+
+    if (isAdmin && !employee.isActive) {
+      throw new BadRequestException("Cannot grant admin access to an inactive employee.")
+    }
+
+    if (!isAdmin && employee.isAdmin) {
+      const otherAdmins = await this.prisma.employee.count({
+        where: { isAdmin: true, isActive: true, employeeNumber: { not: id } },
+      })
+      if (otherAdmins === 0) {
+        throw new BadRequestException("Cannot remove admin access from the last remaining admin.")
+      }
+    }
+
+    return this.prisma.employee.update({
+      where: { employeeNumber: id },
+      data: { isAdmin },
+      include: EMPLOYEE_DETAIL_INCLUDE,
+    })
+  }
 
   async updatePartner(id: string, dto: UpdatePartnerDto) {
     await this.findOne(id)

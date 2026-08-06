@@ -8,7 +8,15 @@ export interface OrgChartNode {
   department: { id: string; name: string }
   unit: { id: string; name: string } | null
   level: { id: string; name: string; code: string | null; rank: number; track: string }
-  employees: { employeeNumber: string; firstName: string; lastName: string }[]
+  employees: {
+    employeeNumber: string
+    firstName: string
+    lastName: string
+    /** Band lives on Employee, not Position (a position is a reusable
+     *  role/template multiple employees can hold — see Position's schema
+     *  doc comment) — null only if that employee's band is somehow unset. */
+    band: { id: string; name: string } | null
+  }[]
   directReports: OrgChartNode[]
 }
 
@@ -34,7 +42,7 @@ export class OrgChartService {
         level: { select: { id: true, name: true, code: true, rank: true, track: true } },
         employees: {
           where: { isActive: true },
-          select: { employeeNumber: true, firstName: true, lastName: true },
+          select: { employeeNumber: true, firstName: true, lastName: true, band: { select: { id: true, name: true } } },
         },
       },
       orderBy: { title: "asc" },

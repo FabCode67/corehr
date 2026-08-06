@@ -7,6 +7,8 @@ export interface Branch {
   code: string | null
   isHeadquarters: boolean
   isActive: boolean
+  latitude: number | null
+  longitude: number | null
 }
 
 /** Full, unpaginated list — used by the employee form and leave filter bars
