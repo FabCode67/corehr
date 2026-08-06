@@ -31,9 +31,22 @@ type PinnedBranch = Branch & { latitude: number; longitude: number }
  * Loaded via next/dynamic with ssr:false from locations-map-client.tsx —
  * Leaflet touches `window`/`document` at import time, so this component can
  * never run server-side.
+ *
+ * The guard below checks more than `!== null` on purpose: a stale Prisma
+ * Client on the API (schema migrated, but `prisma generate` not re-run
+ * since) serves Branch rows with latitude/longitude missing entirely
+ * (`undefined`, not `null`), which Leaflet's LatLng constructor throws a
+ * hard, uncaught "Invalid LatLng object" error on — crashing this whole
+ * page instead of falling back to the empty state below.
  */
 export function LocationsMap({ branches }: { branches: Branch[] }) {
-  const pinned = branches.filter((branch): branch is PinnedBranch => branch.latitude !== null && branch.longitude !== null)
+  const pinned = branches.filter(
+    (branch): branch is PinnedBranch =>
+      typeof branch.latitude === "number" &&
+      typeof branch.longitude === "number" &&
+      Number.isFinite(branch.latitude) &&
+      Number.isFinite(branch.longitude)
+  )
 
   if (pinned.length === 0) {
     return (
