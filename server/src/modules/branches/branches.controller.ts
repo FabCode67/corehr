@@ -45,4 +45,9 @@ export class BranchesController {
   remove(@Param("id", ParseUUIDPipe) id: string) {
     return this.branchesService.remove(id)
   }
+
+  @Patch(":id/activate")
+  activate(@Param("id", ParseUUIDPipe) id: string) {
+    return this.branchesService.activate(id)
+  }
 }

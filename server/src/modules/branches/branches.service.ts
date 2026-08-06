@@ -94,6 +94,13 @@ export class BranchesService {
     return this.prisma.branch.update({ where: { id }, data: { isActive: false } })
   }
 
+  /** Reverses remove() — no guardrails needed since re-activating never
+   *  conflicts with anything (unlike deactivating the headquarters). */
+  async activate(id: string) {
+    await this.findOne(id)
+    return this.prisma.branch.update({ where: { id }, data: { isActive: true } })
+  }
+
   private async assertNameAvailable(name: string, excludeId?: string) {
     const existing = await this.prisma.branch.findFirst({
       where: { name, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
