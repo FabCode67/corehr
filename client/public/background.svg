@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080"
+     preserveAspectRatio="xMidYMid slice">
+
+  <rect width="1920" height="1080" fill="#1c1311"/>
+
+  <!-- Large NCBA-inspired angular ribbon forms -->
+  <g fill="#271c1a">
+
+    <!-- top-left cropped ribbon -->
+    <path d="M0 0H335
+             C350 18 365 32 382 49
+             L0 49Z"/>
+
+    <path d="M0 134H365
+             L315 190
+             L190 365
+             L106 311
+             L185 218
+             L47 218
+             Z"/>
+
+    <!-- upper middle-left diagonal -->
+    <path d="M580 0H760
+             L554 165
+             L445 165
+             L565 28
+             Z"/>
+
+    <!-- tall center vertical -->
+    <path d="M665 0H748V165H665Z"/>
+
+    <!-- upper right pointed ribbon -->
+    <path d="M915 0H1140
+             L1000 72
+             L915 112
+             Z"/>
+
+    <path d="M1000 70
+             L1150 0H1325
+             L1180 140
+             L1000 230Z"/>
+
+    <!-- central-left long chevron -->
+    <path d="M375 249
+             H748
+             C735 265 718 280 700 296
+             L520 470
+             L435 406
+             L520 334
+             H305
+             Z"/>
+
+    <!-- central main ribbon with pointed end -->
+    <path d="M620 249
+             H1090
+             L930 390
+             L748 470
+             L680 405
+             L820 334
+             H520
+             Z"/>
+
+    <!-- middle vertical diagonal -->
+    <path d="M1140 0
+             H1220
+             V165
+             H1140Z"/>
+
+    <!-- right upper angular ribbon -->
+    <path d="M1500 0
+             H1730
+             L1665 70
+             L1515 140
+             L1515 36Z"/>
+
+    <!-- large right-middle ribbon -->
+    <path d="M1515 250
+             H1920
+             V398
+             L1700 590
+             L1515 770
+             V560
+             L1700 398
+             H1515Z"/>
+
+    <!-- central lower diagonal -->
+    <path d="M830 600
+             L1050 405
+             L1050 545
+             L870 705
+             L800 635Z"/>
+
+    <!-- lower middle -->
+    <path d="M1050 590
+             L1260 405
+             V630
+             L1125 755
+             Z"/>
+
+    <!-- lower-right large form -->
+    <path d="M1515 760
+             L1760 535
+             H1920
+             V800
+             L1690 1010
+             L1515 1080Z"/>
+
+    <!-- bottom-left -->
+    <path d="M0 900
+             L230 700
+             L310 770
+             L170 900
+             H500
+             L700 1080
+             H0Z"/>
+
+    <!-- bottom center pointed -->
+    <path d="M700 1080
+             L900 895
+             L1080 1080Z"/>
+
+    <!-- bottom-right -->
+    <path d="M1150 900
+             L1350 700
+             L1450 800
+             L1300 950
+             L1450 1080
+             H1150Z"/>
+  </g>
+
+  <!-- subtle second layer for depth -->
+  <g fill="#2b201e" opacity="0.42">
+    <path d="M0 50H370L305 135H0Z"/>
+    <path d="M490 0H580L445 165H380Z"/>
+    <path d="M1180 250H1450L1300 390H1130Z"/>
+    <path d="M900 720L1120 520L1180 580L980 770Z"/>
+  </g>
+</svg>

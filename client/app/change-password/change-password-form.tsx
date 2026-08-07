@@ -25,9 +25,10 @@ export function ChangePasswordForm({ name }: { name: string }) {
     <div
       className="flex min-h-svh items-center justify-center bg-muted/40 p-6"
       style={{
-        backgroundImage: "url(/patterns/kitenge-light.svg)",
-        backgroundSize: "140px 200px",
-        backgroundRepeat: "repeat",
+        backgroundImage: "url(/background.svg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
       }}
     >
       <Card className="w-full max-w-sm">

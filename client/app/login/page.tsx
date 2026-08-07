@@ -26,21 +26,14 @@ export default function LoginPage() {
     <div
       className="flex min-h-svh items-center justify-center bg-muted/40 p-6"
       style={{
-        backgroundImage: "url(/patterns/kitenge-light.svg)",
-        backgroundSize: "140px 200px",
-        backgroundRepeat: "repeat",
+        backgroundImage: "url(/background.svg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
       }}
     >
       <Card className="w-full max-w-sm gap-0 overflow-hidden py-0">
-        <div
-          aria-hidden="true"
-          className="h-2 w-full"
-          style={{
-            backgroundImage: "url(/patterns/kitenge-dark.svg)",
-            backgroundSize: "90px 106px",
-            backgroundRepeat: "repeat",
-          }}
-        />
+        <div aria-hidden="true" className="h-2 w-full bg-primary" />
         <div className="flex flex-col gap-6 py-6">
           <CardHeader>
             <div className="mb-1 flex items-center gap-2.5">

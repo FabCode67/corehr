@@ -56,20 +56,8 @@ const FEATURES = [
   },
 ]
 
-function KitengeDivider() {
-  return (
-    <div
-      aria-hidden="true"
-      className="h-6 w-full sm:h-8"
-      style={{
-        backgroundColor: "#3B2412",
-        backgroundImage: "url(/patterns/kitenge-dark.svg)",
-        backgroundSize: "110px 130px",
-        backgroundRepeat: "repeat",
-        backgroundPosition: "center",
-      }}
-    />
-  )
+function SectionDivider() {
+  return <div aria-hidden="true" className="h-6 w-full sm:h-8" style={{ backgroundColor: "#1c1311" }} />
 }
 
 export default function LandingPage() {
@@ -92,9 +80,10 @@ export default function LandingPage() {
           aria-hidden="true"
           className="absolute inset-0 opacity-95"
           style={{
-            backgroundImage: "url(/patterns/kitenge-dark.svg)",
-            backgroundSize: "220px 260px",
-            backgroundRepeat: "repeat",
+            backgroundImage: "url(/background.svg)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-primary/70 via-primary/55 to-primary" />
@@ -127,7 +116,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <KitengeDivider />
+      <SectionDivider />
 
       <section className="mx-auto max-w-5xl px-6 py-16">
         <div className="mx-auto mb-8 max-w-2xl text-center">
@@ -182,7 +171,7 @@ export default function LandingPage() {
         })}
       </section>
 
-      <KitengeDivider />
+      <SectionDivider />
 
       <footer className="flex flex-col items-center gap-2 border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
         <img src="/ncba-logo-dark.svg" alt="NCBA" className="h-5 w-auto opacity-70" />

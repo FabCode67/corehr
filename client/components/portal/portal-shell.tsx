@@ -63,15 +63,6 @@ export function PortalShell({
             <p className="truncate text-xs text-muted-foreground">{portalLabel}</p>
           </div>
         </div>
-        <div
-          aria-hidden="true"
-          className="h-1.5 w-full shrink-0"
-          style={{
-            backgroundImage: "url(/patterns/kitenge-dark.svg)",
-            backgroundSize: "90px 106px",
-            backgroundRepeat: "repeat",
-          }}
-        />
 
         {/* Admins have two portals — this bank-wide Admin Portal and their
          *  own self-service Staff Portal (same as any employee's "My
