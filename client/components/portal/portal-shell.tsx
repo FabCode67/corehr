@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import type { SessionUser } from "@/lib/session"
 
@@ -54,7 +55,22 @@ export function PortalShell({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
   return (
-    <div className="flex min-h-svh bg-muted/30">
+    <div className="relative flex min-h-svh bg-muted/30">
+      {/* Same brand background used on login/change-password/landing —
+       *  kept very low-opacity here since this sits behind data-dense
+       *  dashboard content, not a hero. -z-10 (not DOM order) is what keeps
+       *  it behind the sidebar/header, since those are plain non-positioned
+       *  elements and would otherwise be painted below any position:absolute
+       *  sibling regardless of who comes first in markup. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.05] dark:opacity-[0.16]"
+        style={{
+          backgroundImage: "url(/background.svg)",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-5">
           <img src="/ncba-mark.svg" alt="NCBA" className="size-8 shrink-0" />
@@ -141,6 +157,7 @@ export function PortalShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
+            <ThemeToggle />
             <NotificationBell employeeId={user.employeeId} />
             <div className="hidden text-right sm:block">
               <p className="text-sm leading-tight font-medium">{user.name}</p>
