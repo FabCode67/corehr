@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
 import { fetchBranches } from "@/lib/api/branches"
@@ -27,6 +28,7 @@ const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
 interface SearchParams {
   page?: string
   branchId?: string
+  search?: string
 }
 
 export default async function AdminEmployeesPage({
@@ -34,12 +36,12 @@ export default async function AdminEmployeesPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { page, branchId } = await searchParams
+  const { page, branchId, search } = await searchParams
 
   // Employee records are never deleted — exited employees stay visible
   // (with a status badge) for historical reporting, per the spec.
   const [result, lineManagersResult, session, exportColumnsResult, branchesResult] = await Promise.all([
-    fetchEmployeesPaginated({ includeInactive: true, branchId, page: page ? Number(page) : 1 }),
+    fetchEmployeesPaginated({ includeInactive: true, branchId, search, page: page ? Number(page) : 1 }),
     fetchLineManagersBatch(),
     getSession(),
     fetchEmployeeExportColumns(),
@@ -72,6 +74,15 @@ export default async function AdminEmployeesPage({
         <CardContent className="py-4">
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Search</label>
+              <Input
+                name="search"
+                placeholder="Name, Staff ID, or email…"
+                defaultValue={search ?? ""}
+                className="w-56"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Location</label>
               <Select name="branchId" defaultValue={branchId ?? ""} className="w-48">
                 <option value="">All locations</option>
@@ -85,7 +96,7 @@ export default async function AdminEmployeesPage({
             <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
               Apply
             </button>
-            {branchId ? (
+            {branchId || search ? (
               <Link href="/admin/employees" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
                 Reset
               </Link>
@@ -194,7 +205,7 @@ export default async function AdminEmployeesPage({
             total={result.data.total}
             pageSize={result.data.pageSize}
             basePath="/admin/employees"
-            searchParams={{ branchId }}
+            searchParams={{ branchId, search }}
           />
         </Card>
       )}

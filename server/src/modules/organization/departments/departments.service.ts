@@ -20,19 +20,21 @@ export class DepartmentsService {
   private buildFindAllWhere(params: {
     functionId?: string
     includeInactive?: boolean
+    search?: string
   }): Prisma.DepartmentWhereInput {
-    const { functionId, includeInactive = false } = params
+    const { functionId, includeInactive = false, search } = params
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
       ...(functionId ? { functionId } : {}),
+      ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
     }
   }
 
   /** Full, unpaginated list — used by filter dropdowns throughout the app
    *  (Leave approvals/calendar/analytics filters, etc.). See
    *  findAllPaginated() for the admin table view. */
-  findAll(params: { functionId?: string; includeInactive?: boolean } = {}) {
+  findAll(params: { functionId?: string; includeInactive?: boolean; search?: string } = {}) {
     return this.prisma.department.findMany({
       where: this.buildFindAllWhere(params),
       include: DEPARTMENT_LIST_INCLUDE,
@@ -42,7 +44,7 @@ export class DepartmentsService {
 
   /** Paginated version for the Departments admin table. */
   async findAllPaginated(
-    params: { functionId?: string; includeInactive?: boolean } = {},
+    params: { functionId?: string; includeInactive?: boolean; search?: string } = {},
     page?: number,
     pageSize?: number
   ): Promise<PaginatedResult<Prisma.DepartmentGetPayload<{ include: typeof DEPARTMENT_LIST_INCLUDE }>>> {

@@ -43,10 +43,11 @@ export function fetchDepartments() {
 }
 
 /** Paginated version for the Departments admin table — see lib/api/pagination.ts. */
-export function fetchDepartmentsPaginated(page: number, pageSize?: number) {
-  const search = new URLSearchParams({ includeInactive: "true", page: String(page) })
-  if (pageSize) search.set("pageSize", String(pageSize))
-  return apiFetchSafe<PaginatedResult<Department>>(`/organization/departments?${search.toString()}`)
+export function fetchDepartmentsPaginated(page: number, pageSize?: number, search?: string) {
+  const query = new URLSearchParams({ includeInactive: "true", page: String(page) })
+  if (pageSize) query.set("pageSize", String(pageSize))
+  if (search) query.set("search", search)
+  return apiFetchSafe<PaginatedResult<Department>>(`/organization/departments?${query.toString()}`)
 }
 
 export function fetchDepartment(id: string) {

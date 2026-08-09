@@ -31,6 +31,7 @@ function triStateOverride(value: FormDataEntryValue | null, forUpdate: boolean):
  *  exactly which pages are live at any given point in the build-out. */
 function revalidateLeavePaths() {
   revalidatePath("/staff/leave")
+  revalidatePath("/staff/leave/approvals")
   revalidatePath("/admin/leave")
   revalidatePath("/admin/leave/approvals")
   revalidatePath("/admin/leave/calendar")

@@ -24,10 +24,11 @@ export class DepartmentsController {
   findAll(
     @Query("functionId") functionId?: string,
     @Query("includeInactive") includeInactive?: string,
+    @Query("search") search?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string
   ) {
-    const filters = { functionId, includeInactive: includeInactive === "true" }
+    const filters = { functionId, includeInactive: includeInactive === "true", search }
     if (page) {
       return this.departmentsService.findAllPaginated(
         filters,

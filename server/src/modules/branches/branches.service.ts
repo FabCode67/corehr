@@ -13,17 +13,40 @@ const BRANCH_ORDER_BY = [{ isHeadquarters: "desc" as const }, { name: "asc" as c
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private buildFindAllWhere(includeInactive = false): Prisma.BranchWhereInput {
-    return includeInactive ? {} : { isActive: true }
+  private buildFindAllWhere(includeInactive = false, search?: string): Prisma.BranchWhereInput {
+    return {
+      ...(includeInactive ? {} : { isActive: true }),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { code: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    }
+  }
+
+  /** Only ACTIVE employees count toward a branch's headcount — Employee rows
+   *  are never hard-deleted (see Employees module), so counting all rows
+   *  would keep inflating a branch's number with people who've long since
+   *  left. Shared by findAll() (map pins) and findAllPaginated() (table).
+   *  Must be nested under `include` (or `select`) in the findMany() call —
+   *  Prisma doesn't accept `_count` as a top-level sibling of `where`/
+   *  `orderBy`, only inside include/select. */
+  private static readonly EMPLOYEE_COUNT_INCLUDE = {
+    _count: { select: { employees: { where: { employmentStatus: "ACTIVE" as const } } } },
   }
 
   /** Full, unpaginated list — used by the employee form, leave filters
-   *  (approvals/calendar/analytics), and anywhere else a complete branch
-   *  picker is needed. See findAllPaginated() for the admin table view. */
-  findAll(includeInactive = false) {
+   *  (approvals/calendar/analytics), the Locations map (employeeCount powers
+   *  the per-pin badge), and anywhere else a complete branch picker is
+   *  needed. See findAllPaginated() for the admin table view. */
+  findAll(includeInactive = false, search?: string) {
     return this.prisma.branch.findMany({
-      where: this.buildFindAllWhere(includeInactive),
+      where: this.buildFindAllWhere(includeInactive, search),
       orderBy: BRANCH_ORDER_BY,
+      include: BranchesService.EMPLOYEE_COUNT_INCLUDE,
     })
   }
 
@@ -31,16 +54,27 @@ export class BranchesService {
   async findAllPaginated(
     includeInactive = false,
     page?: number,
-    pageSize?: number
-  ): Promise<PaginatedResult<Prisma.BranchGetPayload<object>>> {
-    const where = this.buildFindAllWhere(includeInactive)
+    pageSize?: number,
+    search?: string
+  ): Promise<
+    PaginatedResult<
+      Prisma.BranchGetPayload<{ include: { _count: { select: { employees: true } } } }>
+    >
+  > {
+    const where = this.buildFindAllWhere(includeInactive, search)
     const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
       page,
       pageSize
     )
 
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.branch.findMany({ where, orderBy: BRANCH_ORDER_BY, skip, take }),
+      this.prisma.branch.findMany({
+        where,
+        orderBy: BRANCH_ORDER_BY,
+        skip,
+        take,
+        include: BranchesService.EMPLOYEE_COUNT_INCLUDE,
+      }),
       this.prisma.branch.count({ where }),
     ])
 

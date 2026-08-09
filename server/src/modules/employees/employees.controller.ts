@@ -41,6 +41,7 @@ export class EmployeesController {
     @Query("positionId") positionId?: string,
     @Query("branchId") branchId?: string,
     @Query("includeInactive") includeInactive?: string,
+    @Query("search") search?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string
   ) {
@@ -50,6 +51,7 @@ export class EmployeesController {
       positionId,
       branchId,
       includeInactive: includeInactive === "true",
+      search,
     }
     // `page` is opt-in: omit it and you get the full array exactly as
     // before (dropdowns/cascading selects rely on this); pass it and you
@@ -132,6 +134,15 @@ export class EmployeesController {
   @Get(":id/reporting-manager")
   getReportingManager(@Param("id") id: string) {
     return this.employeesService.getReportingManager(id)
+  }
+
+  /** Everyone who reports to this employee (override-first, else position
+   *  hierarchy — same resolution as reporting-manager above, just
+   *  inverted). Powers "My Team" on the staff dashboard and the
+   *  line-manager leave-approval queue. */
+  @Get(":id/direct-reports")
+  getDirectReports(@Param("id") id: string) {
+    return this.employeesService.getDirectReports(id)
   }
 
   @Get(":id/history")

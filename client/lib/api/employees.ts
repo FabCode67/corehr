@@ -200,15 +200,17 @@ export function fetchEmployees(includeInactive = false) {
 export function fetchEmployeesPaginated(params: {
   includeInactive?: boolean
   branchId?: string
+  search?: string
   page?: number
   pageSize?: number
 }) {
-  const search = new URLSearchParams()
-  if (params.includeInactive) search.set("includeInactive", "true")
-  if (params.branchId) search.set("branchId", params.branchId)
-  search.set("page", String(params.page ?? 1))
-  if (params.pageSize) search.set("pageSize", String(params.pageSize))
-  return apiFetchSafe<PaginatedResult<Employee>>(`/employees?${search.toString()}`)
+  const query = new URLSearchParams()
+  if (params.includeInactive) query.set("includeInactive", "true")
+  if (params.branchId) query.set("branchId", params.branchId)
+  if (params.search) query.set("search", params.search)
+  query.set("page", String(params.page ?? 1))
+  if (params.pageSize) query.set("pageSize", String(params.pageSize))
+  return apiFetchSafe<PaginatedResult<Employee>>(`/employees?${query.toString()}`)
 }
 
 export function fetchEmployee(id: string) {
@@ -225,6 +227,21 @@ export function fetchEmployeeHistory(id: string) {
 
 export function fetchReportingManager(id: string) {
   return apiFetchSafe<ReportingManagerResult>(`/employees/${id}/reporting-manager`)
+}
+
+export interface DirectReport {
+  employeeNumber: string
+  firstName: string
+  lastName: string
+  email: string
+  position: { title: string } | null
+  branch: { name: string } | null
+}
+
+/** Everyone who reports to this employee — powers "My Team" on the staff
+ *  dashboard and the line-manager leave-approvals queue. */
+export function fetchDirectReports(id: string) {
+  return apiFetchSafe<DirectReport[]>(`/employees/${id}/direct-reports`)
 }
 
 export function fetchEmployeeFamilyTree(id: string) {

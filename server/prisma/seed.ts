@@ -317,30 +317,43 @@ async function upsertEmployee(params: {
 
 async function main() {
   // ---- Position levels ---------------------------------------------------
-  // Codes follow "lower number = more senior" within each track — F1 is
-  // the most senior standard role (Head of Department), E1 is the most
-  // senior overall (Managing Director). Purely presentational (org-chart
-  // badges); see PositionLevel.code in schema.prisma.
-  const levelIntern = await upsertLevel("Intern", 1, "STANDARD", "F7")
-  const levelOfficer = await upsertLevel("Officer", 2, "STANDARD", "F6")
-  await upsertLevel("Senior Officer", 3, "STANDARD", "F5")
-  const levelAssistantManager = await upsertLevel("Assistant Manager", 4, "STANDARD", "F4")
-  const levelManager = await upsertLevel("Manager", 5, "STANDARD", "F3")
-  const levelSeniorManager = await upsertLevel("Senior Manager", 6, "STANDARD", "F2")
-  const levelHoD = await upsertLevel("Head of Department", 7, "STANDARD", "F1")
-  const levelMD = await upsertLevel("Managing Director", 8, "EXECUTIVE", "E1")
-  const levelCEO = await upsertLevel("Chief Executive Officer", 9, "EXECUTIVE", "E2")
-  const levelCOO = await upsertLevel("Chief Operating Officer", 10, "EXECUTIVE", "E3")
-  const levelCTO = await upsertLevel("Chief Technology Officer", 11, "EXECUTIVE", "E4")
-  const levelCFO = await upsertLevel("Chief Financial Officer", 12, "EXECUTIVE", "E5")
-  await upsertLevel("Other Executive", 13, "EXECUTIVE", "E6")
-  void levelIntern // reserved for future Intern positions; not used in this seed
+  // The bank's real 10-level ladder (junior to senior). Replaces an earlier
+  // 13-row Intern..Other-Executive/STANDARD-vs-EXECUTIVE-track scheme — see
+  // prisma/migrations/20260809120000_update_position_levels_and_bands for
+  // the one-time in-place rename of any already-deployed rows (existing
+  // Position/Employee references are preserved by id; only name/rank move).
+  // No `code`/track distinction in the new scheme — every level is STANDARD.
+  const levelSupportStaff = await upsertLevel("Support Staff", 1)
+  const levelOperationsAssistant = await upsertLevel("Operations Assistant", 2)
+  const levelOfficer = await upsertLevel("Officer", 3)
+  const levelAssistantManager = await upsertLevel("Assistant Manager", 4)
+  const levelManager = await upsertLevel("Manager", 5)
+  const levelSeniorManager = await upsertLevel("Senior Manager", 6)
+  const levelAGM = await upsertLevel("Assistant General Manager", 7)
+  const levelGM = await upsertLevel("General Manager", 8)
+  const levelDeputyDirector = await upsertLevel("Deputy Director", 9)
+  const levelDirector = await upsertLevel("Director", 10)
+  void levelSupportStaff // reserved for future Support Staff positions; not used in this seed
+  void levelOperationsAssistant // reserved; not used in this seed
+  void levelDeputyDirector // reserved; not used in this seed
+  void levelDirector // reserved; not used in this seed
+  // Demo Position rows below were originally created against the old
+  // Managing Director/CEO/COO/CTO/CFO executive rows — those now map onto
+  // General Manager for the top of the demo org chart (see migration above
+  // for the same mapping applied to already-deployed data).
+  const levelHoD = levelAGM
+  const levelMD = levelGM
+  const levelCEO = levelGM
+  const levelCOO = levelGM
+  const levelCTO = levelGM
+  const levelCFO = levelGM
 
-  // ---- Bands (1..10) -------------------------------------------------------
+  // ---- Bands (1..10, plus Contractual Staff for non-payroll workers) -------
   const bands = new Map<number, Awaited<ReturnType<typeof upsertBand>>>()
   for (let i = 1; i <= 10; i++) {
     bands.set(i, await upsertBand(`Band ${i}`, i))
   }
+  await upsertBand("Contractual Staff (DSA, GT & Intern)", 11)
 
   // ---- Functions & Departments ---------------------------------------------
   // Only 3 Functions exist now (standard banking "three lines" taxonomy):

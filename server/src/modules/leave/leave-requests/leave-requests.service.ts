@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common"
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 import { LeaveRequestStatus, NotificationType, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
@@ -394,6 +394,8 @@ export class LeaveRequestsService {
       throw new BadRequestException("This request has no matching approval step on record.")
     }
 
+    await this.assertCanDecideStep(currentApproval.role, request.employeeId, dto.actingEmployeeId)
+
     const year = request.startDate.getUTCFullYear()
 
     return this.prisma.$transaction(async (tx) => {
@@ -692,5 +694,41 @@ export class LeaveRequestsService {
       where: { positionId: employee.position.reportsToPositionId, isActive: true },
     })
     return holder?.employeeNumber ?? null
+  }
+
+  /**
+   * decide() used to write whatever `actingEmployeeId` the caller supplied
+   * with no verification at all — harmless while only admins could reach
+   * the approvals page (client/middleware.ts gated the whole /admin tree),
+   * but no longer safe now that line managers get their own staff-portal
+   * approvals queue (see findPendingForManager()). A LINE_MANAGER step can
+   * only be decided by the requester's actually-resolved line manager; an
+   * HR step can only be decided by an admin (this app has no separate
+   * HR-role concept — see schema.prisma's ApprovalRole doc comment).
+   */
+  private async assertCanDecideStep(
+    role: "LINE_MANAGER" | "HR",
+    requesterEmployeeId: string,
+    actingEmployeeId: string | undefined
+  ) {
+    if (!actingEmployeeId) {
+      throw new BadRequestException("actingEmployeeId is required to decide an approval step.")
+    }
+
+    if (role === "LINE_MANAGER") {
+      const resolvedManagerId = await this.resolveLineManagerId(requesterEmployeeId)
+      if (!resolvedManagerId || resolvedManagerId !== actingEmployeeId) {
+        throw new ForbiddenException("Only this employee's resolved line manager can decide this approval step.")
+      }
+      return
+    }
+
+    const actor = await this.prisma.employee.findUnique({
+      where: { employeeNumber: actingEmployeeId },
+      select: { isAdmin: true },
+    })
+    if (!actor?.isAdmin) {
+      throw new ForbiddenException("Only an admin can decide an HR approval step.")
+    }
   }
 }

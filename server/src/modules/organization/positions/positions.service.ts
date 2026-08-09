@@ -18,14 +18,16 @@ export class PositionsService {
     unitId?: string
     reportsToPositionId?: string
     includeInactive?: boolean
+    search?: string
   }): Prisma.PositionWhereInput {
-    const { departmentId, unitId, reportsToPositionId, includeInactive = false } = params
+    const { departmentId, unitId, reportsToPositionId, includeInactive = false, search } = params
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
       ...(departmentId ? { departmentId } : {}),
       ...(unitId ? { unitId } : {}),
       ...(reportsToPositionId ? { reportsToPositionId } : {}),
+      ...(search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
     }
   }
 
@@ -38,6 +40,7 @@ export class PositionsService {
       unitId?: string
       reportsToPositionId?: string
       includeInactive?: boolean
+      search?: string
     } = {}
   ) {
     return this.prisma.position.findMany({
@@ -54,6 +57,7 @@ export class PositionsService {
       unitId?: string
       reportsToPositionId?: string
       includeInactive?: boolean
+      search?: string
     } = {},
     page?: number,
     pageSize?: number

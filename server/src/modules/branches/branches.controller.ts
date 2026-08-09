@@ -13,6 +13,7 @@ export class BranchesController {
   @Get()
   findAll(
     @Query("includeInactive") includeInactive?: string,
+    @Query("search") search?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string
   ) {
@@ -20,10 +21,11 @@ export class BranchesController {
       return this.branchesService.findAllPaginated(
         includeInactive === "true",
         Number(page),
-        pageSize ? Number(pageSize) : undefined
+        pageSize ? Number(pageSize) : undefined,
+        search
       )
     }
-    return this.branchesService.findAll(includeInactive === "true")
+    return this.branchesService.findAll(includeInactive === "true", search)
   }
 
   @Get(":id")

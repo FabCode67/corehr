@@ -75,8 +75,9 @@ export class EmployeesService {
     positionId?: string
     branchId?: string
     includeInactive?: boolean
+    search?: string
   }): Prisma.EmployeeWhereInput {
-    const { departmentId, unitId, positionId, branchId, includeInactive } = params
+    const { departmentId, unitId, positionId, branchId, includeInactive, search } = params
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
@@ -88,6 +89,18 @@ export class EmployeesService {
               ...(departmentId ? { departmentId } : {}),
               ...(unitId ? { unitId } : {}),
             },
+          }
+        : {}),
+      // Same OR/contains/insensitive shape as CandidatesService — matches
+      // on name, employee number (Staff ID), or email.
+      ...(search
+        ? {
+            OR: [
+              { firstName: { contains: search, mode: "insensitive" as const } },
+              { lastName: { contains: search, mode: "insensitive" as const } },
+              { employeeNumber: { contains: search, mode: "insensitive" as const } },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
           }
         : {}),
     }
@@ -119,6 +132,7 @@ export class EmployeesService {
       positionId?: string
       branchId?: string
       includeInactive?: boolean
+      search?: string
     } = {},
     page?: number,
     pageSize?: number
@@ -850,6 +864,49 @@ export class EmployeesService {
     }
 
     return result
+  }
+
+  /**
+   * The inverse of getReportingManager()/getLineManagersBatch(): everyone
+   * whose resolved manager (override-first, else position hierarchy — same
+   * rule as those two) is this employee. Powers "my team" on the staff
+   * dashboard and the line-manager leave-approval queue's headcount.
+   * Reuses getLineManagersBatch() rather than re-deriving resolution logic a
+   * third time — a little wasteful (computes everyone's manager, not just
+   * this one employee's reports) but this module already accepts that
+   * tradeoff for getLineManagersBatch()'s own callers, and direct-report
+   * lookups aren't hot-path/high-frequency enough to warrant a bespoke query.
+   */
+  async getDirectReports(managerId: string) {
+    const [manager, allManagers] = await Promise.all([
+      this.prisma.employee.findUnique({ where: { employeeNumber: managerId } }),
+      this.getLineManagersBatch(),
+    ])
+
+    if (!manager) {
+      throw new NotFoundException(`Employee ${managerId} not found`)
+    }
+
+    const directReportIds = Object.entries(allManagers)
+      .filter(([, reportsTo]) => reportsTo?.id === managerId)
+      .map(([employeeNumber]) => employeeNumber)
+
+    if (directReportIds.length === 0) {
+      return []
+    }
+
+    return this.prisma.employee.findMany({
+      where: { employeeNumber: { in: directReportIds } },
+      select: {
+        employeeNumber: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        position: { select: { title: true } },
+        branch: { select: { name: true } },
+      },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    })
   }
 
   private async assertPositionExists(positionId: string) {

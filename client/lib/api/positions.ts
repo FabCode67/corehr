@@ -30,10 +30,11 @@ export function fetchPositions() {
 }
 
 /** Paginated version for the Positions admin table — see lib/api/pagination.ts. */
-export function fetchPositionsPaginated(page: number, pageSize?: number) {
-  const search = new URLSearchParams({ includeInactive: "true", page: String(page) })
-  if (pageSize) search.set("pageSize", String(pageSize))
-  return apiFetchSafe<PaginatedResult<Position>>(`/organization/positions?${search.toString()}`)
+export function fetchPositionsPaginated(page: number, pageSize?: number, search?: string) {
+  const query = new URLSearchParams({ includeInactive: "true", page: String(page) })
+  if (pageSize) query.set("pageSize", String(pageSize))
+  if (search) query.set("search", search)
+  return apiFetchSafe<PaginatedResult<Position>>(`/organization/positions?${query.toString()}`)
 }
 
 export function fetchPosition(id: string) {

@@ -9,6 +9,10 @@ export interface Branch {
   isActive: boolean
   latitude: number | null
   longitude: number | null
+  /** Count of ACTIVE employees at this branch — present on both
+   *  fetchBranches() and fetchBranchesPaginated() responses; powers the
+   *  Locations map's per-pin headcount badge and the admin table. */
+  _count?: { employees: number }
 }
 
 /** Full, unpaginated list — used by the employee form and leave filter bars
@@ -20,10 +24,11 @@ export function fetchBranches(includeInactive = false) {
 }
 
 /** Paginated version for the Branches admin table. */
-export function fetchBranchesPaginated(page: number, pageSize?: number) {
-  const search = new URLSearchParams({ includeInactive: "true", page: String(page) })
-  if (pageSize) search.set("pageSize", String(pageSize))
-  return apiFetchSafe<PaginatedResult<Branch>>(`/branches?${search.toString()}`)
+export function fetchBranchesPaginated(page: number, pageSize?: number, search?: string) {
+  const query = new URLSearchParams({ includeInactive: "true", page: String(page) })
+  if (pageSize) query.set("pageSize", String(pageSize))
+  if (search) query.set("search", search)
+  return apiFetchSafe<PaginatedResult<Branch>>(`/branches?${query.toString()}`)
 }
 
 export function fetchBranch(id: string) {

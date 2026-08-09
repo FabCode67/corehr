@@ -3,6 +3,7 @@
 import {
   Bell,
   CalendarDays,
+  CalendarCheck,
   ClipboardCheck,
   Clock3,
   FileText,
@@ -26,6 +27,14 @@ const STAFF_NAV: PortalNavItem[] = [
   { label: "Professional Profile", href: "/staff/professional-profile", icon: UserCircle },
   { label: "My Onboarding", href: "/staff/onboarding", icon: ClipboardCheck },
   { label: "Leave", href: "/staff/leave", icon: CalendarDays },
+  // Shown to everyone, not just people who currently manage someone — same
+  // reasoning as the "My team" dashboard card: this app's session doesn't
+  // carry a live "is this person a manager" flag (SessionUser is a static
+  // cookie set at login), and re-deriving it here would mean another API
+  // call on every single page render just to decide whether to show a nav
+  // link. The page itself renders a clean empty state when there's nothing
+  // pending, so no harm in always showing the entry.
+  { label: "Team Approvals", href: "/staff/leave/approvals", icon: CalendarCheck },
   { label: "Attendance", href: "/staff/attendance", icon: Clock3 },
   { label: "Performance", href: "/staff/performance", icon: Target },
   { label: "Learning", href: "/staff/learning", icon: GraduationCap },

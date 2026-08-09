@@ -26,6 +26,7 @@ export class PositionsController {
     @Query("unitId") unitId?: string,
     @Query("reportsToPositionId") reportsToPositionId?: string,
     @Query("includeInactive") includeInactive?: string,
+    @Query("search") search?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string
   ) {
@@ -34,6 +35,7 @@ export class PositionsController {
       unitId,
       reportsToPositionId,
       includeInactive: includeInactive === "true",
+      search,
     }
     if (page) {
       return this.positionsService.findAllPaginated(

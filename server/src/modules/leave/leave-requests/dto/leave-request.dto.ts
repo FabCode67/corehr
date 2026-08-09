@@ -104,9 +104,11 @@ export class DecideApprovalDto {
   comment?: string
 
   @ApiPropertyOptional({
-    description: "The employee acting as approver, if known (e.g. the resolved line manager).",
+    description:
+      "The employee acting as approver. Required — LeaveRequestsService.decide() verifies this is either " +
+      "the request's resolved line manager (for a LINE_MANAGER step) or an admin (for an HR step) before " +
+      "acting on the request.",
   })
   @IsString()
-  @IsOptional()
-  actingEmployeeId?: string
+  actingEmployeeId!: string
 }

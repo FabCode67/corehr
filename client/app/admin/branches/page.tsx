@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
 import { fetchBranches, fetchBranchesPaginated } from "@/lib/api/branches"
 
@@ -12,12 +13,13 @@ import { LocationsMapLoader } from "./locations-map-client"
 export default async function AdminBranchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; search?: string }>
 }) {
-  const { page } = await searchParams
+  const { page, search } = await searchParams
   const [result, allBranchesResult] = await Promise.all([
-    fetchBranchesPaginated(page ? Number(page) : 1),
-    // Unpaginated — the map plots every location, not just the current page.
+    fetchBranchesPaginated(page ? Number(page) : 1, undefined, search),
+    // Unpaginated — the map plots every location, not just the current page
+    // (and isn't affected by the table's search box).
     fetchBranches(),
   ])
 
@@ -42,6 +44,25 @@ export default async function AdminBranchesPage({
         </CardHeader>
         <CardContent>
           <LocationsMapLoader branches={allBranchesResult.ok ? allBranchesResult.data : []} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="py-4">
+          <form method="get" className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Search</label>
+              <Input name="search" placeholder="Name or code…" defaultValue={search ?? ""} className="w-56" />
+            </div>
+            <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
+              Apply
+            </button>
+            {search ? (
+              <Link href="/admin/branches" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
+                Reset
+              </Link>
+            ) : null}
+          </form>
         </CardContent>
       </Card>
 
@@ -71,6 +92,7 @@ export default async function AdminBranchesPage({
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Code</th>
                   <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Employees</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">
                     <span className="sr-only">Actions</span>
@@ -91,6 +113,7 @@ export default async function AdminBranchesPage({
                         <span className="text-muted-foreground">Location</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground">{branch._count?.employees ?? 0}</td>
                     <td className="px-4 py-3">
                       <Badge variant={branch.isActive ? "success" : "outline"}>
                         {branch.isActive ? "Active" : "Inactive"}
@@ -137,6 +160,7 @@ export default async function AdminBranchesPage({
             total={result.data.total}
             pageSize={result.data.pageSize}
             basePath="/admin/branches"
+            searchParams={{ search }}
           />
         </Card>
       )}

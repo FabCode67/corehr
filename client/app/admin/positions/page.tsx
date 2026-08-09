@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
 import { fetchPositionsPaginated } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
@@ -13,10 +14,13 @@ import { deactivatePosition } from "./actions"
 export default async function AdminPositionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; search?: string }>
 }) {
-  const { page } = await searchParams
-  const [result, session] = await Promise.all([fetchPositionsPaginated(page ? Number(page) : 1), getSession()])
+  const { page, search } = await searchParams
+  const [result, session] = await Promise.all([
+    fetchPositionsPaginated(page ? Number(page) : 1, undefined, search),
+    getSession(),
+  ])
   const actingEmployeeId = session?.employeeId ?? ""
 
   return (
@@ -35,6 +39,25 @@ export default async function AdminPositionsPage({
           </Link>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="py-4">
+          <form method="get" className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Search</label>
+              <Input name="search" placeholder="Position title…" defaultValue={search ?? ""} className="w-56" />
+            </div>
+            <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
+              Apply
+            </button>
+            {search ? (
+              <Link href="/admin/positions" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
+                Reset
+              </Link>
+            ) : null}
+          </form>
+        </CardContent>
+      </Card>
 
       {!result.ok ? (
         <Card className="border-dashed border-destructive/40">
@@ -122,6 +145,7 @@ export default async function AdminPositionsPage({
             total={result.data.total}
             pageSize={result.data.pageSize}
             basePath="/admin/positions"
+            searchParams={{ search }}
           />
         </Card>
       )}

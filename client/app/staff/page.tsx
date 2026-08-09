@@ -1,7 +1,8 @@
-import { CalendarDays, CheckCircle2, Clock3, Target } from "lucide-react"
+import { CalendarDays, CheckCircle2, Clock3, Target, Users } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
+import { fetchDirectReports } from "@/lib/api/employees"
 import { fetchLeaveBalances, fetchLeaveRequests } from "@/lib/api/leave"
 import { fetchReviewPeriods, type ReviewPeriod } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
@@ -33,10 +34,11 @@ export default async function StaffDashboardPage() {
   const employeeId = session?.employeeId ?? ""
   const currentYear = new Date().getUTCFullYear()
 
-  const [balancesResult, pendingRequestsResult, reviewPeriodsResult] = await Promise.all([
+  const [balancesResult, pendingRequestsResult, reviewPeriodsResult, directReportsResult] = await Promise.all([
     fetchLeaveBalances(employeeId, currentYear),
     fetchLeaveRequests({ employeeId, status: "PENDING_APPROVAL" }),
     fetchReviewPeriods(),
+    fetchDirectReports(employeeId),
   ])
 
   const annualBalance = balancesResult.ok
@@ -44,6 +46,8 @@ export default async function StaffDashboardPage() {
     : null
   const pendingRequestsCount = pendingRequestsResult.ok ? pendingRequestsResult.data.length : null
   const nextReview = reviewPeriodsResult.ok ? pickNextReview(reviewPeriodsResult.data) : { label: "—", hint: "Couldn't load review periods" }
+  const directReports = directReportsResult.ok ? directReportsResult.data : []
+  const isLineManager = directReports.length > 0
 
   const stats = [
     {
@@ -69,6 +73,12 @@ export default async function StaffDashboardPage() {
       value: pendingRequestsCount === null ? "—" : String(pendingRequestsCount),
       hint: "Your leave requests awaiting approval",
       icon: CheckCircle2,
+    },
+    {
+      label: "My team",
+      value: String(directReports.length),
+      hint: isLineManager ? "Employees reporting to you" : "No one reports to you",
+      icon: Users,
     },
   ]
 
@@ -115,6 +125,26 @@ export default async function StaffDashboardPage() {
           <SummaryField label="Email" value={session?.email ?? "—"} />
         </CardContent>
       </Card>
+
+      {isLineManager ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>My team</CardTitle>
+            <CardDescription>Employees who report to you, directly or via an assigned override.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {directReports.map((report) => (
+              <div key={report.employeeNumber} className="rounded-lg border border-border p-3">
+                <p className="font-medium text-foreground">
+                  {report.firstName} {report.lastName}
+                </p>
+                <p className="text-xs text-muted-foreground">{report.position?.title ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">{report.branch?.name ?? "—"}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }
