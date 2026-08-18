@@ -4,10 +4,10 @@ import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchBranch } from "@/lib/api/branches"
+import { fetchEmployeesPaginated } from "@/lib/api/employees"
 
 import { updateBranch } from "../actions"
 import { BranchForm } from "../branch-form"
-import { fetchEmployeesPaginated } from "@/lib/api/employees"
 
 export default async function EditBranchPage({
   params,
@@ -15,10 +15,13 @@ export default async function EditBranchPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const result = await fetchBranch(id)
+  const [branchResult, employeesResult] = await Promise.all([
+    fetchBranch(id),
+    fetchEmployeesPaginated({ branchId: id, page: 1, pageSize: 20, includeInactive: true }),
+  ])
 
-  if (!result.ok) {
-    if (result.status === 404) {
+  if (!branchResult.ok) {
+    if (branchResult.status === 404) {
       notFound()
     }
 
@@ -26,16 +29,14 @@ export default async function EditBranchPage({
       <Card className="max-w-xl border-dashed border-destructive/40">
         <CardHeader>
           <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
-          <CardDescription>{result.error}</CardDescription>
+          <CardDescription>{branchResult.error}</CardDescription>
         </CardHeader>
       </Card>
     )
   }
 
-  const branch = result.data
-
-  // Server-rendered employees list for this branch (first page)
-  const employeesResult = await fetchEmployeesPaginated({ branchId: id, page: 1, pageSize: 50 })
+  const branch = branchResult.data
+  const employees = employeesResult.ok ? employeesResult.data.data : []
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -68,21 +69,28 @@ export default async function EditBranchPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Employees at this location</CardTitle>
-          <CardDescription>Server-rendered list of employees assigned to this branch.</CardDescription>
+          <CardDescription>
+            {employeesResult.ok ? `${employeesResult.data.total} total employee(s)` : "Unable to load the employee list right now."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {!employeesResult.ok ? (
             <p className="text-sm text-muted-foreground">{employeesResult.error}</p>
-          ) : employeesResult.data.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No employees assigned to this location.</p>
+          ) : employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No employees are assigned to this location yet.</p>
           ) : (
-            <ul className="grid gap-2">
-              {employeesResult.data.data.map((e) => (
-                <li key={e.employeeNumber} className="flex items-center justify-between">
-                  <Link href={`/admin/employees/${e.employeeNumber}`} className="font-medium hover:underline">
-                    {e.preferredName || e.firstName} {e.lastName}
+            <ul className="space-y-2">
+              {employees.map((employee) => (
+                <li key={employee.employeeNumber} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {employee.firstName} {employee.lastName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{employee.employeeNumber}</p>
+                  </div>
+                  <Link href={`/admin/employees/${employee.employeeNumber}`} className="text-xs font-medium text-primary hover:underline">
+                    View
                   </Link>
-                  <span className="text-sm text-muted-foreground">{e.employeeNumber}</span>
                 </li>
               ))}
             </ul>

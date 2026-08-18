@@ -53,6 +53,10 @@ UPDATE "position_levels"
   SET "name" = 'Director', "rank" = 10, "code" = NULL, "track" = 'STANDARD'
   WHERE "name" = 'Chief Operating Officer';
 
+-- Department head role is now represented by "General Manager"; the
+-- executive tiers are the final two levels: "Deputy Director" and
+-- "Director".
+
 -- The old ladder had 3 extra EXECUTIVE-track rows with no equivalent in the
 -- new 10-level list (Chief Technology Officer / Chief Financial Officer /
 -- Other Executive). Position.levelId is ON DELETE RESTRICT, so these can't

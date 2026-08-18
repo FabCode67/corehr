@@ -117,10 +117,45 @@ async function upsertLevel(
   track: PositionTrack = "STANDARD",
   code?: string
 ) {
-  return prisma.positionLevel.upsert({
-    where: { name },
-    update: { rank, track, code },
-    create: { name, rank, track, code },
+  const existing = await prisma.positionLevel.findUnique({ where: { name } })
+  if (existing) {
+    return prisma.positionLevel.update({
+      where: { id: existing.id },
+      data: { rank, track, code },
+    })
+  }
+
+  const collisions = await prisma.positionLevel.findMany({
+    where: { rank },
+    orderBy: { id: "asc" },
+  })
+
+  if (collisions.length > 0) {
+    const usedRanks = new Set(
+      (await prisma.positionLevel.findMany({ select: { rank: true } })).map((level) => level.rank)
+    )
+    let nextTempRank = 1000
+
+    for (const collision of collisions) {
+      while (usedRanks.has(nextTempRank)) {
+        nextTempRank += 1
+      }
+
+      usedRanks.add(nextTempRank)
+      await prisma.positionLevel.update({
+        where: { id: collision.id },
+        data: { rank: nextTempRank },
+      })
+    }
+
+    return prisma.positionLevel.update({
+      where: { id: collisions[0].id },
+      data: { name, rank, track, code },
+    })
+  }
+
+  return prisma.positionLevel.create({
+    data: { name, rank, track, code },
   })
 }
 
@@ -135,10 +170,24 @@ async function upsertBand(name: string, rank: number) {
 /** `code` doubles as the migration key from the old WorkLocation enum — see
  *  backfillBranchesFromLegacyWorkLocation() below. */
 async function upsertBranch(name: string, code: string, isHeadquarters = false) {
-  return prisma.branch.upsert({
-    where: { name },
-    update: { code, isHeadquarters },
-    create: { name, code, isHeadquarters },
+  const existingByCode = await prisma.branch.findUnique({ where: { code } }).catch(() => null)
+  if (existingByCode) {
+    return prisma.branch.update({
+      where: { id: existingByCode.id },
+      data: { name, isHeadquarters },
+    })
+  }
+
+  const existingByName = await prisma.branch.findUnique({ where: { name } }).catch(() => null)
+  if (existingByName) {
+    return prisma.branch.update({
+      where: { id: existingByName.id },
+      data: { code, isHeadquarters },
+    })
+  }
+
+  return prisma.branch.create({
+    data: { name, code, isHeadquarters },
   })
 }
 
@@ -333,20 +382,18 @@ async function main() {
   const levelGM = await upsertLevel("General Manager", 8)
   const levelDeputyDirector = await upsertLevel("Deputy Director", 9)
   const levelDirector = await upsertLevel("Director", 10)
-  void levelSupportStaff // reserved for future Support Staff positions; not used in this seed
-  void levelOperationsAssistant // reserved; not used in this seed
-  void levelDeputyDirector // reserved; not used in this seed
-  void levelDirector // reserved; not used in this seed
-  // Demo Position rows below were originally created against the old
-  // Managing Director/CEO/COO/CTO/CFO executive rows — those now map onto
-  // General Manager for the top of the demo org chart (see migration above
-  // for the same mapping applied to already-deployed data).
-  const levelHoD = levelAGM
-  const levelMD = levelGM
-  const levelCEO = levelGM
-  const levelCOO = levelGM
-  const levelCTO = levelGM
-  const levelCFO = levelGM
+
+  // As requested: General Manager is the department-head level, while the
+  // executive levels are Deputy Director and Director.
+  const levelHoD = levelGM
+  const levelMD = levelDirector
+  const levelCEO = levelDeputyDirector
+  const levelCOO = levelDeputyDirector
+  const levelCTO = levelDeputyDirector
+  const levelCFO = levelDeputyDirector
+
+  void levelSupportStaff
+  void levelOperationsAssistant
 
   // ---- Bands (1..10, plus Contractual Staff for non-payroll workers) -------
   const bands = new Map<number, Awaited<ReturnType<typeof upsertBand>>>()
