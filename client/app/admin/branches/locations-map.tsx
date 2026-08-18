@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css"
 
 import { Fragment } from "react"
+import Link from "next/link"
 import L from "leaflet"
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet"
 
@@ -105,6 +106,11 @@ export function LocationsMap({ branches }: { branches: Branch[] }) {
                   <p>
                     {employeeCount} {employeeCount === 1 ? "employee" : "employees"}
                   </p>
+                  <div className="mt-2">
+                    <Link href={`/admin/branches/${branch.id}`} className="text-sm text-primary hover:underline">
+                      View employees
+                    </Link>
+                  </div>
                 </Popup>
               </Marker>
               {/* Non-interactive badge overlaying the pin's shoulder with the

@@ -7,6 +7,7 @@ import { fetchBranch } from "@/lib/api/branches"
 
 import { updateBranch } from "../actions"
 import { BranchForm } from "../branch-form"
+import { fetchEmployeesPaginated } from "@/lib/api/employees"
 
 export default async function EditBranchPage({
   params,
@@ -33,6 +34,9 @@ export default async function EditBranchPage({
 
   const branch = result.data
 
+  // Server-rendered employees list for this branch (first page)
+  const employeesResult = await fetchEmployeesPaginated({ branchId: id, page: 1, pageSize: 50 })
+
   return (
     <div className="flex max-w-xl flex-col gap-6">
       <div>
@@ -58,6 +62,31 @@ export default async function EditBranchPage({
         </CardHeader>
         <CardContent>
           <BranchForm branch={branch} action={updateBranch.bind(null, branch.id)} submitLabel="Save changes" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Employees at this location</CardTitle>
+          <CardDescription>Server-rendered list of employees assigned to this branch.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!employeesResult.ok ? (
+            <p className="text-sm text-muted-foreground">{employeesResult.error}</p>
+          ) : employeesResult.data.data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No employees assigned to this location.</p>
+          ) : (
+            <ul className="grid gap-2">
+              {employeesResult.data.data.map((e) => (
+                <li key={e.employeeNumber} className="flex items-center justify-between">
+                  <Link href={`/admin/employees/${e.employeeNumber}`} className="font-medium hover:underline">
+                    {e.preferredName || e.firstName} {e.lastName}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">{e.employeeNumber}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
