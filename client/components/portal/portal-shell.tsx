@@ -158,7 +158,7 @@ export function PortalShell({
 
           <div className="flex shrink-0 items-center gap-3">
             <ThemeToggle />
-            <NotificationBell employeeId={user.employeeId} />
+            <NotificationBell employeeId={user.employeeId} role={user.role} />
             <div className="hidden text-right sm:block">
               <p className="text-sm leading-tight font-medium">{user.name}</p>
               <p className="text-xs leading-tight text-muted-foreground">{user.branch}</p>

@@ -571,7 +571,11 @@ model Employee {
   delegateOnRequests  LeaveRequest[]      @relation("LeaveDelegate")
   leaveRequestsCancelled LeaveRequest[]   @relation("LeaveCancelledBy")
   approvalActions     LeaveApproval[]
-  notifications       Notification[]
+  notifications       Notification[] @relation("NotificationRecipient")
+  /// Notifications ABOUT this employee sent to someone else (e.g. an HR
+  /// admin's "employee X's probation is ending soon" alert) — see
+  /// Notification.relatedEmployeeId's doc comment.
+  relatedNotifications Notification[] @relation("NotificationRelatedEmployee")
 
   // --- Onboarding Document Management --------------------------------------
   onboardingDocuments         OnboardingDocumentAssignment[] @relation("OnboardingDocumentEmployee")
@@ -1084,6 +1088,14 @@ enum NotificationType {
   /// Fired to HR admins when an employee submits a new self-service
   /// education/certification/institution record awaiting review.
   PROFILE_RECORD_PENDING_REVIEW
+  /// Employee-facing + admin-facing pair, fired by ProbationReminderScheduler
+  /// ~10 days before Employee.probationEndDate.
+  PROBATION_ENDING_SOON
+  PROBATION_ENDING_SOON_ADMIN
+  /// Employee-facing + admin-facing pair, fired by ContractReminderScheduler
+  /// ~10 days before Employee.contractEndDate (TEMPORARY contracts only).
+  CONTRACT_ENDING_SOON
+  CONTRACT_ENDING_SOON_ADMIN
 }
 
 /// A configurable leave type (Annual, Maternity, Paternity, Sick,
@@ -1387,9 +1399,17 @@ model Notification {
   message            String
   isRead             Boolean          @default(false)
   relatedLeaveRequestId String?       @db.Uuid
+  /// Generic "this notification is about employee X" reference — everything
+  /// besides leave (which already has relatedLeaveRequestId) uses this so an
+  /// admin-facing notification (e.g. probation/contract ending soon) can
+  /// deep-link straight to the employee record it concerns, instead of only
+  /// ever landing on a generic list page. Nullable/optional for every other
+  /// notification type that doesn't need it.
+  relatedEmployeeId String?
 
-  recipient          Employee      @relation(fields: [recipientEmployeeId], references: [employeeNumber])
+  recipient          Employee      @relation("NotificationRecipient", fields: [recipientEmployeeId], references: [employeeNumber])
   relatedLeaveRequest LeaveRequest? @relation(fields: [relatedLeaveRequestId], references: [id])
+  relatedEmployee     Employee?     @relation("NotificationRelatedEmployee", fields: [relatedEmployeeId], references: [employeeNumber])
 
   createdAt DateTime @default(now())
 

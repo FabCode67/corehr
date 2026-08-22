@@ -20,6 +20,12 @@ export interface AppNotification {
   message: string
   isRead: boolean
   relatedLeaveRequestId: string | null
+  /** Generic "this notification is about employee X" reference — used by
+   *  everything other than leave notifications (e.g. probation/contract
+   *  ending soon) so an admin-facing notification can deep-link straight to
+   *  the employee record it concerns. See Notification.relatedEmployeeId's
+   *  schema doc comment. */
+  relatedEmployeeId: string | null
   createdAt: string
 }
 

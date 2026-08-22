@@ -368,10 +368,14 @@ async function main() {
   // ---- Position levels ---------------------------------------------------
   // The bank's real 10-level ladder (junior to senior). Replaces an earlier
   // 13-row Intern..Other-Executive/STANDARD-vs-EXECUTIVE-track scheme — see
-  // prisma/migrations/20260809120000_update_position_levels_and_bands for
-  // the one-time in-place rename of any already-deployed rows (existing
-  // Position/Employee references are preserved by id; only name/rank move).
-  // No `code`/track distinction in the new scheme — every level is STANDARD.
+  // prisma/migrations/20260809120000_update_position_levels_and_bands (the
+  // one-time in-place rename of any already-deployed rows — existing
+  // Position/Employee references are preserved by id, only name/rank move)
+  // and .../20260822070000_set_executive_track_deputy_director_director
+  // (sets track on the two levels below — the rename migration originally
+  // left every level as STANDARD). Only Deputy Director and Director are
+  // EXECUTIVE track; General Manager is the department-head level and
+  // stays STANDARD, per the user's explicit correction.
   const levelSupportStaff = await upsertLevel("Support Staff", 1)
   const levelOperationsAssistant = await upsertLevel("Operations Assistant", 2)
   const levelOfficer = await upsertLevel("Officer", 3)
@@ -380,8 +384,8 @@ async function main() {
   const levelSeniorManager = await upsertLevel("Senior Manager", 6)
   const levelAGM = await upsertLevel("Assistant General Manager", 7)
   const levelGM = await upsertLevel("General Manager", 8)
-  const levelDeputyDirector = await upsertLevel("Deputy Director", 9)
-  const levelDirector = await upsertLevel("Director", 10)
+  const levelDeputyDirector = await upsertLevel("Deputy Director", 9, "EXECUTIVE")
+  const levelDirector = await upsertLevel("Director", 10, "EXECUTIVE")
 
   // As requested: General Manager is the department-head level, while the
   // executive levels are Deputy Director and Director.
@@ -3363,6 +3367,58 @@ async function seedEmployeeRelations(employees: {
         `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was returned by {{approver_name}} for correction. Notes: {{decision_comment}}</p>`
       ),
       variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment"],
+    },
+
+    // ---- Employees (probation / contract ending soon) --------------------------
+    {
+      key: "probation_ending_soon",
+      name: "Probation Ending Soon (Employee)",
+      category: "employees",
+      subject: "Your probation period ends soon",
+      bodyHtml: emailShell(
+        "Probation ending soon",
+        `<p>Hi {{employee_name}}, your probation period ends on {{end_date}}. Please contact HR if you have any questions.</p>`
+      ),
+      variables: ["employee_name", "end_date", "employee_url"],
+      isMandatory: true,
+    },
+    {
+      key: "probation_ending_soon_admin",
+      name: "Probation Ending Soon (Admin)",
+      category: "employees",
+      subject: "Employee probation ending soon — {{employee_name}}",
+      bodyHtml: emailShell(
+        "Employee probation ending soon",
+        `<p>Hi {{admin_name}}, {{employee_name}} ({{employee_number}}) has probation ending on {{end_date}}.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review employee record</a></p>`
+      ),
+      variables: ["admin_name", "employee_name", "employee_number", "end_date", "employee_url"],
+      isMandatory: true,
+    },
+    {
+      key: "contract_ending_soon",
+      name: "Contract Ending Soon (Employee)",
+      category: "employees",
+      subject: "Your contract is ending soon",
+      bodyHtml: emailShell(
+        "Contract ending soon",
+        `<p>Hi {{employee_name}}, your contract ends on {{end_date}}. Please contact HR if you have any questions.</p>`
+      ),
+      variables: ["employee_name", "end_date", "employee_url"],
+      isMandatory: true,
+    },
+    {
+      key: "contract_ending_soon_admin",
+      name: "Contract Ending Soon (Admin)",
+      category: "employees",
+      subject: "Employee contract ending soon — {{employee_name}}",
+      bodyHtml: emailShell(
+        "Employee contract ending soon",
+        `<p>Hi {{admin_name}}, {{employee_name}} ({{employee_number}})'s contract ends on {{end_date}}.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review employee record</a></p>`
+      ),
+      variables: ["admin_name", "employee_name", "employee_number", "end_date", "employee_url"],
+      isMandatory: true,
     },
   ]
 

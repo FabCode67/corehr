@@ -6,6 +6,8 @@ import { Bell, GraduationCap } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { resolveNotificationHref } from "@/lib/notification-links"
+import type { Role } from "@/lib/session"
 import {
   getMyNotifications,
   getOverdueTrainingAlerts,
@@ -37,7 +39,7 @@ function relativeTime(iso: string) {
  * 60s and also re-fetches on open, so the badge count doesn't require a
  * page refresh to update.
  */
-export function NotificationBell({ employeeId }: { employeeId: string }) {
+export function NotificationBell({ employeeId, role }: { employeeId: string; role: Role }) {
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [training, setTraining] = useState<{ mine: OverdueTrainingAlert[]; team: OverdueTrainingAlert[] }>({
@@ -174,10 +176,13 @@ export function NotificationBell({ employeeId }: { employeeId: string }) {
                 )
               ) : (
                 notifications.slice(0, 20).map((n) => (
-                  <button
+                  <Link
                     key={n.id}
-                    type="button"
-                    onClick={() => handleMarkRead(n.id)}
+                    href={resolveNotificationHref(n.type, role, n.relatedLeaveRequestId, n.relatedEmployeeId)}
+                    onClick={() => {
+                      setOpen(false)
+                      if (!n.isRead) handleMarkRead(n.id)
+                    }}
                     className={cn(
                       "flex w-full flex-col gap-0.5 border-b border-border px-4 py-2.5 text-left last:border-b-0 hover:bg-muted/50",
                       !n.isRead && "bg-primary/5"
@@ -189,7 +194,7 @@ export function NotificationBell({ employeeId }: { employeeId: string }) {
                     </span>
                     <span className="text-xs text-muted-foreground">{n.message}</span>
                     <span className="text-[11px] text-muted-foreground">{relativeTime(n.createdAt)}</span>
-                  </button>
+                  </Link>
                 ))
               )}
             </>

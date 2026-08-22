@@ -6,9 +6,22 @@ import { PrismaService } from "../../prisma/prisma.service"
 import { EmailService } from "../email/email.service"
 import { NotificationsService } from "../leave/notifications/notifications.service"
 
+/**
+ * Same "N days out" scan as ProbationReminderScheduler, for the other
+ * fixed-end-date employment event: a TEMPORARY employee's contract
+ * approaching Employee.contractEndDate. Only TEMPORARY contracts use
+ * contractEndDate at all — Permanent/Graduate Trainee/Intern don't (see the
+ * field's doc comment on the Employee model) — so this only ever scans that
+ * one contract type.
+ */
 @Injectable()
-export class ProbationReminderScheduler {
-  private readonly logger = new Logger(ProbationReminderScheduler.name)
+export class ContractReminderScheduler {
+  private readonly logger = new Logger(ContractReminderScheduler.name)
+
+  /** Matches ProbationReminderScheduler.DAYS_AHEAD — kept as a separate
+   *  constant since the two reminders are independent and could reasonably
+   *  diverge later. */
+  private static readonly DAYS_AHEAD = 10
 
   constructor(
     private readonly prisma: PrismaService,
@@ -16,18 +29,14 @@ export class ProbationReminderScheduler {
     private readonly emailService: EmailService
   ) {}
 
-  /** How many days out counts as "ending soon" — matches the equivalent
-   *  contract-ending-soon reminder in contract-reminder.scheduler.ts. */
-  private static readonly DAYS_AHEAD = 10
-
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
-  async checkProbationEndingSoon() {
+  async checkContractEndingSoon() {
     try {
       const today = new Date()
       today.setUTCHours(0, 0, 0, 0)
 
       const target = new Date(today)
-      target.setUTCDate(target.getUTCDate() + ProbationReminderScheduler.DAYS_AHEAD)
+      target.setUTCDate(target.getUTCDate() + ContractReminderScheduler.DAYS_AHEAD)
 
       const targetStart = new Date(target)
       targetStart.setUTCHours(0, 0, 0, 0)
@@ -38,14 +47,15 @@ export class ProbationReminderScheduler {
       const employees = await this.prisma.employee.findMany({
         where: {
           isActive: true,
-          probationEndDate: { gte: targetStart, lte: targetEnd },
+          contractType: "TEMPORARY",
+          contractEndDate: { gte: targetStart, lte: targetEnd },
         },
         select: {
           employeeNumber: true,
           firstName: true,
           lastName: true,
           email: true,
-          probationEndDate: true,
+          contractEndDate: true,
         },
       })
 
@@ -57,30 +67,30 @@ export class ProbationReminderScheduler {
       })
 
       for (const employee of employees) {
-        const endDateStr = employee.probationEndDate ? new Date(employee.probationEndDate).toISOString().slice(0, 10) : ""
+        const endDateStr = employee.contractEndDate ? new Date(employee.contractEndDate).toISOString().slice(0, 10) : ""
 
         await this.notifications
           .create({
             recipientEmployeeId: employee.employeeNumber,
-            type: NotificationType.PROBATION_ENDING_SOON,
-            title: "Probation ending soon",
-            message: `Your probation period ends on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days). Please contact HR if you have questions.`,
+            type: NotificationType.CONTRACT_ENDING_SOON,
+            title: "Contract ending soon",
+            message: `Your contract ends on ${endDateStr} (in ${ContractReminderScheduler.DAYS_AHEAD} days). Please contact HR if you have questions.`,
             relatedEmployeeId: employee.employeeNumber,
           })
           .catch(() => undefined)
 
         await this.notifications
           .createForAllAdmins({
-            type: NotificationType.PROBATION_ENDING_SOON_ADMIN,
-            title: "Employee probation ending soon",
-            message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) has probation ending on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days).`,
+            type: NotificationType.CONTRACT_ENDING_SOON_ADMIN,
+            title: "Employee contract ending soon",
+            message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})'s contract ends on ${endDateStr} (in ${ContractReminderScheduler.DAYS_AHEAD} days).`,
             relatedEmployeeId: employee.employeeNumber,
           })
           .catch(() => undefined)
 
         await this.emailService
           .enqueue({
-            templateKey: "probation_ending_soon",
+            templateKey: "contract_ending_soon",
             recipientEmail: employee.email,
             recipientEmployeeId: employee.employeeNumber,
             relatedModule: "employees",
@@ -96,7 +106,7 @@ export class ProbationReminderScheduler {
         for (const admin of admins) {
           await this.emailService
             .enqueue({
-              templateKey: "probation_ending_soon_admin",
+              templateKey: "contract_ending_soon_admin",
               recipientEmail: admin.email,
               recipientEmployeeId: admin.employeeNumber,
               relatedModule: "employees",
@@ -113,7 +123,7 @@ export class ProbationReminderScheduler {
         }
       }
     } catch (error) {
-      this.logger.error(`Probation reminder scan failed: ${(error as Error).message}`, (error as Error).stack)
+      this.logger.error(`Contract reminder scan failed: ${(error as Error).message}`, (error as Error).stack)
     }
   }
 }

@@ -25,6 +25,12 @@ export class NotificationsService {
       title: string
       message: string
       relatedLeaveRequestId?: string
+      /** Generic "this notification is about employee X" reference — for
+       *  everything other than leave (which already has relatedLeaveRequestId).
+       *  Lets the client deep-link an admin-facing notification straight to
+       *  the employee record it concerns (e.g. probation/contract ending
+       *  soon), instead of only ever landing on a generic list page. */
+      relatedEmployeeId?: string
     },
     tx?: Prisma.TransactionClient
   ) {
@@ -38,7 +44,13 @@ export class NotificationsService {
    *  uploads awaiting review). No role/group concept exists on Notification
    *  itself, so this just fans out a create() per admin. */
   async createForAllAdmins(
-    params: { type: NotificationType; title: string; message: string; relatedLeaveRequestId?: string },
+    params: {
+      type: NotificationType
+      title: string
+      message: string
+      relatedLeaveRequestId?: string
+      relatedEmployeeId?: string
+    },
     tx?: Prisma.TransactionClient
   ) {
     const client = tx ?? this.prisma

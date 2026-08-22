@@ -39,9 +39,14 @@ export class BranchesService {
   }
 
   /** Full, unpaginated list — used by the employee form, leave filters
-   *  (approvals/calendar/analytics), the Locations map (employeeCount powers
-   *  the per-pin badge), and anywhere else a complete branch picker is
-   *  needed. See findAllPaginated() for the admin table view. */
+   *  (approvals/calendar/analytics), plain branch-picker dropdowns
+   *  throughout recruitment/performance/learning, and the Locations map
+   *  (employeeCount powers the per-pin badge — the actual roster behind
+   *  each pin's "View employees" button is a separate on-demand,
+   *  paginated fetchEmployeesPaginated({ branchId }) call, not embedded
+   *  here, so this list stays light for the many callers that only need
+   *  {id, name} for a <select>). See findAllPaginated() for the admin
+   *  table view. */
   findAll(includeInactive = false, search?: string) {
     return this.prisma.branch.findMany({
       where: this.buildFindAllWhere(includeInactive, search),

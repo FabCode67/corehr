@@ -8,7 +8,7 @@ import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet"
 import Link from "next/link"
 
 import type { Branch } from "@/lib/api/branches"
-import { fetchEmployeesPaginated } from "@/lib/api/employees"
+import { fetchEmployeesPaginated, type Employee } from "@/lib/api/employees"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,6 @@ import {
   DialogTitle,
   DialogBody,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 
@@ -158,7 +157,7 @@ function ViewEmployeesButton({
   branchName: string
 }) {
   const [open, setOpen] = useState(false)
-  const [employees, setEmployees] = useState<any[] | null>(null)
+  const [employees, setEmployees] = useState<Employee[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -208,7 +207,6 @@ function ViewEmployeesButton({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Employees at {branchName}</DialogTitle>
-            <DialogClose aria-label="Close" />
           </DialogHeader>
           <DialogBody>
             <div className="mb-4 flex items-center justify-between gap-4">

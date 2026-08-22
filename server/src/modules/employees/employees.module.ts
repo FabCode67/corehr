@@ -5,6 +5,7 @@ import { LeaveBalancesModule } from "../leave/leave-balances/leave-balances.modu
 import { NotificationsModule } from "../leave/notifications/notifications.module"
 import { AssignmentsModule } from "../learning/assignments/assignments.module"
 
+import { ContractReminderScheduler } from "./contract-reminder.scheduler"
 import { EmployeesController } from "./employees.controller"
 import { EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
@@ -13,7 +14,7 @@ import { ProbationReminderScheduler } from "./probation-reminder.scheduler"
 @Module({
   imports: [LeaveBalancesModule, AssignmentsModule, EmailModule, NotificationsModule],
   controllers: [EmployeesController],
-  providers: [EmployeesService, EmployeesExportService, ProbationReminderScheduler],
+  providers: [EmployeesService, EmployeesExportService, ProbationReminderScheduler, ContractReminderScheduler],
   exports: [EmployeesService],
 })
 export class EmployeesModule {}
