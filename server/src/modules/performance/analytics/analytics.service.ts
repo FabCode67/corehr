@@ -436,15 +436,85 @@ export class PerformanceAnalyticsService {
     })
   }
 
-  /** Employees with a consistently strong, non-declining rating history —
-   *  a simple, transparent heuristic (not a formal succession-planning
-   *  model): average rating >= 4, latest rating >= 4, at least 2 counted
-   *  reviews, and trend isn't declining. */
+  /** HR's four promotion-eligibility criteria, all required:
+   *   1. Latest performance rating between 3 and 5.
+   *   2. At least 3 years of continuous tenure in the employee's current
+   *      department — walked back through PositionHistory (joined to
+   *      Position for its departmentId) from most recent, stopping at the
+   *      first row whose position sits in a different department; an
+   *      employee with no PositionHistory at all falls back to their
+   *      company employmentStartDate (never having changed departments).
+   *   3. At least 18 months since their last internal PROMOTION or
+   *      TRANSFER, if they've ever had one — an employee who's never moved
+   *      internally has nothing to cool down from, so this passes by
+   *      default in that case.
+   *   4. Never received a disciplinary sanction, at any time.
+   * Unlike highPotential() below, this intentionally ignores reviewCount/
+   * trend — HR's brief is about a rating band plus tenure/conduct, not
+   * trajectory. */
   async promotionReadiness(filters: PerformanceAnalyticsFilters) {
     const rollups = await this.employeeRatingRollups(filters)
-    return rollups
-      .filter((r) => r.reviewCount >= 2 && r.averageRating >= 4 && (r.latestRating ?? 0) >= 4 && r.trend !== "declining")
-      .sort((a, b) => b.averageRating - a.averageRating)
+    const candidates = rollups.filter((r) => r.latestRating !== null && r.latestRating >= 3 && r.latestRating <= 5)
+    if (candidates.length === 0) return []
+
+    const employeeIds = candidates.map((c) => c.employeeId)
+
+    const [employees, historyRows, sanctioned] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { employeeNumber: { in: employeeIds } },
+        select: { employeeNumber: true, employmentStartDate: true, position: { select: { departmentId: true } } },
+      }),
+      this.prisma.positionHistory.findMany({
+        where: { employeeId: { in: employeeIds } },
+        orderBy: { effectiveFrom: "desc" },
+        select: { employeeId: true, changeType: true, effectiveFrom: true, position: { select: { departmentId: true } } },
+      }),
+      this.prisma.sanction.findMany({
+        where: { employeeId: { in: employeeIds } },
+        select: { employeeId: true },
+        distinct: ["employeeId"],
+      }),
+    ])
+
+    const employeeById = new Map(employees.map((e) => [e.employeeNumber, e]))
+    const historyByEmployee = new Map<string, typeof historyRows>()
+    for (const row of historyRows) {
+      const list = historyByEmployee.get(row.employeeId) ?? []
+      list.push(row)
+      historyByEmployee.set(row.employeeId, list)
+    }
+    const sanctionedIds = new Set(sanctioned.map((s) => s.employeeId))
+
+    const now = Date.now()
+    const THREE_YEARS_MS = 3 * 365.25 * 24 * 60 * 60 * 1000
+    const EIGHTEEN_MONTHS_MS = 18 * 30.44 * 24 * 60 * 60 * 1000
+
+    return candidates
+      .filter((c) => {
+        if (sanctionedIds.has(c.employeeId)) return false
+
+        const employee = employeeById.get(c.employeeId)
+        const currentDepartmentId = employee?.position?.departmentId ?? null
+        // Rows are already sorted most-recent-first (orderBy effectiveFrom desc above).
+        const history = historyByEmployee.get(c.employeeId) ?? []
+
+        let departmentStart: Date | null = null
+        if (history.length === 0) {
+          departmentStart = employee?.employmentStartDate ?? null
+        } else if (currentDepartmentId) {
+          for (const row of history) {
+            if (row.position.departmentId !== currentDepartmentId) break
+            departmentStart = row.effectiveFrom
+          }
+        }
+        if (!departmentStart || now - departmentStart.getTime() < THREE_YEARS_MS) return false
+
+        const lastInternalMove = history.find((row) => row.changeType === "PROMOTION" || row.changeType === "TRANSFER")
+        if (lastInternalMove && now - lastInternalMove.effectiveFrom.getTime() < EIGHTEEN_MONTHS_MS) return false
+
+        return true
+      })
+      .sort((a, b) => (b.latestRating ?? 0) - (a.latestRating ?? 0))
   }
 
   /** Employees whose rating history stands out as exceptional — average

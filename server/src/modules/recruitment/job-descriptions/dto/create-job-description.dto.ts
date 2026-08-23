@@ -53,10 +53,12 @@ export class CreateJobDescriptionDto {
   @IsOptional()
   requiredBandId?: string
 
+  /** The position the hire reports to (e.g. "Branch Manager"), not a named
+   *  employee — see the field's doc comment on the JobDescription model. */
   @ApiPropertyOptional()
-  @IsString()
+  @IsUUID()
   @IsOptional()
-  reportingManagerId?: string
+  reportingManagerPositionId?: string
 
   @ApiPropertyOptional()
   @IsString()

@@ -289,12 +289,12 @@ export interface JobDescription {
   behaviouralCompetencies: string | null
   requiredLevelId: string | null
   requiredBandId: string | null
-  reportingManagerId: string | null
+  reportingManagerPositionId: string | null
   workLocation: string | null
   isActive: boolean
   requiredLevel: NamedRef | null
   requiredBand: NamedRef | null
-  reportingManager: EmployeeRef | null
+  reportingManagerPosition: TitledRef | null
   createdAt: string
   updatedAt: string
 }

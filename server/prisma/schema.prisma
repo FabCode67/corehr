@@ -339,6 +339,7 @@ model Position {
   courseAssignments  CourseAssignment[]
   jobRequisitions        JobRequisition[] @relation("RequisitionPosition")
   requisitionsReportingTo JobRequisition[] @relation("RequisitionReportsTo")
+  jobDescriptionsReportingTo JobDescription[] @relation("JobDescriptionReportingManager")
   offers                 Offer[]
 
   createdAt DateTime @default(now())
@@ -601,7 +602,6 @@ model Employee {
   requisitionsAsHiringManager   JobRequisition[]        @relation("RequisitionHiringManager")
   requisitionsAsRecruiter       JobRequisition[]        @relation("RequisitionRecruiter")
   requisitionsApproved          JobRequisition[]        @relation("RequisitionApprover")
-  jobDescriptionsAsReportingManager JobDescription[]    @relation("JobDescriptionReportingManager")
   recruitmentStagesOwned        RecruitmentStageInstance[] @relation("StageOwner")
   screeningsDecided             Screening[]             @relation("ScreeningDecider")
   assessmentsEvaluated          Assessment[]            @relation("AssessmentEvaluator")
@@ -2433,14 +2433,19 @@ model JobDescription {
 
   requiredLevelId    String? @db.Uuid
   requiredBandId     String? @db.Uuid
-  reportingManagerId String?
+  /// The position the hire will report to (e.g. "Branch Manager"), not a
+  /// named individual — a reusable job description template outlives
+  /// whoever currently holds that position, and the recruiter/candidate only
+  /// ever need to know the role, not the person. See JobRequisition's own
+  /// reportsToPositionId for the same pattern.
+  reportingManagerPositionId String? @db.Uuid
   workLocation       String?
 
   isActive Boolean @default(true)
 
   requiredLevel    PositionLevel? @relation(fields: [requiredLevelId], references: [id])
   requiredBand     Band?          @relation(fields: [requiredBandId], references: [id])
-  reportingManager Employee?      @relation("JobDescriptionReportingManager", fields: [reportingManagerId], references: [employeeNumber])
+  reportingManagerPosition Position? @relation("JobDescriptionReportingManager", fields: [reportingManagerPositionId], references: [id])
 
   requisitions JobRequisition[]
 

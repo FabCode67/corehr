@@ -12,7 +12,7 @@ const JOB_DESCRIPTION_ORDER_BY = [{ jobTitle: "asc" as const }]
 const JOB_DESCRIPTION_INCLUDE = {
   requiredLevel: { select: { id: true, name: true } },
   requiredBand: { select: { id: true, name: true } },
-  reportingManager: { select: { employeeNumber: true, firstName: true, lastName: true } },
+  reportingManagerPosition: { select: { id: true, title: true } },
 } as const
 
 @Injectable()

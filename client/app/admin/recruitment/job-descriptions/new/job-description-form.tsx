@@ -8,19 +8,18 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Band } from "@/lib/api/bands"
-import type { Employee } from "@/lib/api/employees"
-import type { PositionLevel } from "@/lib/api/positions"
+import type { Position, PositionLevel } from "@/lib/api/positions"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
 
 interface JobDescriptionFormProps {
   levels: PositionLevel[]
   bands: Band[]
-  employees: Employee[]
+  positions: Position[]
   action: (prevState: RecruitmentActionState | undefined, formData: FormData) => Promise<RecruitmentActionState>
   submitLabel: string
 }
 
-export function JobDescriptionForm({ levels, bands, employees, action, submitLabel }: JobDescriptionFormProps) {
+export function JobDescriptionForm({ levels, bands, positions, action, submitLabel }: JobDescriptionFormProps) {
   const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(action, undefined)
 
   return (
@@ -93,12 +92,12 @@ export function JobDescriptionForm({ levels, bands, employees, action, submitLab
           </Select>
         </div>
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label htmlFor="reportingManagerId">Reporting manager (optional)</Label>
-          <Select id="reportingManagerId" name="reportingManagerId" defaultValue="">
+          <Label htmlFor="reportingManagerPositionId">Reports to (position, optional)</Label>
+          <Select id="reportingManagerPositionId" name="reportingManagerPositionId" defaultValue="">
             <option value="">None</option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
+            {positions.map((position) => (
+              <option key={position.id} value={position.id}>
+                {position.title} {position.department ? `(${position.department.name})` : ""}
               </option>
             ))}
           </Select>

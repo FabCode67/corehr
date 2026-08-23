@@ -172,6 +172,50 @@ export async function createRequisition(
   redirect(`/admin/recruitment/requisitions/${requisitionId}`)
 }
 
+export async function updateRequisition(
+  id: string,
+  actingEmployeeId: string,
+  _prevState: RecruitmentActionState | undefined,
+  formData: FormData
+): Promise<RecruitmentActionState> {
+  const bandId = trimmedOrUndefined(formData.get("bandId"))
+  const numberOfVacancies = trimmedOrUndefined(formData.get("numberOfVacancies"))
+  const contractType = trimmedOrUndefined(formData.get("contractType"))
+  const employmentType = trimmedOrUndefined(formData.get("employmentType"))
+  const priority = trimmedOrUndefined(formData.get("priority"))
+  const targetStartDate = trimmedOrUndefined(formData.get("targetStartDate"))
+  const jobDescriptionId = trimmedOrUndefined(formData.get("jobDescriptionId"))
+
+  try {
+    await apiFetch(`/recruitment/requisitions/${id}?actingEmployeeId=${actingEmployeeId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        bandId,
+        numberOfVacancies: numberOfVacancies ? Number(numberOfVacancies) : undefined,
+        contractType,
+        employmentType,
+        priority,
+        targetStartDate,
+        jobDescriptionId,
+      }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to update the requisition." }
+  }
+  revalidateRecruitmentPaths()
+  redirect(`/admin/recruitment/requisitions/${id}`)
+}
+
+export async function deleteRequisition(id: string, actingEmployeeId: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/requisitions/${id}?actingEmployeeId=${actingEmployeeId}`, { method: "DELETE" })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to delete the requisition." }
+  }
+  revalidateRecruitmentPaths()
+  redirect(`/admin/recruitment/requisitions`)
+}
+
 export async function submitRequisition(id: string, actingEmployeeId: string): Promise<RecruitmentActionState> {
   try {
     await apiFetch(`/recruitment/requisitions/${id}/submit`, { method: "POST", body: JSON.stringify({ actingEmployeeId }) })
@@ -273,7 +317,7 @@ export async function createJobDescription(
         behaviouralCompetencies: trimmedOrUndefined(formData.get("behaviouralCompetencies")),
         requiredLevelId: trimmedOrUndefined(formData.get("requiredLevelId")),
         requiredBandId: trimmedOrUndefined(formData.get("requiredBandId")),
-        reportingManagerId: trimmedOrUndefined(formData.get("reportingManagerId")),
+        reportingManagerPositionId: trimmedOrUndefined(formData.get("reportingManagerPositionId")),
         workLocation: trimmedOrUndefined(formData.get("workLocation")),
       }),
     })

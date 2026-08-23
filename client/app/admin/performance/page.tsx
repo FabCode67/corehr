@@ -678,7 +678,9 @@ export default async function AdminPerformanceDashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Promotion readiness</CardTitle>
-            <CardDescription>Consistently strong, non-declining rating history (avg &amp; latest ≥ 4, 2+ reviews).</CardDescription>
+            <CardDescription>
+              Rating 3–5, 3+ years in current department, 18+ months since last internal move, no disciplinary sanctions.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {!promotionReadinessResult.ok || promotionReadinessResult.data.length === 0 ? (

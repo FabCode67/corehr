@@ -1,11 +1,19 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { approveRequisition, closeRequisition, reopenRequisition, rejectRequisition, submitRequisition } from "@/lib/api/recruitment-actions"
+import {
+  approveRequisition,
+  closeRequisition,
+  deleteRequisition,
+  reopenRequisition,
+  rejectRequisition,
+  submitRequisition,
+} from "@/lib/api/recruitment-actions"
 import type { RequisitionStatus } from "@/lib/api/recruitment"
 
 export function RequisitionActions({
@@ -42,12 +50,24 @@ export function RequisitionActions({
   const canDecide = isAdmin && status === "PENDING_APPROVAL"
   const canClose = status === "APPROVED"
   const canReopen = status === "CLOSED"
+  const canEdit = status !== "CLOSED"
+  const canDelete = status === "DRAFT"
 
-  if (!canSubmit && !canDecide && !canClose && !canReopen) return null
+  function handleDelete() {
+    if (!window.confirm("Delete this draft requisition? This can't be undone.")) return
+    run(() => deleteRequisition(requisitionId, actingEmployeeId))
+  }
+
+  if (!canSubmit && !canDecide && !canClose && !canReopen && !canEdit && !canDelete) return null
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
+        {canEdit ? (
+          <Link href={`/admin/recruitment/requisitions/${requisitionId}/edit`} className={buttonVariants({ size: "sm", variant: "outline" })}>
+            Edit details
+          </Link>
+        ) : null}
         {canSubmit ? (
           <Button type="button" size="sm" disabled={pending} onClick={() => run(() => submitRequisition(requisitionId, actingEmployeeId))}>
             {pending ? "Submitting…" : "Submit for approval"}
@@ -71,6 +91,11 @@ export function RequisitionActions({
         {canReopen ? (
           <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => reopenRequisition(requisitionId, actingEmployeeId))}>
             {pending ? "Reopening…" : "Reopen requisition"}
+          </Button>
+        ) : null}
+        {canDelete ? (
+          <Button type="button" size="sm" variant="destructive" disabled={pending} onClick={handleDelete}>
+            {pending ? "Deleting…" : "Delete requisition"}
           </Button>
         ) : null}
       </div>

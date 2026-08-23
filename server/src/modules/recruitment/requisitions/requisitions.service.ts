@@ -194,9 +194,36 @@ export class RequisitionsService {
     if (requisition.status === "CLOSED") {
       throw new BadRequestException("A closed requisition can no longer be edited.")
     }
+    if (dto.bandId) {
+      await this.assertBandExists(dto.bandId)
+    }
     const updated = await this.prisma.jobRequisition.update({ where: { id }, data: dto, include: REQUISITION_INCLUDE })
     await this.log(id, "UPDATED", actingEmployeeId)
     return updated
+  }
+
+  /** Only a DRAFT requisition can be deleted outright — anything past that
+   *  has an approval decision, possibly job postings/applications, and
+   *  RecruitmentAuditLog history attached, so per the spec's audit-trail
+   *  requirements it's closed (see close()/reopen()) rather than erased.
+   *  A DRAFT requisition still always carries its 12 seeded
+   *  RecruitmentStageInstance rows (see create()'s doc comment) and any
+   *  audit log entries logged so far, so those are deleted first in the
+   *  same transaction to satisfy the FK constraint. */
+  async remove(id: string, actingEmployeeId: string) {
+    const requisition = await this.findOne(id, actingEmployeeId)
+    if (requisition.status !== "DRAFT") {
+      throw new BadRequestException("Only a draft requisition can be deleted — close it instead once it's past draft.")
+    }
+    const postingCount = await this.prisma.jobPosting.count({ where: { requisitionId: id } })
+    if (postingCount > 0) {
+      throw new BadRequestException("This requisition already has job postings attached and can't be deleted.")
+    }
+    await this.prisma.$transaction([
+      this.prisma.recruitmentStageInstance.deleteMany({ where: { requisitionId: id } }),
+      this.prisma.recruitmentAuditLog.deleteMany({ where: { entityType: "JobRequisition", entityId: id } }),
+      this.prisma.jobRequisition.delete({ where: { id } }),
+    ])
   }
 
   async submit(id: string, dto: ActingEmployeeDto) {

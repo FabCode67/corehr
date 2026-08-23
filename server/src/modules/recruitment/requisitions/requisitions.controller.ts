@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
 
 import { RecruitmentStageName } from "@prisma/client"
@@ -54,6 +54,11 @@ export class RequisitionsController {
     @Query("actingEmployeeId") actingEmployeeId: string
   ) {
     return this.requisitionsService.update(id, dto, actingEmployeeId)
+  }
+
+  @Delete(":id")
+  remove(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.requisitionsService.remove(id, actingEmployeeId)
   }
 
   @Post(":id/submit")

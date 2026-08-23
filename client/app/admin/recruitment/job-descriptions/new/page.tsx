@@ -3,14 +3,13 @@ import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { fetchBands } from "@/lib/api/bands"
-import { fetchEmployees } from "@/lib/api/employees"
-import { fetchPositionLevels } from "@/lib/api/positions"
+import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { createJobDescription } from "@/lib/api/recruitment-actions"
 
 import { JobDescriptionForm } from "./job-description-form"
 
 export default async function NewJobDescriptionPage() {
-  const [levelsResult, bandsResult, employeesResult] = await Promise.all([fetchPositionLevels(), fetchBands(), fetchEmployees()])
+  const [levelsResult, bandsResult, positionsResult] = await Promise.all([fetchPositionLevels(), fetchBands(), fetchPositions()])
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -30,7 +29,7 @@ export default async function NewJobDescriptionPage() {
           <JobDescriptionForm
             levels={levelsResult.ok ? levelsResult.data : []}
             bands={bandsResult.ok ? bandsResult.data : []}
-            employees={employeesResult.ok ? employeesResult.data : []}
+            positions={positionsResult.ok ? positionsResult.data : []}
             action={createJobDescription}
             submitLabel="Create job description"
           />

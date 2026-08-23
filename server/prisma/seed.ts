@@ -1868,7 +1868,7 @@ async function seedRecruitment(params: {
       behaviouralCompetencies?: string
       requiredLevelId?: string
       requiredBandId?: string
-      reportingManagerId?: string
+      reportingManagerPositionId?: string
       workLocation?: string
       isActive?: boolean
     }
@@ -2079,7 +2079,7 @@ async function seedRecruitment(params: {
     behaviouralCompetencies: "Ownership, attention to detail, collaborative.",
     requiredLevelId: levelOfficer.id,
     requiredBandId: band3,
-    reportingManagerId: claudine.employeeNumber,
+    reportingManagerPositionId: amApis.id,
     workLocation: "Headquarters",
     isActive: true,
   })
