@@ -51,7 +51,7 @@ export class SanctionsService {
 
     await this.prisma.disciplinaryCase.update({ where: { id: caseId }, data: { status: "SANCTION_ISSUED" } })
     await this.log(caseId, "SANCTION_ISSUED", dto.actingEmployeeId, `${sanction.sanctionType.name}`)
-    await this.notify(disciplinaryCase.employeeId, "ERC_DECISION_ISSUED", "Disciplinary decision issued", `A decision has been issued on case ${disciplinaryCase.caseNumber}.`)
+    await this.notify(disciplinaryCase.employeeId, "ERC_DECISION_ISSUED", "Disciplinary decision issued", `A decision has been issued on case ${disciplinaryCase.caseNumber}.`, caseId)
 
     return sanction
   }
@@ -72,8 +72,10 @@ export class SanctionsService {
     return this.prisma.sanction.findMany({ where: { employeeId }, include: SANCTION_INCLUDE, orderBy: { dateOfSanction: "desc" } })
   }
 
-  private async notify(recipientEmployeeId: string, type: "ERC_DECISION_ISSUED", title: string, message: string) {
-    await this.prisma.notification.create({ data: { recipientEmployeeId, type, title, message } })
+  private async notify(recipientEmployeeId: string, type: "ERC_DECISION_ISSUED", title: string, message: string, caseId: string) {
+    await this.prisma.notification.create({
+      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/employee-relations/cases/${caseId}` },
+    })
   }
 
   private async log(caseId: string, action: string, actorId: string | null, notes?: string) {

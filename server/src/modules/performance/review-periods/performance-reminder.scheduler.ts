@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common"
 import { Cron, CronExpression } from "@nestjs/schedule"
 import { PerformanceReviewType } from "@prisma/client"
 
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 
@@ -104,6 +105,7 @@ export class PerformanceReminderScheduler {
               employee_name: `${employee.firstName} ${employee.lastName}`,
               review_period: reviewPeriodLabel,
               deadline: deadlineLabel,
+              review_url: buildClientUrl("/staff/performance"),
             },
           })
           .catch(() => undefined)

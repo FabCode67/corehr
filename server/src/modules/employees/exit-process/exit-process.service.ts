@@ -78,12 +78,14 @@ export class ExitProcessService {
         variables: {
           employee_name: `${employee.firstName} ${employee.lastName}`,
           last_working_day: "To be confirmed by HR",
-          form_url: buildClientUrl("/staff/forms"),
+          form_url: buildClientUrl(`/staff/forms/${formInstance.id}`),
         },
       })
     } else {
       this.logger.warn(`Exit initiated for ${employeeId}, but no active "${EXIT_FORM_CODE}" form template was found — nothing assigned. Run the seed script to create it.`)
     }
+
+    const employeeUrl = `/admin/employees/${employeeId}`
 
     const manager = await this.employeesService.getReportingManager(employeeId)
     if (manager.manager) {
@@ -93,6 +95,8 @@ export class ExitProcessService {
           type: NotificationType.EXIT_PROCESS_STARTED,
           title: "Exit process started",
           message: `${employee.firstName} ${employee.lastName}, who reports to you, has begun the exit process.`,
+          relatedEmployeeId: employeeId,
+          actionUrl: employeeUrl,
         },
       })
       const managerContact = await this.prisma.employee.findUnique({ where: { employeeNumber: manager.manager.id }, select: { email: true } })
@@ -107,6 +111,7 @@ export class ExitProcessService {
             manager_name: `${manager.manager.firstName} ${manager.manager.lastName}`,
             employee_name: `${employee.firstName} ${employee.lastName}`,
             task_name: "Exit clearance sign-off",
+            employee_url: buildClientUrl(employeeUrl),
           },
         })
       }
@@ -120,6 +125,8 @@ export class ExitProcessService {
           type: NotificationType.EXIT_PROCESS_STARTED,
           title: "Exit process started",
           message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) has begun the exit process.`,
+          relatedEmployeeId: employeeId,
+          actionUrl: employeeUrl,
         })),
       })
       await Promise.all(
@@ -133,6 +140,7 @@ export class ExitProcessService {
             variables: {
               employee_name: `${employee.firstName} ${employee.lastName}`,
               status: "Exit process started",
+              employee_url: buildClientUrl(employeeUrl),
             },
           })
         )

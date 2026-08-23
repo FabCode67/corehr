@@ -64,7 +64,7 @@ export class AppealsService {
 
     await this.prisma.disciplinaryCase.update({ where: { id: caseId }, data: { status: "APPEALED" } })
     await this.log(caseId, "APPEAL_SUBMITTED", dto.actingEmployeeId)
-    await this.notify(disciplinaryCase.reportedById, "ERC_APPEAL_SUBMITTED", "Appeal submitted", `An appeal has been submitted on case ${disciplinaryCase.caseNumber}.`)
+    await this.notify(disciplinaryCase.reportedById, "ERC_APPEAL_SUBMITTED", "Appeal submitted", `An appeal has been submitted on case ${disciplinaryCase.caseNumber}.`, caseId, true)
 
     return appeal
   }
@@ -88,13 +88,28 @@ export class AppealsService {
 
     await this.prisma.disciplinaryCase.update({ where: { id: caseId }, data: { status: "CLOSED", closedAt: new Date() } })
     await this.log(caseId, "APPEAL_DECIDED", dto.actingEmployeeId, `${dto.outcome}: ${dto.decisionComments}`)
-    await this.notify(disciplinaryCase.employeeId, "ERC_APPEAL_DECIDED", "Appeal decision available", `A decision is available on your appeal for case ${disciplinaryCase.caseNumber}.`)
+    await this.notify(disciplinaryCase.employeeId, "ERC_APPEAL_DECIDED", "Appeal decision available", `A decision is available on your appeal for case ${disciplinaryCase.caseNumber}.`, caseId)
 
     return updated
   }
 
-  private async notify(recipientEmployeeId: string, type: "ERC_APPEAL_SUBMITTED" | "ERC_APPEAL_DECIDED", title: string, message: string) {
-    await this.prisma.notification.create({ data: { recipientEmployeeId, type, title, message } })
+  private async notify(
+    recipientEmployeeId: string,
+    type: "ERC_APPEAL_SUBMITTED" | "ERC_APPEAL_DECIDED",
+    title: string,
+    message: string,
+    caseId: string,
+    forAdmin = false
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        recipientEmployeeId,
+        type,
+        title,
+        message,
+        actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
+      },
+    })
   }
 
   private async log(caseId: string, action: string, actorId: string | null, notes?: string) {

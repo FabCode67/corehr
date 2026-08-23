@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
 import { RecruitmentAccessService } from "../access/recruitment-access.service"
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 
@@ -118,6 +119,7 @@ export class InterviewsService {
             job_title: interview.application.jobPosting.postingTitle,
             interview_date: interviewDateStr,
             interview_time: interviewTimeStr,
+            application_url: buildClientUrl(`/admin/recruitment/applications/${interview.applicationId}`),
           },
         })
       }

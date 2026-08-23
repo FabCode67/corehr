@@ -2987,9 +2987,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Your leave request has been submitted",
       bodyHtml: emailShell(
         "Leave request submitted",
-        `<p>Hi {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} ({{days}} day(s)) has been submitted and is awaiting approval from {{approver_name}}.</p>`
+        `<p>Hi {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} ({{days}} day(s)) has been submitted and is awaiting approval from {{approver_name}}.</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my requests</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "start_date", "end_date", "days", "approver_name"],
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "days", "approver_name", "leave_url"],
     },
     {
       key: "leave_approval_needed",
@@ -3010,9 +3011,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Your leave request was approved",
       bodyHtml: emailShell(
         "Leave approved",
-        `<p>Good news, {{employee_name}} — your {{leave_type}} request for {{start_date}} to {{end_date}} has been approved by {{approver_name}}.</p>`
+        `<p>Good news, {{employee_name}} — your {{leave_type}} request for {{start_date}} to {{end_date}} has been approved by {{approver_name}}.</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my requests</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name"],
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name", "leave_url"],
     },
     {
       key: "leave_rejected",
@@ -3022,9 +3024,10 @@ async function seedEmployeeRelations(employees: {
       bodyHtml: emailShell(
         "Leave request rejected",
         `<p>Hi {{employee_name}}, your {{leave_type}} request for {{start_date}} to {{end_date}} was not approved by {{approver_name}}.</p>
-        <p>Reason: {{decision_comment}}</p>`
+        <p>Reason: {{decision_comment}}</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my requests</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name", "decision_comment"],
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "approver_name", "decision_comment", "leave_url"],
     },
     {
       key: "leave_cancelled",
@@ -3033,9 +3036,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Leave request cancelled — {{employee_name}}",
       bodyHtml: emailShell(
         "Leave request cancelled",
-        `<p>{{employee_name}}'s {{leave_type}} request for {{start_date}} to {{end_date}} has been cancelled.</p>`
+        `<p>{{employee_name}}'s {{leave_type}} request for {{start_date}} to {{end_date}} has been cancelled.</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View leave requests</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "start_date", "end_date"],
+      variables: ["employee_name", "leave_type", "start_date", "end_date", "leave_url"],
     },
     {
       key: "leave_low_balance",
@@ -3044,9 +3048,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Your {{leave_type}} balance is running low",
       bodyHtml: emailShell(
         "Low leave balance",
-        `<p>Hi {{employee_name}}, your remaining {{leave_type}} balance is now {{balance_days}} day(s). Plan ahead if you have time off coming up.</p>`
+        `<p>Hi {{employee_name}}, your remaining {{leave_type}} balance is now {{balance_days}} day(s). Plan ahead if you have time off coming up.</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my balances</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "balance_days"],
+      variables: ["employee_name", "leave_type", "balance_days", "leave_url"],
     },
     {
       key: "leave_carry_forward_expiring",
@@ -3055,9 +3060,10 @@ async function seedEmployeeRelations(employees: {
       subject: "{{carry_forward_days}} carried-forward day(s) expire on {{expiry_date}}",
       bodyHtml: emailShell(
         "Carried-forward leave is expiring soon",
-        `<p>Hi {{employee_name}}, you have {{carry_forward_days}} day(s) of carried-forward {{leave_type}} leave that will expire on {{expiry_date}}. Use them before they're forfeited.</p>`
+        `<p>Hi {{employee_name}}, you have {{carry_forward_days}} day(s) of carried-forward {{leave_type}} leave that will expire on {{expiry_date}}. Use them before they're forfeited.</p>
+        <p><a href="{{leave_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my balances</a></p>`
       ),
-      variables: ["employee_name", "leave_type", "carry_forward_days", "expiry_date"],
+      variables: ["employee_name", "leave_type", "carry_forward_days", "expiry_date", "leave_url"],
     },
 
     // ---- Performance -------------------------------------------------------
@@ -3080,25 +3086,34 @@ async function seedEmployeeRelations(employees: {
       subject: "Reminder: {{review_period}} appraisal due in 14 days",
       bodyHtml: emailShell(
         "14 days left to complete your appraisal",
-        `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}} — that's 14 days from now.</p>`
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}} — that's 14 days from now.</p>
+        <p><a href="{{review_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete appraisal</a></p>`
       ),
-      variables: ["employee_name", "review_period", "deadline"],
+      variables: ["employee_name", "review_period", "deadline", "review_url"],
     },
     {
       key: "performance_reminder_7_days",
       name: "Appraisal Reminder — 7 Days Left",
       category: "performance",
       subject: "Reminder: {{review_period}} appraisal due in 7 days",
-      bodyHtml: emailShell("7 days left to complete your appraisal", `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}}.</p>`),
-      variables: ["employee_name", "review_period", "deadline"],
+      bodyHtml: emailShell(
+        "7 days left to complete your appraisal",
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due on {{deadline}}.</p>
+        <p><a href="{{review_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete appraisal</a></p>`
+      ),
+      variables: ["employee_name", "review_period", "deadline", "review_url"],
     },
     {
       key: "performance_reminder_1_day",
       name: "Appraisal Reminder — 1 Day Left",
       category: "performance",
       subject: "Final reminder: {{review_period}} appraisal due tomorrow",
-      bodyHtml: emailShell("Due tomorrow", `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due tomorrow ({{deadline}}).</p>`),
-      variables: ["employee_name", "review_period", "deadline"],
+      bodyHtml: emailShell(
+        "Due tomorrow",
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal is due tomorrow ({{deadline}}).</p>
+        <p><a href="{{review_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete appraisal</a></p>`
+      ),
+      variables: ["employee_name", "review_period", "deadline", "review_url"],
     },
     {
       key: "performance_overdue",
@@ -3107,9 +3122,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Overdue: {{review_period}} appraisal",
       bodyHtml: emailShell(
         "Your appraisal is now overdue",
-        `<p>Hi {{employee_name}}, your {{review_period}} appraisal was due on {{deadline}} and has not yet been submitted. Please complete it as soon as possible.</p>`
+        `<p>Hi {{employee_name}}, your {{review_period}} appraisal was due on {{deadline}} and has not yet been submitted. Please complete it as soon as possible.</p>
+        <p><a href="{{review_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete appraisal now</a></p>`
       ),
-      variables: ["employee_name", "review_period", "deadline"],
+      variables: ["employee_name", "review_period", "deadline", "review_url"],
     },
     {
       key: "performance_manager_reminder",
@@ -3141,24 +3157,36 @@ async function seedEmployeeRelations(employees: {
       name: "Course Not Started Reminder",
       category: "learning",
       subject: "Reminder: {{course_name}} not yet started",
-      bodyHtml: emailShell("You haven't started this course yet", `<p>Hi {{employee_name}}, "{{course_name}}" is due by {{due_date}} and hasn't been started.</p>`),
-      variables: ["employee_name", "course_name", "due_date"],
+      bodyHtml: emailShell(
+        "You haven't started this course yet",
+        `<p>Hi {{employee_name}}, "{{course_name}}" is due by {{due_date}} and hasn't been started.</p>
+        <p><a href="{{course_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Start course</a></p>`
+      ),
+      variables: ["employee_name", "course_name", "due_date", "course_url"],
     },
     {
       key: "learning_approaching_deadline",
       name: "Course Deadline Approaching",
       category: "learning",
       subject: "{{course_name}} is due soon",
-      bodyHtml: emailShell("Deadline approaching", `<p>Hi {{employee_name}}, "{{course_name}}" is due on {{due_date}}.</p>`),
-      variables: ["employee_name", "course_name", "due_date"],
+      bodyHtml: emailShell(
+        "Deadline approaching",
+        `<p>Hi {{employee_name}}, "{{course_name}}" is due on {{due_date}}.</p>
+        <p><a href="{{course_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Continue course</a></p>`
+      ),
+      variables: ["employee_name", "course_name", "due_date", "course_url"],
     },
     {
       key: "learning_overdue",
       name: "Course Overdue",
       category: "learning",
       subject: "Overdue: {{course_name}}",
-      bodyHtml: emailShell("This course is now overdue", `<p>Hi {{employee_name}}, "{{course_name}}" was due on {{due_date}} and is now overdue.</p>`),
-      variables: ["employee_name", "course_name", "due_date"],
+      bodyHtml: emailShell(
+        "This course is now overdue",
+        `<p>Hi {{employee_name}}, "{{course_name}}" was due on {{due_date}} and is now overdue.</p>
+        <p><a href="{{course_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete course now</a></p>`
+      ),
+      variables: ["employee_name", "course_name", "due_date", "course_url"],
     },
     {
       key: "learning_aml_mandatory_reminder",
@@ -3167,9 +3195,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Action required: {{course_name}} (mandatory compliance training)",
       bodyHtml: emailShell(
         "Mandatory compliance training reminder",
-        `<p>Hi {{employee_name}}, "{{course_name}}" is mandatory AML/compliance training due by {{due_date}}. This reminder cannot be disabled.</p>`
+        `<p>Hi {{employee_name}}, "{{course_name}}" is mandatory AML/compliance training due by {{due_date}}. This reminder cannot be disabled.</p>
+        <p><a href="{{course_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Complete training now</a></p>`
       ),
-      variables: ["employee_name", "course_name", "due_date"],
+      variables: ["employee_name", "course_name", "due_date", "course_url"],
       isMandatory: true,
     },
 
@@ -3236,8 +3265,12 @@ async function seedEmployeeRelations(employees: {
       name: "New Application (Recruiter)",
       category: "recruitment",
       subject: "New application — {{job_title}}",
-      bodyHtml: emailShell("New application received", `<p>{{candidate_name}} has applied for {{job_title}}.</p>`),
-      variables: ["candidate_name", "job_title"],
+      bodyHtml: emailShell(
+        "New application received",
+        `<p>{{candidate_name}} has applied for {{job_title}}.</p>
+        <p><a href="{{application_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review application</a></p>`
+      ),
+      variables: ["candidate_name", "job_title", "application_url"],
     },
     {
       key: "recruitment_interview_scheduled_recruiter",
@@ -3246,9 +3279,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Interview scheduled — {{candidate_name}} for {{job_title}}",
       bodyHtml: emailShell(
         "Interview scheduled",
-        `<p>An interview for {{candidate_name}} ({{job_title}}) has been scheduled for {{interview_date}} at {{interview_time}}.</p>`
+        `<p>An interview for {{candidate_name}} ({{job_title}}) has been scheduled for {{interview_date}} at {{interview_time}}.</p>
+        <p><a href="{{application_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review application</a></p>`
       ),
-      variables: ["candidate_name", "job_title", "interview_date", "interview_time"],
+      variables: ["candidate_name", "job_title", "interview_date", "interview_time", "application_url"],
     },
 
     // ---- Exit Management -----------------------------------------------------
@@ -3293,17 +3327,22 @@ async function seedEmployeeRelations(employees: {
       subject: "Action needed: exit clearance for {{employee_name}}",
       bodyHtml: emailShell(
         "Exit clearance awaiting your approval",
-        `<p>Hi {{manager_name}}, {{employee_name}}'s exit clearance item ({{task_name}}) is awaiting your sign-off.</p>`
+        `<p>Hi {{manager_name}}, {{employee_name}}'s exit clearance item ({{task_name}}) is awaiting your sign-off.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review employee record</a></p>`
       ),
-      variables: ["manager_name", "employee_name", "task_name"],
+      variables: ["manager_name", "employee_name", "task_name", "employee_url"],
     },
     {
       key: "exit_hr_workflow_update",
       name: "Exit Workflow Update (HR)",
       category: "exit",
       subject: "Exit workflow update — {{employee_name}}",
-      bodyHtml: emailShell("Exit workflow update", `<p>{{employee_name}}'s exit process status changed to {{status}}.</p>`),
-      variables: ["employee_name", "status"],
+      bodyHtml: emailShell(
+        "Exit workflow update",
+        `<p>{{employee_name}}'s exit process status changed to {{status}}.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review employee record</a></p>`
+      ),
+      variables: ["employee_name", "status", "employee_url"],
     },
 
     // ---- Employee Relations ---------------------------------------------------
@@ -3343,8 +3382,12 @@ async function seedEmployeeRelations(employees: {
       name: "Approval Completed",
       category: "approval",
       subject: "Approved: {{item_title}}",
-      bodyHtml: emailShell("Approved", `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) has been approved by {{approver_name}}.</p>`),
-      variables: ["requester_name", "item_title", "item_type", "approver_name"],
+      bodyHtml: emailShell(
+        "Approved",
+        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) has been approved by {{approver_name}}.</p>
+        <p><a href="{{item_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View record</a></p>`
+      ),
+      variables: ["requester_name", "item_title", "item_type", "approver_name", "item_url"],
     },
     {
       key: "approval_rejected",
@@ -3353,9 +3396,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Rejected: {{item_title}}",
       bodyHtml: emailShell(
         "Not approved",
-        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was rejected by {{approver_name}}. Reason: {{decision_comment}}</p>`
+        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was rejected by {{approver_name}}. Reason: {{decision_comment}}</p>
+        <p><a href="{{item_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View record</a></p>`
       ),
-      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment"],
+      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment", "item_url"],
     },
     {
       key: "approval_returned_for_correction",
@@ -3364,9 +3408,10 @@ async function seedEmployeeRelations(employees: {
       subject: "Please review: {{item_title}} was returned for correction",
       bodyHtml: emailShell(
         "Returned for correction",
-        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was returned by {{approver_name}} for correction. Notes: {{decision_comment}}</p>`
+        `<p>Hi {{requester_name}}, "{{item_title}}" ({{item_type}}) was returned by {{approver_name}} for correction. Notes: {{decision_comment}}</p>
+        <p><a href="{{item_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View record</a></p>`
       ),
-      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment"],
+      variables: ["requester_name", "item_title", "item_type", "approver_name", "decision_comment", "item_url"],
     },
 
     // ---- Employees (probation / contract ending soon) --------------------------
@@ -3377,7 +3422,8 @@ async function seedEmployeeRelations(employees: {
       subject: "Your probation period ends soon",
       bodyHtml: emailShell(
         "Probation ending soon",
-        `<p>Hi {{employee_name}}, your probation period ends on {{end_date}}. Please contact HR if you have any questions.</p>`
+        `<p>Hi {{employee_name}}, your probation period ends on {{end_date}}. Please contact HR if you have any questions.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my profile</a></p>`
       ),
       variables: ["employee_name", "end_date", "employee_url"],
       isMandatory: true,
@@ -3402,7 +3448,8 @@ async function seedEmployeeRelations(employees: {
       subject: "Your contract is ending soon",
       bodyHtml: emailShell(
         "Contract ending soon",
-        `<p>Hi {{employee_name}}, your contract ends on {{end_date}}. Please contact HR if you have any questions.</p>`
+        `<p>Hi {{employee_name}}, your contract ends on {{end_date}}. Please contact HR if you have any questions.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View my profile</a></p>`
       ),
       variables: ["employee_name", "end_date", "employee_url"],
       isMandatory: true,

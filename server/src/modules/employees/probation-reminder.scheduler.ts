@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common"
 import { Cron, CronExpression } from "@nestjs/schedule"
 import { NotificationType } from "@prisma/client"
 
+import { buildClientUrl } from "../../common/client-url.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { EmailService } from "../email/email.service"
 import { NotificationsService } from "../leave/notifications/notifications.service"
@@ -58,6 +59,7 @@ export class ProbationReminderScheduler {
 
       for (const employee of employees) {
         const endDateStr = employee.probationEndDate ? new Date(employee.probationEndDate).toISOString().slice(0, 10) : ""
+        const employeeUrl = `/admin/employees/${employee.employeeNumber}`
 
         await this.notifications
           .create({
@@ -66,6 +68,7 @@ export class ProbationReminderScheduler {
             title: "Probation ending soon",
             message: `Your probation period ends on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days). Please contact HR if you have questions.`,
             relatedEmployeeId: employee.employeeNumber,
+            actionUrl: "/staff/profile",
           })
           .catch(() => undefined)
 
@@ -75,6 +78,7 @@ export class ProbationReminderScheduler {
             title: "Employee probation ending soon",
             message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) has probation ending on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days).`,
             relatedEmployeeId: employee.employeeNumber,
+            actionUrl: employeeUrl,
           })
           .catch(() => undefined)
 
@@ -88,7 +92,7 @@ export class ProbationReminderScheduler {
             variables: {
               employee_name: `${employee.firstName} ${employee.lastName}`,
               end_date: endDateStr,
-              employee_url: `/admin/employees/${employee.employeeNumber}`,
+              employee_url: buildClientUrl("/staff/profile"),
             },
           })
           .catch(() => undefined)
@@ -106,7 +110,7 @@ export class ProbationReminderScheduler {
                 employee_name: `${employee.firstName} ${employee.lastName}`,
                 employee_number: employee.employeeNumber,
                 end_date: endDateStr,
-                employee_url: `/admin/employees/${employee.employeeNumber}`,
+                employee_url: buildClientUrl(employeeUrl),
               },
             })
             .catch(() => undefined)

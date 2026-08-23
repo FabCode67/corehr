@@ -314,6 +314,7 @@ export class LeaveRequestsService {
           title: "Leave request submitted",
           message: `Your ${leaveType.name} request for ${numberOfDays} day(s) has been submitted.`,
           relatedLeaveRequestId: created.id,
+          actionUrl: "/staff/leave",
         },
         tx
       )
@@ -339,6 +340,7 @@ export class LeaveRequestsService {
         end_date: endDateStr,
         days: populated.numberOfDays,
         approver_name: firstStep ? "your approving manager" : "N/A — auto-approved",
+        leave_url: buildClientUrl("/staff/leave"),
       },
     })
 
@@ -351,6 +353,7 @@ export class LeaveRequestsService {
           title: "Leave request awaiting your approval",
           message: `A ${leaveType.name} request needs your approval.`,
           relatedLeaveRequestId: request.id,
+          actionUrl: "/staff/leave/approvals",
         })
         const managerEmail = await this.getEmployeeEmail(managerId)
         if (managerEmail) {
@@ -429,6 +432,7 @@ export class LeaveRequestsService {
             title: "Leave request rejected",
             message: `Your ${request.leaveType.name} request was rejected.${dto.comment ? ` Reason: ${dto.comment}` : ""}`,
             relatedLeaveRequestId: id,
+            actionUrl: "/staff/leave",
           },
           tx
         )
@@ -447,6 +451,7 @@ export class LeaveRequestsService {
               end_date: request.endDate.toISOString().slice(0, 10),
               approver_name: rejectingApprover ? `${rejectingApprover.firstName} ${rejectingApprover.lastName}` : "HR",
               decision_comment: dto.comment ?? "No reason provided.",
+              leave_url: buildClientUrl("/staff/leave"),
             },
           },
           tx
@@ -488,6 +493,7 @@ export class LeaveRequestsService {
           title: "Leave request approved",
           message: `Your ${request.leaveType.name} request for ${request.numberOfDays} day(s) has been approved.`,
           relatedLeaveRequestId: id,
+          actionUrl: "/staff/leave",
         },
         tx
       )
@@ -505,6 +511,7 @@ export class LeaveRequestsService {
             start_date: request.startDate.toISOString().slice(0, 10),
             end_date: request.endDate.toISOString().slice(0, 10),
             approver_name: approvingApprover ? `${approvingApprover.firstName} ${approvingApprover.lastName}` : "HR",
+            leave_url: buildClientUrl("/staff/leave"),
           },
         },
         tx
@@ -578,6 +585,7 @@ export class LeaveRequestsService {
           title: "Leave request cancelled",
           message: `Your ${request.leaveType.name} request has been cancelled.`,
           relatedLeaveRequestId: id,
+          actionUrl: "/staff/leave",
         },
         tx
       )
@@ -593,6 +601,7 @@ export class LeaveRequestsService {
             leave_type: request.leaveType.name,
             start_date: request.startDate.toISOString().slice(0, 10),
             end_date: request.endDate.toISOString().slice(0, 10),
+            leave_url: buildClientUrl("/staff/leave"),
           },
         },
         tx
@@ -604,6 +613,7 @@ export class LeaveRequestsService {
           title: "Leave request cancelled",
           message: `${request.employee.firstName} ${request.employee.lastName} cancelled their ${request.leaveType.name} request. Reason: ${dto.cancellationReason}`,
           relatedLeaveRequestId: id,
+          actionUrl: "/admin/leave",
         },
         tx
       )
@@ -619,6 +629,7 @@ export class LeaveRequestsService {
         title: "Leave request cancelled",
         message: `${request.employee.firstName} ${request.employee.lastName}, who reports to you, cancelled their ${request.leaveType.name} request.`,
         relatedLeaveRequestId: id,
+        actionUrl: "/staff/leave/approvals",
       })
     }
 

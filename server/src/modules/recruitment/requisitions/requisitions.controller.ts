@@ -76,6 +76,11 @@ export class RequisitionsController {
     return this.requisitionsService.close(id, dto)
   }
 
+  @Post(":id/reopen")
+  reopen(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ActingEmployeeDto) {
+    return this.requisitionsService.reopen(id, dto)
+  }
+
   @Get(":id/stages")
   getStages(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
     return this.requisitionsService.getStages(id, actingEmployeeId)

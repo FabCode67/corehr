@@ -162,7 +162,7 @@ export class DisciplinaryCasesService {
     if (!disciplinaryCase.isConfidential) {
       const { manager } = await this.employeesService.getReportingManager(disciplinaryCase.employeeId)
       if (manager) {
-        await this.notify(manager.id, "ERC_MANAGER_INPUT_NEEDED", "Disciplinary case requires your input", `A disciplinary case (${disciplinaryCase.caseNumber}) involving one of your team members needs your input.`)
+        await this.notify(manager.id, "ERC_MANAGER_INPUT_NEEDED", "Disciplinary case requires your input", `A disciplinary case (${disciplinaryCase.caseNumber}) involving one of your team members needs your input.`, id)
       }
     }
 
@@ -205,7 +205,8 @@ export class DisciplinaryCasesService {
       disciplinaryCase.employeeId,
       "ERC_MEETING_SCHEDULED",
       "Disciplinary meeting scheduled",
-      `A meeting has been scheduled for ${dto.scheduledAt.toLocaleString()} regarding case ${disciplinaryCase.caseNumber}.`
+      `A meeting has been scheduled for ${dto.scheduledAt.toLocaleString()} regarding case ${disciplinaryCase.caseNumber}.`,
+      caseId
     )
 
     // Invitee emails deliberately carry only the meeting's own subject/
@@ -261,9 +262,19 @@ export class DisciplinaryCasesService {
     recipientEmployeeId: string,
     type: "ERC_MEETING_SCHEDULED" | "ERC_DECISION_ISSUED" | "ERC_APPEAL_DECIDED" | "ERC_MANAGER_INPUT_NEEDED" | "ERC_INVESTIGATION_OVERDUE" | "ERC_APPEAL_SUBMITTED",
     title: string,
-    message: string
+    message: string,
+    caseId: string,
+    forAdmin = false
   ) {
-    await this.prisma.notification.create({ data: { recipientEmployeeId, type, title, message } })
+    await this.prisma.notification.create({
+      data: {
+        recipientEmployeeId,
+        type,
+        title,
+        message,
+        actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
+      },
+    })
   }
 
   private async log(id: string, action: string, actorId: string | null, notes?: string) {

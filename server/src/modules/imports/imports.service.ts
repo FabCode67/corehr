@@ -230,6 +230,7 @@ export class ImportsService {
         type: "BULK_IMPORT_COMPLETED",
         title: `${config.label} import ${finalStatus === "COMPLETED" ? "completed" : finalStatus === "PARTIALLY_COMPLETED" ? "completed with errors" : "failed"}`,
         message: `${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed out of ${rows.length} rows. Imported by ${actingEmployeeId}.`,
+        actionUrl: `/admin/imports/history/${jobId}`,
       })
       .catch(() => undefined)
 

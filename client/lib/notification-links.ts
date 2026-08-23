@@ -1,12 +1,14 @@
 import type { Role } from "./session"
 
 /**
- * Maps a stored Notification row to wherever the recipient should land to
- * actually act on it. The Notification model (schema.prisma) only carries
- * one entity reference — `relatedLeaveRequestId` — so for every other
- * module this can only route to the right list/queue page, not a specific
- * record; that's still a large step up from the bell being fully inert.
+ * Fallback router for notifications that predate Notification.actionUrl (or
+ * for the rare type that intentionally has no specific record to deep-link
+ * to). Every notification created going forward carries its own actionUrl
+ * set server-side at creation time — see notification-bell.tsx's `n.actionUrl
+ * ?? resolveNotificationHref(...)` call — so this only ever runs for older
+ * rows or gaps, routing to the best generic list/queue page available.
  *
+
  * `role` matters because this same bell renders in both the admin and
  * staff portals, and several notification types can land on either an
  * ordinary staff member (their own leave/course/form) or a manager/HR admin

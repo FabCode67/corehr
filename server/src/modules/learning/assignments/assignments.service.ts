@@ -69,7 +69,7 @@ export class AssignmentsService {
           employee_name: `${employee.firstName} ${employee.lastName}`,
           course_name: courseName,
           due_date: dueDate ? dueDate.toISOString().slice(0, 10) : "No due date set",
-          course_url: buildClientUrl("/staff/learning"),
+          course_url: buildClientUrl(`/staff/learning/${relatedEntityId}`),
         },
       })
     } catch {
@@ -234,6 +234,7 @@ export class AssignmentsService {
         type: NotificationType.COURSE_ASSIGNED,
         title: "Mandatory training assigned",
         message: `"${course.name}" has been assigned — due ${dueDate.toISOString().slice(0, 10)}.`,
+        actionUrl: `/staff/learning/${assignment.id}`,
       })
       // AML/compliance courses use the isMandatory-template (never
       // suppressible via NotificationPreference — see EmailService), since
@@ -321,6 +322,7 @@ export class AssignmentsService {
       type: NotificationType.COURSE_ASSIGNED,
       title: "New course assigned",
       message: `You've been assigned "${course.name}"${dto.dueDate ? ` — due ${dto.dueDate.toISOString().slice(0, 10)}` : ""}.`,
+      actionUrl: `/staff/learning/${assignment.id}`,
     })
     await this.safeSendCourseEmail("learning_course_assigned", dto.employeeId, course.name, dto.dueDate ?? null, assignment.id)
 
@@ -432,6 +434,7 @@ export class AssignmentsService {
       type: NotificationType.CERTIFICATE_APPROVED,
       title: "Certificate approved",
       message: "Your course certificate has been verified — the course is now marked complete.",
+      actionUrl: `/staff/learning/${id}`,
     })
     return updated
   }
@@ -462,6 +465,7 @@ export class AssignmentsService {
       type: NotificationType.CERTIFICATE_REJECTED,
       title: "Certificate rejected",
       message: `Your certificate submission was rejected: ${dto.hrVerificationComment}`,
+      actionUrl: `/staff/learning/${id}`,
     })
     return updated
   }

@@ -263,6 +263,25 @@ export class RequisitionsService {
     return updated
   }
 
+  /** Reverses close() — puts a closed requisition back to APPROVED so
+   *  recruiting can resume against it (e.g. it was closed too early, or the
+   *  hire fell through). Deliberately symmetric with close()'s own
+   *  precondition: only ever CLOSED -> APPROVED, never used to resurrect a
+   *  REJECTED requisition (that has its own, separate lifecycle). */
+  async reopen(id: string, dto: ActingEmployeeDto) {
+    const requisition = await this.findOne(id, dto.actingEmployeeId)
+    if (requisition.status !== "CLOSED") {
+      throw new BadRequestException("Only a closed requisition can be reopened.")
+    }
+    const updated = await this.prisma.jobRequisition.update({
+      where: { id },
+      data: { status: RequisitionStatus.APPROVED },
+      include: REQUISITION_INCLUDE,
+    })
+    await this.log(id, "REOPENED", dto.actingEmployeeId)
+    return updated
+  }
+
   async getStages(requisitionId: string, actingEmployeeId: string) {
     await this.findOne(requisitionId, actingEmployeeId)
     return this.prisma.recruitmentStageInstance.findMany({

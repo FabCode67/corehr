@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
 import { ContractType, LeaveEntitlementCategory, NotificationType, Prisma } from "@prisma/client"
 
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -155,6 +156,7 @@ export class LeaveBalancesService {
               type: NotificationType.LEAVE_CARRY_FORWARD_EXPIRING,
               title: "Carried-forward leave expiring soon",
               message: `${balance.carriedForwardDays} carried-forward day(s) of ${balance.leaveType.name} expire on ${carryForwardExpiresAt.toISOString().slice(0, 10)}.`,
+              actionUrl: "/staff/leave",
             })
             const contact = await getEmployeeContact()
             if (contact) {
@@ -169,6 +171,7 @@ export class LeaveBalancesService {
                   leave_type: balance.leaveType.name,
                   carry_forward_days: balance.carriedForwardDays,
                   expiry_date: carryForwardExpiresAt.toISOString().slice(0, 10),
+                  leave_url: buildClientUrl("/staff/leave"),
                 },
               })
             }
@@ -188,6 +191,7 @@ export class LeaveBalancesService {
             type: NotificationType.LOW_BALANCE,
             title: "Low leave balance",
             message: `Your remaining ${balance.leaveType.name} balance is now ${remainingDays} day(s).`,
+            actionUrl: "/staff/leave",
           })
           const contact = await getEmployeeContact()
           if (contact) {
@@ -201,6 +205,7 @@ export class LeaveBalancesService {
                 employee_name: `${contact.firstName} ${contact.lastName}`,
                 leave_type: balance.leaveType.name,
                 balance_days: remainingDays,
+                leave_url: buildClientUrl("/staff/leave"),
               },
             })
           }

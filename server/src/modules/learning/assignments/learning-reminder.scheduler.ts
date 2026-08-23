@@ -68,7 +68,7 @@ export class LearningReminderScheduler {
               employee_name: `${assignment.employee.firstName} ${assignment.employee.lastName}`,
               course_name: assignment.course.name,
               due_date: assignment.dueDate ? assignment.dueDate.toISOString().slice(0, 10) : "No due date set",
-              course_url: buildClientUrl("/staff/learning"),
+              course_url: buildClientUrl(`/staff/learning/${assignment.id}`),
             },
           })
           .catch(() => undefined)

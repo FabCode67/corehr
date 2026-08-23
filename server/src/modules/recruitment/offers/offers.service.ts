@@ -204,13 +204,17 @@ export class OffersService {
    *  so the offer response is surfaced to the recruiter/hiring manager
    *  instead, using the 2 NotificationTypes added specifically for this. */
   private async notifyResponse(
-    offer: { application: { candidate: { firstName: string; lastName: string }; jobPosting: { requisition: { recruiterId: string; hiringManagerId: string } } } },
+    offer: {
+      applicationId: string
+      application: { candidate: { firstName: string; lastName: string }; jobPosting: { requisition: { recruiterId: string; hiringManagerId: string } } }
+    },
     type: "OFFER_ACCEPTED" | "OFFER_DECLINED"
   ) {
     const candidateName = `${offer.application.candidate.firstName} ${offer.application.candidate.lastName}`
     const { recruiterId, hiringManagerId } = offer.application.jobPosting.requisition
     const recipients = Array.from(new Set([recruiterId, hiringManagerId]))
     const verb = type === "OFFER_ACCEPTED" ? "accepted" : "declined"
+    const applicationId = offer.applicationId
 
     await this.prisma.notification.createMany({
       data: recipients.map((recipientEmployeeId) => ({
@@ -218,6 +222,7 @@ export class OffersService {
         type,
         title: `Offer ${verb}`,
         message: `${candidateName} has ${verb} the offer.`,
+        actionUrl: `/admin/recruitment/applications/${applicationId}`,
       })),
     })
   }

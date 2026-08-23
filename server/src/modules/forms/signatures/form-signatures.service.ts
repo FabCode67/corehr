@@ -92,7 +92,8 @@ export class FormSignaturesService {
       signature.formInstance.employee.employeeNumber,
       "FORM_REJECTED",
       "Form rejected",
-      `"${signature.formInstance.formTemplate.title}" was rejected: ${dto.comments}`
+      `"${signature.formInstance.formTemplate.title}" was rejected: ${dto.comments}`,
+      signature.formInstanceId
     )
     const approver = await this.prisma.employee.findUnique({ where: { employeeNumber: dto.actingEmployeeId }, select: { firstName: true, lastName: true } })
     await this.notifyEmail(signature.formInstance.employee.employeeNumber, "approval_rejected", {
@@ -101,6 +102,7 @@ export class FormSignaturesService {
       item_type: "Form",
       approver_name: approver ? `${approver.firstName} ${approver.lastName}` : "HR",
       decision_comment: dto.comments ?? "No reason provided.",
+      item_url: buildClientUrl(`/staff/forms/${signature.formInstanceId}`),
     })
 
     return this.prisma.formSignature.findUnique({ where: { id: signatureId }, include: SIGNATURE_INCLUDE })
@@ -128,6 +130,7 @@ export class FormSignaturesService {
       item_type: "Form",
       approver_name: returner ? `${returner.firstName} ${returner.lastName}` : "HR",
       decision_comment: dto.comments ?? "No notes provided.",
+      item_url: buildClientUrl(`/staff/forms/${signature.formInstanceId}`),
     })
 
     return this.prisma.formSignature.findUnique({ where: { id: signatureId }, include: SIGNATURE_INCLUDE })
@@ -158,13 +161,20 @@ export class FormSignaturesService {
     if (laterStageOrders.length === 0) {
       await this.prisma.formInstance.update({ where: { id: formInstanceId }, data: { status: "COMPLETED", completedAt: new Date() } })
       await this.log(formInstanceId, "COMPLETED", null)
-      await this.notify(instance.employeeId, "FORM_COMPLETED", "Form completed", `"${instance.formTemplate.title}" is now fully signed and complete.`)
+      await this.notify(
+        instance.employeeId,
+        "FORM_COMPLETED",
+        "Form completed",
+        `"${instance.formTemplate.title}" is now fully signed and complete.`,
+        formInstanceId
+      )
       const owner = await this.prisma.employee.findUnique({ where: { employeeNumber: instance.employeeId }, select: { firstName: true, lastName: true } })
       await this.notifyEmail(instance.employeeId, "approval_completed", {
         requester_name: owner ? `${owner.firstName} ${owner.lastName}` : instance.employeeId,
         item_title: instance.formTemplate.title,
         item_type: "Form",
         approver_name: "All signers",
+        item_url: buildClientUrl(`/staff/forms/${formInstanceId}`),
       })
       return
     }
@@ -172,19 +182,33 @@ export class FormSignaturesService {
     const nextStageOrder = Math.min(...laterStageOrders)
     const nextSigners = instance.signatures.filter((signature) => signature.formSignatureStage.stageOrder === nextStageOrder && signature.signerId)
     for (const signature of nextSigners) {
-      await this.notify(signature.signerId as string, "FORM_SIGNATURE_REQUIRED", "Signature required", "A form needs your signature.")
+      await this.notify(
+        signature.signerId as string,
+        "FORM_SIGNATURE_REQUIRED",
+        "Signature required",
+        "A form needs your signature.",
+        formInstanceId
+      )
       const signer = await this.prisma.employee.findUnique({ where: { employeeNumber: signature.signerId as string }, select: { firstName: true, lastName: true } })
       await this.notifyEmail(signature.signerId as string, "approval_required", {
         approver_name: signer ? `${signer.firstName} ${signer.lastName}` : (signature.signerId as string),
         item_title: instance.formTemplate.title,
         item_type: "Form",
-        approval_url: buildClientUrl("/staff/forms"),
+        approval_url: buildClientUrl(`/staff/forms/${formInstanceId}`),
       })
     }
   }
 
-  private async notify(recipientEmployeeId: string, type: "FORM_SIGNATURE_REQUIRED" | "FORM_COMPLETED" | "FORM_REJECTED", title: string, message: string) {
-    await this.prisma.notification.create({ data: { recipientEmployeeId, type, title, message } })
+  private async notify(
+    recipientEmployeeId: string,
+    type: "FORM_SIGNATURE_REQUIRED" | "FORM_COMPLETED" | "FORM_REJECTED",
+    title: string,
+    message: string,
+    formInstanceId: string
+  ) {
+    await this.prisma.notification.create({
+      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/forms/${formInstanceId}` },
+    })
   }
 
   /** The generic approval_* email templates (approval_required/completed/

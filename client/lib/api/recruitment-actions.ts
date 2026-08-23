@@ -215,6 +215,16 @@ export async function closeRequisition(id: string, actingEmployeeId: string): Pr
   return {}
 }
 
+export async function reopenRequisition(id: string, actingEmployeeId: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/requisitions/${id}/reopen`, { method: "POST", body: JSON.stringify({ actingEmployeeId }) })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to reopen the requisition." }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
 export async function updateRequisitionStage(
   requisitionId: string,
   stage: string,

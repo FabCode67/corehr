@@ -176,6 +176,8 @@ export class EducationRecordsService {
           type: "PROFILE_RECORD_PENDING_REVIEW" as const,
           title: "Profile record awaiting review",
           message: `${employee.firstName} ${employee.lastName} submitted a new ${recordType} record ("${title}") for review.`,
+          relatedEmployeeId: employeeId,
+          actionUrl: `/admin/professional-profile/${employeeId}`,
         })),
       }),
       ...admins.map((admin) =>
@@ -189,7 +191,7 @@ export class EducationRecordsService {
               approver_name: admin.email,
               item_title: `${title} (${employee.firstName} ${employee.lastName})`,
               item_type: recordType === "education" ? "Education record" : "Certification",
-              approval_url: buildClientUrl("/admin/professional-profile/review"),
+              approval_url: buildClientUrl(`/admin/professional-profile/${employeeId}`),
             },
           })
           .catch(() => undefined)
@@ -213,6 +215,7 @@ export class EducationRecordsService {
           decision === "VERIFIED"
             ? `"${title}" has been verified by HR.`
             : `"${title}" was rejected by HR.${comment ? ` Reason: ${comment}` : ""}`,
+        actionUrl: "/staff/professional-profile",
       },
     })
 
@@ -229,6 +232,7 @@ export class EducationRecordsService {
           item_type: "Education record",
           approver_name: "HR",
           decision_comment: comment ?? "No comment provided.",
+          item_url: buildClientUrl("/staff/professional-profile"),
         },
       })
     } catch {

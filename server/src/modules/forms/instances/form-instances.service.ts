@@ -122,7 +122,7 @@ export class FormInstancesService {
       include: FORM_INSTANCE_INCLUDE,
     })
 
-    await this.notify(dto.employeeId, "FORM_ASSIGNED", "Form assigned", `You've been assigned "${template.title}".`)
+    await this.notify(dto.employeeId, "FORM_ASSIGNED", "Form assigned", `You've been assigned "${template.title}".`, instance.id)
     await this.log(instance.id, "ASSIGNED", dto.assignedById)
     return instance
   }
@@ -226,12 +226,12 @@ export class FormInstancesService {
         const activeStageOrder = Math.min(...pendingSignatures.map((signature) => signature.formSignatureStage.stageOrder))
         for (const signature of pendingSignatures.filter((item) => item.formSignatureStage.stageOrder === activeStageOrder)) {
           if (signature.signerId) {
-            await this.notify(signature.signerId, "FORM_SIGNATURE_REQUIRED", "Signature required", `"${instance.formTemplate.title}" needs your signature.`)
+            await this.notify(signature.signerId, "FORM_SIGNATURE_REQUIRED", "Signature required", `"${instance.formTemplate.title}" needs your signature.`, id)
           }
         }
       }
     } else {
-      await this.notify(instance.employeeId, "FORM_COMPLETED", "Form completed", `"${instance.formTemplate.title}" is complete.`)
+      await this.notify(instance.employeeId, "FORM_COMPLETED", "Form completed", `"${instance.formTemplate.title}" is complete.`, id)
     }
 
     return updated
@@ -304,8 +304,16 @@ export class FormInstancesService {
     return null
   }
 
-  private async notify(recipientEmployeeId: string, type: "FORM_ASSIGNED" | "FORM_SIGNATURE_REQUIRED" | "FORM_COMPLETED" | "FORM_APPROVED" | "FORM_REJECTED", title: string, message: string) {
-    await this.prisma.notification.create({ data: { recipientEmployeeId, type, title, message } })
+  private async notify(
+    recipientEmployeeId: string,
+    type: "FORM_ASSIGNED" | "FORM_SIGNATURE_REQUIRED" | "FORM_COMPLETED" | "FORM_APPROVED" | "FORM_REJECTED",
+    title: string,
+    message: string,
+    formInstanceId: string
+  ) {
+    await this.prisma.notification.create({
+      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/forms/${formInstanceId}` },
+    })
   }
 
   private async log(id: string, action: string, actorId: string | null, notes?: string) {

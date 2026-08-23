@@ -1406,6 +1406,15 @@ model Notification {
   /// ever landing on a generic list page. Nullable/optional for every other
   /// notification type that doesn't need it.
   relatedEmployeeId String?
+  /// Relative app path (e.g. "/staff/forms/abc123", "/admin/employees/EMP001")
+  /// pointing straight at the specific record this notification is about.
+  /// Set by the module that creates the notification, at the moment it
+  /// already has the record's id in scope — this is the single source of
+  /// truth the notification bell links to (see resolveNotificationHref's
+  /// fallback in client/lib/notification-links.ts for older rows / types
+  /// that only ever had a generic destination). Nullable so existing rows
+  /// created before this field predates them keep working via that fallback.
+  actionUrl String?
 
   recipient          Employee      @relation("NotificationRecipient", fields: [recipientEmployeeId], references: [employeeNumber])
   relatedLeaveRequest LeaveRequest? @relation(fields: [relatedLeaveRequestId], references: [id])

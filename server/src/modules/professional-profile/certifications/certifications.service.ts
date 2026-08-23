@@ -137,6 +137,7 @@ export class CertificationsService {
           dto.decision === "VERIFIED"
             ? `"${updated.name}" has been verified by HR.`
             : `"${updated.name}" was rejected by HR.${dto.comment ? ` Reason: ${dto.comment}` : ""}`,
+        actionUrl: "/staff/professional-profile",
       },
     })
 
@@ -153,6 +154,7 @@ export class CertificationsService {
           item_type: "Certification",
           approver_name: "HR",
           decision_comment: dto.comment ?? "No comment provided.",
+          item_url: buildClientUrl("/staff/professional-profile"),
         },
       })
     } catch {
@@ -176,6 +178,8 @@ export class CertificationsService {
           type: "PROFILE_RECORD_PENDING_REVIEW" as const,
           title: "Profile record awaiting review",
           message: `${employee.firstName} ${employee.lastName} submitted a new certification ("${certName}") for review.`,
+          relatedEmployeeId: employeeId,
+          actionUrl: `/admin/professional-profile/${employeeId}`,
         })),
       }),
       ...admins.map((admin) =>
@@ -189,7 +193,7 @@ export class CertificationsService {
               approver_name: admin.email,
               item_title: `${certName} (${employee.firstName} ${employee.lastName})`,
               item_type: "Certification",
-              approval_url: buildClientUrl("/admin/professional-profile/review"),
+              approval_url: buildClientUrl(`/admin/professional-profile/${employeeId}`),
             },
           })
           .catch(() => undefined)

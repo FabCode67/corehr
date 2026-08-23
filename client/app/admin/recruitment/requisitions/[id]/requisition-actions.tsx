@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { approveRequisition, closeRequisition, rejectRequisition, submitRequisition } from "@/lib/api/recruitment-actions"
+import { approveRequisition, closeRequisition, reopenRequisition, rejectRequisition, submitRequisition } from "@/lib/api/recruitment-actions"
 import type { RequisitionStatus } from "@/lib/api/recruitment"
 
 export function RequisitionActions({
@@ -41,8 +41,9 @@ export function RequisitionActions({
   const canSubmit = status === "DRAFT"
   const canDecide = isAdmin && status === "PENDING_APPROVAL"
   const canClose = status === "APPROVED"
+  const canReopen = status === "CLOSED"
 
-  if (!canSubmit && !canDecide && !canClose) return null
+  if (!canSubmit && !canDecide && !canClose && !canReopen) return null
 
   return (
     <div className="flex flex-col gap-2">
@@ -65,6 +66,11 @@ export function RequisitionActions({
         {canClose ? (
           <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => closeRequisition(requisitionId, actingEmployeeId))}>
             {pending ? "Closing…" : "Close requisition"}
+          </Button>
+        ) : null}
+        {canReopen ? (
+          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => reopenRequisition(requisitionId, actingEmployeeId))}>
+            {pending ? "Reopening…" : "Reopen requisition"}
           </Button>
         ) : null}
       </div>

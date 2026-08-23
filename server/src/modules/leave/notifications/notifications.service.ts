@@ -31,6 +31,12 @@ export class NotificationsService {
        *  the employee record it concerns (e.g. probation/contract ending
        *  soon), instead of only ever landing on a generic list page. */
       relatedEmployeeId?: string
+      /** Relative app path to the specific record this notification is
+       *  about (e.g. "/staff/forms/abc123") — see the field's doc comment
+       *  on the Notification model. Callers should pass this whenever the
+       *  entity in question has a dedicated detail page; the client falls
+       *  back to a generic type-based route otherwise. */
+      actionUrl?: string
     },
     tx?: Prisma.TransactionClient
   ) {
@@ -50,6 +56,7 @@ export class NotificationsService {
       message: string
       relatedLeaveRequestId?: string
       relatedEmployeeId?: string
+      actionUrl?: string
     },
     tx?: Prisma.TransactionClient
   ) {

@@ -178,7 +178,7 @@ export function NotificationBell({ employeeId, role }: { employeeId: string; rol
                 notifications.slice(0, 20).map((n) => (
                   <Link
                     key={n.id}
-                    href={resolveNotificationHref(n.type, role, n.relatedLeaveRequestId, n.relatedEmployeeId)}
+                    href={n.actionUrl ?? resolveNotificationHref(n.type, role, n.relatedLeaveRequestId, n.relatedEmployeeId)}
                     onClick={() => {
                       setOpen(false)
                       if (!n.isRead) handleMarkRead(n.id)

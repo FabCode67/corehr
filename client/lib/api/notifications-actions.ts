@@ -26,6 +26,12 @@ export interface AppNotification {
    *  the employee record it concerns. See Notification.relatedEmployeeId's
    *  schema doc comment. */
   relatedEmployeeId: string | null
+  /** Relative app path to the specific record this notification is about
+   *  (e.g. "/staff/forms/abc123") — set server-side at creation time by the
+   *  module that fired the notification. Takes priority over
+   *  resolveNotificationHref's type-based fallback whenever present; see
+   *  Notification.actionUrl's schema doc comment. */
+  actionUrl: string | null
   createdAt: string
 }
 

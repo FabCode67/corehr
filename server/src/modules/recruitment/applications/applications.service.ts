@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { ApplicationStatus, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
+import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { RecruitmentAccessScope, RecruitmentAccessService } from "../access/recruitment-access.service"
@@ -149,6 +150,7 @@ export class ApplicationsService {
             variables: {
               candidate_name: `${candidate.firstName} ${candidate.lastName}`,
               job_title: application.jobPosting.postingTitle,
+              application_url: buildClientUrl(`/admin/recruitment/applications/${application.id}`),
             },
           })
         }

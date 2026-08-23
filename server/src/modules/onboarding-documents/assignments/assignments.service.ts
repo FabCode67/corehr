@@ -85,6 +85,7 @@ export class AssignmentsService {
         type: NotificationType.ONBOARDING_DOCUMENT_ASSIGNED,
         title: "Onboarding documents assigned",
         message: `${created.length} onboarding document(s) have been assigned to you. Check My Onboarding to get started.`,
+        actionUrl: "/staff/onboarding",
       })
     }
 
@@ -107,6 +108,7 @@ export class AssignmentsService {
       type: NotificationType.ONBOARDING_DOCUMENT_UPLOADED,
       title: "Onboarding document uploaded",
       message: `${assignment.employee.firstName} ${assignment.employee.lastName} uploaded ${assignment.documentType.name} for review.`,
+      actionUrl: "/admin/onboarding-documents",
     })
 
     return updated
@@ -131,6 +133,7 @@ export class AssignmentsService {
         type: notificationType,
         title: `Onboarding document ${dto.status.toLowerCase().replaceAll("_", " ")}`,
         message: `${assignment.documentType.name}: ${dto.status === "APPROVED" ? "approved." : dto.reviewComments ? dto.reviewComments : "needs your attention."}`,
+        actionUrl: "/staff/onboarding",
       })
     }
 

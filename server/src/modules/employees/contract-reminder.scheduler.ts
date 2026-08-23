@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common"
 import { Cron, CronExpression } from "@nestjs/schedule"
 import { NotificationType } from "@prisma/client"
 
+import { buildClientUrl } from "../../common/client-url.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { EmailService } from "../email/email.service"
 import { NotificationsService } from "../leave/notifications/notifications.service"
@@ -68,6 +69,7 @@ export class ContractReminderScheduler {
 
       for (const employee of employees) {
         const endDateStr = employee.contractEndDate ? new Date(employee.contractEndDate).toISOString().slice(0, 10) : ""
+        const employeeUrl = `/admin/employees/${employee.employeeNumber}`
 
         await this.notifications
           .create({
@@ -76,6 +78,7 @@ export class ContractReminderScheduler {
             title: "Contract ending soon",
             message: `Your contract ends on ${endDateStr} (in ${ContractReminderScheduler.DAYS_AHEAD} days). Please contact HR if you have questions.`,
             relatedEmployeeId: employee.employeeNumber,
+            actionUrl: "/staff/profile",
           })
           .catch(() => undefined)
 
@@ -85,6 +88,7 @@ export class ContractReminderScheduler {
             title: "Employee contract ending soon",
             message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})'s contract ends on ${endDateStr} (in ${ContractReminderScheduler.DAYS_AHEAD} days).`,
             relatedEmployeeId: employee.employeeNumber,
+            actionUrl: employeeUrl,
           })
           .catch(() => undefined)
 
@@ -98,7 +102,7 @@ export class ContractReminderScheduler {
             variables: {
               employee_name: `${employee.firstName} ${employee.lastName}`,
               end_date: endDateStr,
-              employee_url: `/admin/employees/${employee.employeeNumber}`,
+              employee_url: buildClientUrl("/staff/profile"),
             },
           })
           .catch(() => undefined)
@@ -116,7 +120,7 @@ export class ContractReminderScheduler {
                 employee_name: `${employee.firstName} ${employee.lastName}`,
                 employee_number: employee.employeeNumber,
                 end_date: endDateStr,
-                employee_url: `/admin/employees/${employee.employeeNumber}`,
+                employee_url: buildClientUrl(employeeUrl),
               },
             })
             .catch(() => undefined)
