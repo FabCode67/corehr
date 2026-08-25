@@ -8,7 +8,8 @@ import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet"
 import Link from "next/link"
 
 import type { Branch } from "@/lib/api/branches"
-import { fetchEmployeesPaginated, type Employee } from "@/lib/api/employees"
+import type { Employee } from "@/lib/api/employees"
+import type { PaginatedResult } from "@/lib/api/pagination"
 import {
   Dialog,
   DialogContent,
@@ -170,16 +171,31 @@ function ViewEmployeesButton({
     let mounted = true
     setLoading(true)
     setError(null)
-    fetchEmployeesPaginated({ page, pageSize, branchId, includeInactive })
-      .then((res) => {
+
+    // Runs in the browser (this button lives inside a Leaflet popup), so it
+    // can't use lib/api/employees.ts's fetchEmployeesPaginated — that helper
+    // calls apiFetchSafe, which reads the server-only API_URL env var and is
+    // only safe from Server Components/Actions. Hits the Next.js proxy route
+    // instead (app/api/employees/route.ts), same pattern as the employee
+    // export download link.
+    const query = new URLSearchParams()
+    if (includeInactive) query.set("includeInactive", "true")
+    query.set("branchId", branchId)
+    query.set("page", String(page))
+    query.set("pageSize", String(pageSize))
+
+    fetch(`/api/employees?${query.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
         if (!mounted) return
+        const body = await res.json().catch(() => null)
         if (!res.ok) {
-          setError(res.error ?? `Could not load employees (${res.status})`)
+          setError((body && body.message) || `Could not load employees (${res.status})`)
           setEmployees([])
-        } else {
-          setEmployees(res.data.data)
-          setTotalPages(res.data.totalPages)
+          return
         }
+        const result = body as PaginatedResult<Employee>
+        setEmployees(result.data)
+        setTotalPages(result.totalPages)
       })
       .catch((err) => {
         if (!mounted) return
