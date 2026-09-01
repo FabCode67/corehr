@@ -750,23 +750,23 @@ async function postStageDecision(
   return {}
 }
 
-export function advanceApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+export async function advanceApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
   return postStageDecision(applicationId, "advance", actingEmployeeId, comments)
 }
 
-export function returnApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+export async function returnApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
   return postStageDecision(applicationId, "return", actingEmployeeId, comments)
 }
 
-export function holdApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+export async function holdApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
   return postStageDecision(applicationId, "hold", actingEmployeeId, comments)
 }
 
-export function rejectApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+export async function rejectApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
   return postStageDecision(applicationId, "reject", actingEmployeeId, comments)
 }
 
-export function withdrawApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+export async function withdrawApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
   return postStageDecision(applicationId, "withdraw", actingEmployeeId, comments)
 }
 
