@@ -267,6 +267,9 @@ export interface AssignmentFilters {
   isMandatory?: boolean
   departmentId?: string
   branchId?: string
+  positionId?: string
+  levelId?: string
+  bandId?: string
   priority?: CourseAssignmentPriority
   overdueOnly?: boolean
 }

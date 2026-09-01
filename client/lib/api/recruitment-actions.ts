@@ -729,3 +729,167 @@ export async function completeOnboarding(
   revalidateRecruitmentPaths()
   redirect(`/admin/recruitment/applications/${applicationId}`)
 }
+
+// ---- Configurable Candidate Pipeline ("ATS stage engine") --------------------
+
+async function postStageDecision(
+  applicationId: string,
+  action: "advance" | "return" | "hold" | "reject" | "withdraw",
+  actingEmployeeId: string,
+  comments?: string
+): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/applications/${applicationId}/pipeline/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ actingEmployeeId, comments }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : `Failed to ${action} the candidate.` }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
+export function advanceApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+  return postStageDecision(applicationId, "advance", actingEmployeeId, comments)
+}
+
+export function returnApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+  return postStageDecision(applicationId, "return", actingEmployeeId, comments)
+}
+
+export function holdApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+  return postStageDecision(applicationId, "hold", actingEmployeeId, comments)
+}
+
+export function rejectApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+  return postStageDecision(applicationId, "reject", actingEmployeeId, comments)
+}
+
+export function withdrawApplicationStage(applicationId: string, actingEmployeeId: string, comments?: string) {
+  return postStageDecision(applicationId, "withdraw", actingEmployeeId, comments)
+}
+
+export async function submitStageScore(
+  stageInstanceId: string,
+  criterionId: string,
+  score: number,
+  actingEmployeeId: string,
+  comments?: string
+): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/application-stage-instances/${stageInstanceId}/score`, {
+      method: "POST",
+      body: JSON.stringify({ criterionId, score, comments, actingEmployeeId }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save the score." }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
+// ---- Recruitment Stage Catalog (admin) ---------------------------------------
+
+export async function createStageDefinition(
+  _prevState: RecruitmentActionState | undefined,
+  formData: FormData
+): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch("/recruitment/stage-definitions", {
+      method: "POST",
+      body: JSON.stringify({
+        key: trimmedOrUndefined(formData.get("key")),
+        name: trimmedOrUndefined(formData.get("name")),
+        description: trimmedOrUndefined(formData.get("description")),
+        stageType: trimmedOrUndefined(formData.get("stageType")),
+        isScored: formData.get("isScored") === "on",
+        actingEmployeeId: trimmedOrUndefined(formData.get("actingEmployeeId")),
+      }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to create the stage." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+export async function updateStageDefinition(id: string, actingEmployeeId: string, fields: { name?: string; description?: string; isScored?: boolean; isActive?: boolean }) {
+  try {
+    await apiFetch(`/recruitment/stage-definitions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ actingEmployeeId, ...fields }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to update the stage." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+export async function upsertStageCriterion(
+  stageId: string,
+  actingEmployeeId: string,
+  fields: { name: string; description?: string; maxScore?: number; sortOrder?: number }
+) {
+  try {
+    await apiFetch(`/recruitment/stage-definitions/${stageId}/criteria`, {
+      method: "POST",
+      body: JSON.stringify({ actingEmployeeId, ...fields }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save the scoring criterion." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+// ---- Recruitment Workflows (admin) -------------------------------------------
+
+export async function createWorkflow(
+  _prevState: RecruitmentActionState | undefined,
+  formData: FormData
+): Promise<RecruitmentActionState> {
+  const contractTypes = formData.getAll("contractTypes").map(String)
+  try {
+    await apiFetch("/recruitment/workflows", {
+      method: "POST",
+      body: JSON.stringify({
+        name: trimmedOrUndefined(formData.get("name")),
+        description: trimmedOrUndefined(formData.get("description")),
+        isDefault: formData.get("isDefault") === "on",
+        minBandRank: formData.get("minBandRank") ? Number(formData.get("minBandRank")) : undefined,
+        maxBandRank: formData.get("maxBandRank") ? Number(formData.get("maxBandRank")) : undefined,
+        contractTypes: contractTypes.length > 0 ? contractTypes : undefined,
+        actingEmployeeId: trimmedOrUndefined(formData.get("actingEmployeeId")),
+      }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to create the workflow." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+export async function setWorkflowStages(workflowId: string, actingEmployeeId: string, stageIds: string[]): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/workflows/${workflowId}/stages`, {
+      method: "PUT",
+      body: JSON.stringify({ actingEmployeeId, stageIds }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save the workflow's stages." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+export async function deactivateWorkflow(id: string, actingEmployeeId: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/workflows/${id}?actingEmployeeId=${actingEmployeeId}`, { method: "DELETE" })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to deactivate the workflow." }
+  }
+  revalidatePath("/admin/recruitment/workflows")
+  return {}
+}

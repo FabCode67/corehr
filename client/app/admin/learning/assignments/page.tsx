@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
+import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
@@ -16,6 +17,7 @@ import {
   type CourseAssignmentPriority,
   type CourseAssignmentStatus,
 } from "@/lib/api/learning"
+import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 
 import { LearningTabs } from "../learning-tabs"
@@ -38,6 +40,9 @@ interface SearchParams {
   isMandatory?: string
   departmentId?: string
   branchId?: string
+  positionId?: string
+  levelId?: string
+  bandId?: string
   priority?: string
   overdueOnly?: string
   page?: string
@@ -48,7 +53,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [assignmentsResult, categoriesResult, departmentsResult, branchesResult] = await Promise.all([
+  const [assignmentsResult, categoriesResult, departmentsResult, branchesResult, positionsResult, levelsResult, bandsResult] = await Promise.all([
     fetchAssignmentsPaginated(
       {
         categoryId: filters.categoryId,
@@ -56,6 +61,9 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         isMandatory: filters.isMandatory === "true" ? true : filters.isMandatory === "false" ? false : undefined,
         departmentId: filters.departmentId,
         branchId: filters.branchId,
+        positionId: filters.positionId,
+        levelId: filters.levelId,
+        bandId: filters.bandId,
         priority: filters.priority as CourseAssignmentPriority | undefined,
         overdueOnly: filters.overdueOnly === "true",
       },
@@ -65,11 +73,17 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
     fetchTrainingCategories(),
     fetchDepartments(),
     fetchBranches(),
+    fetchPositions(),
+    fetchPositionLevels(),
+    fetchBands(),
   ])
 
   const categories = categoriesResult.ok ? categoriesResult.data : []
   const departments = departmentsResult.ok ? departmentsResult.data : []
   const branches = branchesResult.ok ? branchesResult.data : []
+  const positions = positionsResult.ok ? [...positionsResult.data].sort((a, b) => a.title.localeCompare(b.title)) : []
+  const levels = levelsResult.ok ? [...levelsResult.data].sort((a, b) => a.rank - b.rank) : []
+  const bands = bandsResult.ok ? [...bandsResult.data].sort((a, b) => a.rank - b.rank) : []
   const assignments = assignmentsResult.ok ? assignmentsResult.data.data : []
 
   return (
@@ -142,6 +156,39 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Position</label>
+              <Select name="positionId" defaultValue={filters.positionId ?? ""} className="w-44">
+                <option value="">All positions</option>
+                {positions.map((position) => (
+                  <option key={position.id} value={position.id}>
+                    {position.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Level</label>
+              <Select name="levelId" defaultValue={filters.levelId ?? ""} className="w-40">
+                <option value="">All levels</option>
+                {levels.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {level.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Band</label>
+              <Select name="bandId" defaultValue={filters.bandId ?? ""} className="w-36">
+                <option value="">All bands</option>
+                {bands.map((band) => (
+                  <option key={band.id} value={band.id}>
+                    {band.name}
                   </option>
                 ))}
               </Select>

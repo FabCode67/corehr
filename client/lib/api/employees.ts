@@ -200,6 +200,11 @@ export function fetchEmployees(includeInactive = false) {
 export function fetchEmployeesPaginated(params: {
   includeInactive?: boolean
   branchId?: string
+  departmentId?: string
+  unitId?: string
+  positionId?: string
+  bandId?: string
+  levelId?: string
   search?: string
   page?: number
   pageSize?: number
@@ -207,6 +212,11 @@ export function fetchEmployeesPaginated(params: {
   const query = new URLSearchParams()
   if (params.includeInactive) query.set("includeInactive", "true")
   if (params.branchId) query.set("branchId", params.branchId)
+  if (params.departmentId) query.set("departmentId", params.departmentId)
+  if (params.unitId) query.set("unitId", params.unitId)
+  if (params.positionId) query.set("positionId", params.positionId)
+  if (params.bandId) query.set("bandId", params.bandId)
+  if (params.levelId) query.set("levelId", params.levelId)
   if (params.search) query.set("search", params.search)
   query.set("page", String(params.page ?? 1))
   if (params.pageSize) query.set("pageSize", String(params.pageSize))

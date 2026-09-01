@@ -9,6 +9,7 @@ import { fetchBands } from "@/lib/api/bands"
 import {
   APPLICATION_STATUS_LABELS,
   fetchApplication,
+  fetchApplicationPipeline,
   fetchAssessments,
   fetchBackgroundChecks,
   fetchInterviews,
@@ -22,6 +23,7 @@ import { BackgroundChecksSection } from "./background-checks-section"
 import { InterviewsSection } from "./interviews-section"
 import { OfferSection } from "./offer-section"
 import { OnboardingSection } from "./onboarding-section"
+import { PipelineSection } from "./pipeline-section"
 import { ScreeningSection } from "./screening-section"
 import { StatusSelect } from "./status-select"
 
@@ -46,15 +48,19 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
 
   const application = applicationResult.data
 
-  const [assessmentsResult, interviewsResult, checksResult, offersResult, onboardingResult, employeesResult, bandsResult] = await Promise.all([
-    fetchAssessments(id, actingEmployeeId),
-    fetchInterviews(id, actingEmployeeId),
-    fetchBackgroundChecks(id, actingEmployeeId),
-    fetchOffers(id, actingEmployeeId),
-    fetchOnboardingTasks(id, actingEmployeeId),
-    fetchEmployees(),
-    fetchBands(),
-  ])
+  const [assessmentsResult, interviewsResult, checksResult, offersResult, onboardingResult, employeesResult, bandsResult, pipelineResult] =
+    await Promise.all([
+      fetchAssessments(id, actingEmployeeId),
+      fetchInterviews(id, actingEmployeeId),
+      fetchBackgroundChecks(id, actingEmployeeId),
+      fetchOffers(id, actingEmployeeId),
+      fetchOnboardingTasks(id, actingEmployeeId),
+      fetchEmployees(),
+      fetchBands(),
+      fetchApplicationPipeline(id, actingEmployeeId),
+    ])
+
+  const isTerminal = application.status === "HIRED" || application.status === "REJECTED" || application.status === "WITHDRAWN"
 
   const hasAcceptedOffer = offersResult.ok && offersResult.data.some((offer) => offer.status === "ACCEPTED")
 
@@ -80,6 +86,21 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
           </div>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Recruitment Pipeline</CardTitle>
+          <CardDescription>The candidate&apos;s progress through this position&apos;s configured interview workflow.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PipelineSection
+            applicationId={application.id}
+            actingEmployeeId={actingEmployeeId}
+            instances={pipelineResult.ok ? pipelineResult.data : []}
+            isTerminal={isTerminal}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

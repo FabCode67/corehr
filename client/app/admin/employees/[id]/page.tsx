@@ -8,6 +8,7 @@ import { FamilyTree } from "@/components/family-tree/family-tree"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
+import { fetchExitDocumentProgress } from "@/lib/api/exit-documents"
 import {
   computeTenure,
   computeTotalBankingExperienceYears,
@@ -31,6 +32,7 @@ import {
   assignPosition,
   changeEmployeeBand,
   processExit,
+  rehireEmployee,
   removeChild,
   removeEducation,
   transferEmployee,
@@ -40,6 +42,7 @@ import {
 } from "../actions"
 import { ExitDialog } from "./exit-dialog"
 import { RegistrationWizard } from "./registration-wizard"
+import { RehireDialog } from "./rehire-dialog"
 
 const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
   ACTIVE: "success",
@@ -121,6 +124,17 @@ export default async function EmployeeDetailPage({
     )
   }
 
+  // Only fetched when relevant — the exit-documents completion gate only
+  // matters once the exit process has actually been started (see
+  // EmployeesService.processExit()'s doc comment).
+  const exitProgressResult =
+    employee.employmentStatus === "ACTIVE" && employee.exitInitiatedAt ? await fetchExitDocumentProgress(employee.employeeNumber) : null
+  const exitProgress = exitProgressResult?.ok ? exitProgressResult.data : null
+  const exitDialogDisabledReason =
+    exitProgress && exitProgress.total > 0 && !exitProgress.allCompleted
+      ? `${exitProgress.remaining} of ${exitProgress.total} exit document(s) still outstanding — complete them below before confirming the exit.`
+      : undefined
+
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
@@ -180,21 +194,30 @@ export default async function EmployeeDetailPage({
 
       {employee.employmentStatus === "ACTIVE" ? (
         <div className="flex flex-wrap items-start gap-3">
-          <ExitDialog employee={employee} action={processExit.bind(null, employee.employeeNumber)} />
+          <ExitDialog
+            employee={employee}
+            action={processExit.bind(null, employee.employeeNumber)}
+            disabledReason={exitDialogDisabledReason}
+          />
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
-          <p className="font-medium text-foreground">
-            Exited {employee.exitDate?.slice(0, 10)}
-            {employee.exitReason ? ` · ${formatEnumLabel(employee.exitReason)}` : ""}
-            {employee.exitType ? ` · ${formatEnumLabel(employee.exitType)}` : ""}
-          </p>
-          {employee.nextMove ? (
-            <p className="mt-1 text-xs text-muted-foreground">Next move: {employee.nextMove}</p>
-          ) : null}
-          {employee.exitComments ? (
-            <p className="mt-1 text-xs text-muted-foreground">{employee.exitComments}</p>
-          ) : null}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-medium text-foreground">
+                Exited {employee.exitDate?.slice(0, 10)}
+                {employee.exitReason ? ` · ${formatEnumLabel(employee.exitReason)}` : ""}
+                {employee.exitType ? ` · ${formatEnumLabel(employee.exitType)}` : ""}
+              </p>
+              {employee.nextMove ? (
+                <p className="mt-1 text-xs text-muted-foreground">Next move: {employee.nextMove}</p>
+              ) : null}
+              {employee.exitComments ? (
+                <p className="mt-1 text-xs text-muted-foreground">{employee.exitComments}</p>
+              ) : null}
+            </div>
+            <RehireDialog employee={employee} action={rehireEmployee.bind(null, employee.employeeNumber, session?.employeeId ?? "")} />
+          </div>
         </div>
       )}
 

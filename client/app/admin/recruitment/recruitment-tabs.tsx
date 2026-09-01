@@ -13,6 +13,7 @@ const TABS = [
   { label: "Job Postings", href: "/admin/recruitment/job-postings" },
   { label: "Candidates", href: "/admin/recruitment/candidates" },
   { label: "Applications", href: "/admin/recruitment/applications" },
+  { label: "Workflows", href: "/admin/recruitment/workflows" },
 ]
 
 export function RecruitmentTabs() {

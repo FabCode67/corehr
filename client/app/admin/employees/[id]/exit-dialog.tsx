@@ -25,6 +25,11 @@ import type { ActionState } from "../actions"
 interface ExitDialogProps {
   employee: Employee
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
+  /** When set, the trigger is disabled and this message is shown instead of
+   *  opening the dialog — used to surface the exit-documents completion
+   *  gate (see EmployeesService.processExit()'s doc comment) before the
+   *  employee even attempts to submit, rather than only on server error. */
+  disabledReason?: string
 }
 
 const EXIT_REASONS = [
@@ -41,7 +46,7 @@ const EXIT_TYPES = [
 /** Exit Management. A dedicated dialog rather than a one-click action,
  *  since processing an exit is a deliberate, one-way change that closes
  *  out the employee's position assignment — matches the provided design. */
-export function ExitDialog({ employee, action }: ExitDialogProps) {
+export function ExitDialog({ employee, action, disabledReason }: ExitDialogProps) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState<ActionState | undefined, FormData>(
     action,
@@ -56,6 +61,17 @@ export function ExitDialog({ employee, action }: ExitDialogProps) {
 
   const initials = `${employee.firstName[0] ?? ""}${employee.lastName[0] ?? ""}`.toUpperCase()
   const fullName = `${employee.firstName} ${employee.lastName}`
+
+  if (disabledReason) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Button type="button" variant="destructive" size="sm" disabled title={disabledReason}>
+          Process Employee Exit
+        </Button>
+        <p className="max-w-xs text-xs text-muted-foreground">{disabledReason}</p>
+      </div>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

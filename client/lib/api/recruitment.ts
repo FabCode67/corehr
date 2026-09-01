@@ -392,6 +392,12 @@ export interface Application {
   status: ApplicationStatus
   appliedAt: string
   hiredEmployeeNumber: string | null
+  /** Null only for applications created before the configurable stage
+   *  engine existed — see ApplicationStagesService for the fine-grained
+   *  pipeline this backs. */
+  workflowId: string | null
+  currentStageId: string | null
+  overallScore: number | null
   candidate: Candidate
   jobPosting: { id: string; postingTitle: string; requisition: { id: string; recruiterId: string; hiringManagerId: string; departmentId: string } }
   screening: { id: string; decision: ScreeningDecision; comments: string | null; screenedById: string; screenedAt: string; screenedBy: EmployeeRef } | null
@@ -580,4 +586,125 @@ export function fetchBudgetByDepartment(actingEmployeeId: string) {
   return apiFetchSafe<{ departmentId: string; departmentName: string; approvedBudget: number }[]>(
     `/recruitment/analytics/budget-by-department${toQuery({ actingEmployeeId })}`
   )
+}
+
+// ---- Configurable Candidate Pipeline ("ATS stage engine") --------------------
+// Separate from RecruitmentStageName/StageStatus above, which track a
+// requisition's own fixed 12-phase project timeline — see the schema's doc
+// comment on RecruitmentStageType for why this is its own model family.
+
+export type RecruitmentStageType = "SCREENING" | "REVIEW" | "TEST" | "INTERVIEW" | "ASSESSMENT_CENTRE" | "DECISION" | "OFFER" | "ADMIN"
+export type ApplicationStageStatus = "PENDING" | "IN_PROGRESS" | "PASSED" | "FAILED" | "ON_HOLD" | "SKIPPED"
+
+export const STAGE_TYPE_LABELS: Record<RecruitmentStageType, string> = {
+  SCREENING: "Screening",
+  REVIEW: "Review",
+  TEST: "Test",
+  INTERVIEW: "Interview",
+  ASSESSMENT_CENTRE: "Assessment Centre",
+  DECISION: "Decision",
+  OFFER: "Offer",
+  ADMIN: "Admin",
+}
+
+export const APPLICATION_STAGE_STATUS_LABELS: Record<ApplicationStageStatus, string> = {
+  PENDING: "Pending",
+  IN_PROGRESS: "In Progress",
+  PASSED: "Passed",
+  FAILED: "Failed",
+  ON_HOLD: "On Hold",
+  SKIPPED: "Skipped",
+}
+
+export interface ScoringCriterion {
+  id: string
+  stageId: string
+  name: string
+  description: string | null
+  maxScore: number
+  sortOrder: number
+  isActive: boolean
+}
+
+export interface RecruitmentStageDefinition {
+  id: string
+  key: string
+  name: string
+  description: string | null
+  stageType: RecruitmentStageType
+  isScored: boolean
+  isSystem: boolean
+  isActive: boolean
+  sortOrderHint: number
+  scoringCriteria: ScoringCriterion[]
+}
+
+export function fetchStageDefinitions(includeInactive = false) {
+  return apiFetchSafe<RecruitmentStageDefinition[]>(`/recruitment/stage-definitions${toQuery({ includeInactive: includeInactive || undefined })}`)
+}
+
+export function fetchStageDefinition(id: string) {
+  return apiFetchSafe<RecruitmentStageDefinition>(`/recruitment/stage-definitions/${id}`)
+}
+
+export interface RecruitmentWorkflow {
+  id: string
+  name: string
+  description: string | null
+  isDefault: boolean
+  isActive: boolean
+  minBandRank: number | null
+  maxBandRank: number | null
+  contractTypes: ContractType[]
+  stages: { id: string; sequence: number; isRequired: boolean; stage: RecruitmentStageDefinition }[]
+}
+
+export function fetchWorkflows(includeInactive = false) {
+  return apiFetchSafe<RecruitmentWorkflow[]>(`/recruitment/workflows${toQuery({ includeInactive: includeInactive || undefined })}`)
+}
+
+export function fetchWorkflow(id: string) {
+  return apiFetchSafe<RecruitmentWorkflow>(`/recruitment/workflows/${id}`)
+}
+
+export interface ApplicationStageScore {
+  id: string
+  criterionId: string
+  score: number
+  comments: string | null
+  criterion: ScoringCriterion
+}
+
+export interface ApplicationStageInstance {
+  id: string
+  applicationId: string
+  stageId: string
+  sequence: number
+  status: ApplicationStageStatus
+  score: number | null
+  startedAt: string | null
+  completedAt: string | null
+  decidedById: string | null
+  comments: string | null
+  stage: RecruitmentStageDefinition
+  decidedBy: EmployeeRef | null
+  scores: ApplicationStageScore[]
+}
+
+export function fetchApplicationPipeline(applicationId: string, actingEmployeeId: string) {
+  return apiFetchSafe<ApplicationStageInstance[]>(`/recruitment/applications/${applicationId}/pipeline${toQuery({ actingEmployeeId })}`)
+}
+
+export interface CandidateRankingEntry {
+  rank: number
+  applicationId: string
+  candidateName: string
+  candidateEmail: string
+  currentStageName: string | null
+  status: ApplicationStatus
+  overallScore: number | null
+}
+
+export function fetchCandidateRanking(jobPostingId: string, actingEmployeeId: string) {
+  return apiFetchSafe<CandidateRankingEntry[]>(`/recruitment/job-postings/${jobPostingId}/ranking${toQuery({ actingEmployeeId })}`)
 }

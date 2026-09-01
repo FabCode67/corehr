@@ -409,6 +409,33 @@ export async function initiateExitForm(id: string, actingEmployeeId: string): Pr
   await initiateExit(id, actingEmployeeId)
 }
 
+// ---- Rehire -----------------------------------------------------------------
+
+export async function rehireEmployee(
+  id: string,
+  actingEmployeeId: string,
+  _prevState: ActionState | undefined,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    await apiFetch(`/employees/${id}/rehire`, {
+      method: "POST",
+      body: JSON.stringify({
+        actingEmployeeId,
+        employmentStartDate: trimmedOrUndefined(formData.get("employmentStartDate")),
+        comments: trimmedOrUndefined(formData.get("comments")),
+      }),
+    })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to rehire this employee." }
+  }
+
+  revalidatePath("/admin/employees")
+  revalidatePath(`/admin/employees/${id}`)
+  revalidatePath("/admin/organization")
+  return {}
+}
+
 // ---- Status (legacy quick deactivate — Exit Management above is preferred) ----
 
 export async function deactivateEmployee(id: string) {

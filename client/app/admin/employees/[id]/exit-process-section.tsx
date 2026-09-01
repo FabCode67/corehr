@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchExitFormStatus, type Employee, type FormInstanceStatus } from "@/lib/api/employees"
 
 import { initiateExitForm } from "../actions"
+import { ExitDocumentsSection } from "./exit-documents-section"
 
 const STATUS_LABELS: Record<FormInstanceStatus, string> = {
   DRAFT: "Draft",
@@ -60,28 +61,32 @@ export async function ExitProcessSection({ employee, actingEmployeeId }: { emplo
   const instance = statusResult.ok ? statusResult.data : null
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Exit Management</CardTitle>
-        <CardDescription>Started {new Date(employee.exitInitiatedAt).toLocaleDateString()} — track the Exit Clearance Form below before finalizing exit clearance.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {instance ? (
-          <div className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-            <div>
-              <p className="font-medium text-foreground">{instance.formTemplate.title}</p>
-              <p className="text-xs text-muted-foreground">
-                Assigned {new Date(instance.assignmentDate).toLocaleDateString()}
-                {instance.submittedAt ? ` · Submitted ${new Date(instance.submittedAt).toLocaleDateString()}` : ""}
-                {instance.completedAt ? ` · Completed ${new Date(instance.completedAt).toLocaleDateString()}` : ""}
-              </p>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Exit Management</CardTitle>
+          <CardDescription>Started {new Date(employee.exitInitiatedAt).toLocaleDateString()} — track the Exit Clearance Form below before finalizing exit clearance.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {instance ? (
+            <div className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+              <div>
+                <p className="font-medium text-foreground">{instance.formTemplate.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  Assigned {new Date(instance.assignmentDate).toLocaleDateString()}
+                  {instance.submittedAt ? ` · Submitted ${new Date(instance.submittedAt).toLocaleDateString()}` : ""}
+                  {instance.completedAt ? ` · Completed ${new Date(instance.completedAt).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+              <Badge variant={STATUS_VARIANT[instance.status]}>{STATUS_LABELS[instance.status]}</Badge>
             </div>
-            <Badge variant={STATUS_VARIANT[instance.status]}>{STATUS_LABELS[instance.status]}</Badge>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No Exit Clearance Form was assigned — the template may not be configured yet.</p>
-        )}
-      </CardContent>
-    </Card>
+          ) : (
+            <p className="text-sm text-muted-foreground">No Exit Clearance Form was assigned — the template may not be configured yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <ExitDocumentsSection employeeId={employee.employeeNumber} actingEmployeeId={actingEmployeeId} />
+    </div>
   )
 }
