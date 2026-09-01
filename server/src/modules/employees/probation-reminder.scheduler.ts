@@ -21,25 +21,46 @@ export class ProbationReminderScheduler {
    *  contract-ending-soon reminder in contract-reminder.scheduler.ts. */
   private static readonly DAYS_AHEAD = 10
 
+  /** How far into the past to still catch up on a probation date that
+   *  should already have triggered a reminder — covers employees the old
+   *  exact-day-match query (see doc comment below) silently skipped before
+   *  this fix shipped. Not unbounded, so this doesn't dredge up reminders
+   *  for probation periods that ended long ago. */
+  private static readonly CATCH_UP_DAYS = 30
+
+  /**
+   * Scans for probation periods ending within the next DAYS_AHEAD days, or
+   * that already ended in the last CATCH_UP_DAYS — a *range*, not a single
+   * exact day. The original version of this query only matched employees
+   * whose probationEndDate landed on exactly today+10, which meant any
+   * employee whose date didn't happen to line up with a day the cron
+   * actually ran (server downtime, a date entered by HR after the 10-day
+   * mark had already passed, etc.) never got a reminder at all — this is
+   * why "I'm not getting these emails" was a real bug, not just a timing
+   * fluke. probationReminderSentAt is what keeps this now-wider range
+   * query from re-notifying the same employee every day until their
+   * probation ends — EmployeesService clears it back to null whenever HR
+   * actually changes probationEndDate, so an extension gets its own fresh
+   * reminder.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async checkProbationEndingSoon() {
     try {
       const today = new Date()
       today.setUTCHours(0, 0, 0, 0)
 
-      const target = new Date(today)
-      target.setUTCDate(target.getUTCDate() + ProbationReminderScheduler.DAYS_AHEAD)
+      const windowStart = new Date(today)
+      windowStart.setUTCDate(windowStart.getUTCDate() - ProbationReminderScheduler.CATCH_UP_DAYS)
 
-      const targetStart = new Date(target)
-      targetStart.setUTCHours(0, 0, 0, 0)
-
-      const targetEnd = new Date(target)
-      targetEnd.setUTCHours(23, 59, 59, 999)
+      const windowEnd = new Date(today)
+      windowEnd.setUTCDate(windowEnd.getUTCDate() + ProbationReminderScheduler.DAYS_AHEAD)
+      windowEnd.setUTCHours(23, 59, 59, 999)
 
       const employees = await this.prisma.employee.findMany({
         where: {
           isActive: true,
-          probationEndDate: { gte: targetStart, lte: targetEnd },
+          probationEndDate: { gte: windowStart, lte: windowEnd },
+          probationReminderSentAt: null,
         },
         select: {
           employeeNumber: true,
@@ -58,7 +79,10 @@ export class ProbationReminderScheduler {
       })
 
       for (const employee of employees) {
-        const endDateStr = employee.probationEndDate ? new Date(employee.probationEndDate).toISOString().slice(0, 10) : ""
+        const endDate = new Date(employee.probationEndDate!)
+        const endDateStr = endDate.toISOString().slice(0, 10)
+        const daysRemaining = Math.round((endDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+        const timing = daysRemaining >= 0 ? `in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}` : `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"} ago`
         const employeeUrl = `/admin/employees/${employee.employeeNumber}`
 
         await this.notifications
@@ -66,7 +90,7 @@ export class ProbationReminderScheduler {
             recipientEmployeeId: employee.employeeNumber,
             type: NotificationType.PROBATION_ENDING_SOON,
             title: "Probation ending soon",
-            message: `Your probation period ends on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days). Please contact HR if you have questions.`,
+            message: `Your probation period ends on ${endDateStr} (${timing}). Please contact HR if you have questions.`,
             relatedEmployeeId: employee.employeeNumber,
             actionUrl: "/staff/profile",
           })
@@ -76,7 +100,7 @@ export class ProbationReminderScheduler {
           .createForAllAdmins({
             type: NotificationType.PROBATION_ENDING_SOON_ADMIN,
             title: "Employee probation ending soon",
-            message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) has probation ending on ${endDateStr} (in ${ProbationReminderScheduler.DAYS_AHEAD} days).`,
+            message: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber}) has probation ending on ${endDateStr} (${timing}).`,
             relatedEmployeeId: employee.employeeNumber,
             actionUrl: employeeUrl,
           })
@@ -115,6 +139,13 @@ export class ProbationReminderScheduler {
             })
             .catch(() => undefined)
         }
+
+        // Marked sent last, after every notification/email attempt above has
+        // at least been queued — if this write itself failed we'd rather
+        // risk a duplicate reminder tomorrow than silently drop this one.
+        await this.prisma.employee
+          .update({ where: { employeeNumber: employee.employeeNumber }, data: { probationReminderSentAt: new Date() } })
+          .catch((error) => this.logger.error(`Failed to mark probation reminder sent for ${employee.employeeNumber}: ${(error as Error).message}`))
       }
     } catch (error) {
       this.logger.error(`Probation reminder scan failed: ${(error as Error).message}`, (error as Error).stack)

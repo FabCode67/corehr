@@ -7,6 +7,7 @@ import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { RecruitmentAccessScope, RecruitmentAccessService } from "../access/recruitment-access.service"
+import { RecruitmentWorkflowsService } from "../workflows/recruitment-workflows.service"
 
 import { CreateApplicationDto } from "./dto/create-application.dto"
 import { CreateScreeningDto } from "./dto/create-screening.dto"
@@ -47,7 +48,8 @@ export class ApplicationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessService: RecruitmentAccessService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly workflowsService: RecruitmentWorkflowsService
   ) {}
 
   private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
@@ -107,7 +109,10 @@ export class ApplicationsService {
   }
 
   async create(dto: CreateApplicationDto, actingEmployeeId: string) {
-    const jobPosting = await this.prisma.jobPosting.findUnique({ where: { id: dto.jobPostingId } })
+    const jobPosting = await this.prisma.jobPosting.findUnique({
+      where: { id: dto.jobPostingId },
+      include: { requisition: { select: { bandId: true, contractType: true } } },
+    })
     if (!jobPosting) {
       throw new NotFoundException(`Job posting ${dto.jobPostingId} not found`)
     }
@@ -119,12 +124,40 @@ export class ApplicationsService {
       throw new NotFoundException(`Candidate ${dto.candidateId} not found`)
     }
 
+    // Resolved once, up front — see RecruitmentWorkflowsService.resolveWorkflowFor's
+    // doc comment on why this is fixed at creation rather than re-resolved later.
+    const workflow = await this.workflowsService.resolveWorkflowFor({
+      bandId: jobPosting.requisition?.bandId ?? null,
+      contractType: jobPosting.requisition?.contractType ?? null,
+    })
+    const workflowStages = await this.prisma.recruitmentWorkflowStage.findMany({
+      where: { workflowId: workflow.id },
+      orderBy: { sequence: "asc" },
+    })
+
     try {
-      const application = await this.prisma.application.create({
-        data: { candidateId: dto.candidateId, jobPostingId: dto.jobPostingId },
-        include: APPLICATION_INCLUDE,
+      const application = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.application.create({
+          data: { candidateId: dto.candidateId, jobPostingId: dto.jobPostingId, workflowId: workflow.id },
+          include: APPLICATION_INCLUDE,
+        })
+
+        if (workflowStages.length > 0) {
+          await tx.applicationStageInstance.createMany({
+            data: workflowStages.map((ws, index) => ({
+              applicationId: created.id,
+              stageId: ws.stageId,
+              sequence: ws.sequence,
+              status: index === 0 ? "IN_PROGRESS" : "PENDING",
+              startedAt: index === 0 ? new Date() : null,
+            })),
+          })
+          await tx.application.update({ where: { id: created.id }, data: { currentStageId: workflowStages[0].stageId } })
+        }
+
+        return created
       })
-      await this.log(application.id, "CREATED", actingEmployeeId)
+      await this.log(application.id, "CREATED", actingEmployeeId, `workflow: ${workflow.name}`)
 
       await this.safeSendEmail({
         templateKey: "recruitment_application_received",

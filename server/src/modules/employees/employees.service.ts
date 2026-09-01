@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
-import { EmploymentStatus, FamilyRelationship, Prisma, PositionChangeType } from "@prisma/client"
+import { EmploymentStatus, FamilyRelationship, NotificationType, Prisma, PositionChangeType } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
@@ -16,6 +16,7 @@ import { ChangeBandDto } from "./dto/change-band.dto"
 import { CreateEmployeeDto } from "./dto/create-employee.dto"
 import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
+import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
@@ -74,20 +75,24 @@ export class EmployeesService {
     unitId?: string
     positionId?: string
     branchId?: string
+    bandId?: string
+    levelId?: string
     includeInactive?: boolean
     search?: string
   }): Prisma.EmployeeWhereInput {
-    const { departmentId, unitId, positionId, branchId, includeInactive, search } = params
+    const { departmentId, unitId, positionId, branchId, bandId, levelId, includeInactive, search } = params
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
       ...(positionId ? { positionId } : {}),
       ...(branchId ? { branchId } : {}),
-      ...(departmentId || unitId
+      ...(bandId ? { bandId } : {}),
+      ...(departmentId || unitId || levelId
         ? {
             position: {
               ...(departmentId ? { departmentId } : {}),
               ...(unitId ? { unitId } : {}),
+              ...(levelId ? { levelId } : {}),
             },
           }
         : {}),
@@ -114,6 +119,8 @@ export class EmployeesService {
     unitId?: string
     positionId?: string
     branchId?: string
+    bandId?: string
+    levelId?: string
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
@@ -131,6 +138,8 @@ export class EmployeesService {
       unitId?: string
       positionId?: string
       branchId?: string
+      bandId?: string
+      levelId?: string
       includeInactive?: boolean
       search?: string
     } = {},
@@ -166,6 +175,8 @@ export class EmployeesService {
     unitId?: string
     positionId?: string
     branchId?: string
+    bandId?: string
+    levelId?: string
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
@@ -315,6 +326,18 @@ export class EmployeesService {
     // call that simply doesn't mention this field.
     const shouldDefaultContractEnd = dto.contractEndDate === undefined && !employee.contractEndDate
 
+    // Reset the reminder-sent flag whenever the date it guards actually
+    // changes to a new value — otherwise an extended probation/contract
+    // would stay silently marked "already reminded" against its old
+    // deadline and never get a fresh reminder for the new one. Compared by
+    // timestamp (not just presence) since HR might resave the same date.
+    const probationDateChanged =
+      dto.probationEndDate !== undefined &&
+      (!employee.probationEndDate || new Date(dto.probationEndDate).getTime() !== new Date(employee.probationEndDate).getTime())
+    const contractDateChanged =
+      dto.contractEndDate !== undefined &&
+      (!employee.contractEndDate || new Date(dto.contractEndDate).getTime() !== new Date(employee.contractEndDate).getTime())
+
     const updated = await this.prisma.employee.update({
       where: { employeeNumber: id },
       data: {
@@ -323,6 +346,8 @@ export class EmployeesService {
           ? { probationEndDate: this.addMonths(effectiveStartDate!, 3) }
           : {}),
         ...(shouldDefaultContractEnd ? { contractEndDate: FAR_FUTURE_CONTRACT_END_DATE } : {}),
+        ...(probationDateChanged || shouldDefaultProbation ? { probationReminderSentAt: null } : {}),
+        ...(contractDateChanged ? { contractReminderSentAt: null } : {}),
       },
       include: EMPLOYEE_DETAIL_INCLUDE,
     })
@@ -466,9 +491,28 @@ export class EmployeesService {
    * "vacant" just means no one currently holds it — no separate flag
    * needed). Band is left untouched as a historical record of the
    * employee's final grade. The employee row itself is never deleted.
+   *
+   * Hard gate: if this employee has any ExitDocumentAssignment rows (i.e.
+   * ExitProcessService.initiateExit() bulk-assigned the exit checklist),
+   * every one of them must be complete before the exit can be finalized —
+   * the one place in Exit Management with a real database-level block
+   * (contrast with the Exit Clearance Form, which is tracked but not
+   * enforced). If no exit documents were ever assigned, exit proceeds as
+   * before — this keeps direct/legacy use of this dialog working.
    */
   async processExit(id: string, dto: ProcessExitDto) {
     const employee = await this.findOne(id)
+
+    const exitDocuments = await this.prisma.exitDocumentAssignment.findMany({
+      where: { employeeId: id },
+      include: { documentType: true },
+    })
+    const incomplete = exitDocuments.filter((assignment) => !assignment.isCompleted)
+    if (incomplete.length > 0) {
+      throw new BadRequestException(
+        `All exit documents must be completed before the exit can be confirmed. Outstanding: ${incomplete.map((a) => a.documentType.name).join(", ")}.`
+      )
+    }
 
     return this.prisma.$transaction(async (tx) => {
       if (employee.positionId) {
@@ -523,6 +567,113 @@ export class EmployeesService {
       data: { exitInitiatedAt: new Date(), exitInitiatedById: actingEmployeeId },
       include: EMPLOYEE_DETAIL_INCLUDE,
     })
+  }
+
+  /**
+   * Rehire. The one-way reverse of processExit() — reuses the same
+   * employeeNumber (never deleted) rather than creating a new Employee row,
+   * so PositionHistory/exit documents/everything else stays attached to one
+   * continuous record across both stints.
+   *
+   * Before clearing the current exit* fields, the prior stint's details are
+   * snapshotted into previousEmployee/previousPositionHeld/
+   * previousDepartment/previousExitDate/previousReasonForLeaving — the same
+   * fields HR fills in manually on the Employment Details step when
+   * registering someone who previously worked at the bank, reused here
+   * since this rehire IS that scenario. previousPositionHeld/
+   * previousDepartment are resolved from the most recently closed
+   * PositionHistory row rather than employee.positionId, since
+   * processExit() already cleared that to null.
+   *
+   * The employee comes back in the same "no position yet" state a brand
+   * new hire starts in (positionId/bandId/contractType cleared) — HR must
+   * re-run Position Assignment, same as onboarding a new employee. A fresh
+   * temporary password is issued since the account may have sat dormant.
+   */
+  async rehire(id: string, dto: RehireEmployeeDto) {
+    const employee = await this.findOne(id)
+
+    if (employee.employmentStatus !== EmploymentStatus.EXIT) {
+      throw new BadRequestException("Only employees with Exit status can be rehired.")
+    }
+
+    const lastHistory = await this.prisma.positionHistory.findFirst({
+      where: { employeeId: id },
+      orderBy: { effectiveTo: "desc" },
+      include: { position: { include: { department: true } } },
+    })
+
+    const previousPositionHeld = lastHistory?.position?.title ?? employee.previousPositionHeld ?? null
+    const previousDepartment = lastHistory?.position?.department?.name ?? employee.previousDepartment ?? null
+    const reasonParts = [employee.exitReason, employee.exitComments].filter((part): part is string => Boolean(part))
+    const previousReasonForLeaving = dto.comments ?? (reasonParts.length > 0 ? reasonParts.join(" — ") : employee.previousReasonForLeaving)
+    const employmentStartDate = dto.employmentStartDate ?? new Date()
+
+    const updated = await this.prisma.employee.update({
+      where: { employeeNumber: id },
+      data: {
+        employmentStatus: EmploymentStatus.ACTIVE,
+        isActive: true,
+        employmentStartDate,
+        probationEndDate: null,
+        probationReminderSentAt: null,
+        contractEndDate: null,
+        contractReminderSentAt: null,
+        contractType: null,
+        positionId: null,
+        bandId: null,
+        exitDate: null,
+        exitReason: null,
+        exitType: null,
+        nextMove: null,
+        exitComments: null,
+        exitInitiatedAt: null,
+        exitInitiatedById: null,
+        previousEmployee: true,
+        previousEmployeeNumber: employee.employeeNumber,
+        previousPositionHeld,
+        previousDepartment,
+        previousExitDate: employee.exitDate,
+        previousReasonForLeaving,
+        rehiredAt: new Date(),
+        rehiredById: dto.actingEmployeeId,
+        mustChangePassword: true,
+        temporaryPasswordExpiresAt: computeTemporaryPasswordExpiry(),
+      },
+      include: EMPLOYEE_DETAIL_INCLUDE,
+    })
+
+    await this.leaveBalancesService.ensureBalancesForEmployee(updated.employeeNumber)
+
+    const employeeUrl = buildClientUrl(`/admin/employees/${updated.employeeNumber}`)
+    try {
+      await this.emailService.enqueue({
+        templateKey: "employee_rehired",
+        recipientEmail: updated.email,
+        recipientEmployeeId: updated.employeeNumber,
+        relatedModule: "employees",
+        relatedEntityId: updated.employeeNumber,
+        variables: {
+          employee_name: `${updated.firstName} ${updated.lastName}`,
+          start_date: employmentStartDate.toISOString().slice(0, 10),
+          employee_url: employeeUrl,
+        },
+      })
+    } catch {
+      // EmailService.enqueue() already logs internally.
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        recipientEmployeeId: updated.employeeNumber,
+        type: NotificationType.EMPLOYEE_REHIRED,
+        title: "Welcome back!",
+        message: `Your employee record has been reactivated effective ${employmentStartDate.toISOString().slice(0, 10)}.`,
+        actionUrl: `/admin/employees/${updated.employeeNumber}`,
+      },
+    })
+
+    return updated
   }
 
   /**

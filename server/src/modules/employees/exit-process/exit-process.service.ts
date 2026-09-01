@@ -46,13 +46,48 @@ export class ExitProcessService {
    * (non-terminal — processExit() is still the separate finalize step),
    * auto-assign the Exit Clearance Form (reusing Forms Management's
    * existing assignment pipeline, which already notifies the employee),
-   * and notify the line manager and HR. If the Exit Form template hasn't
-   * been seeded yet, the exit is still marked as started — a missing form
+   * bulk-assign the Exit Document checklist (every active ExitDocumentType
+   * — see schema.prisma's Exit Document Management module note), and
+   * notify the line manager and HR. If the Exit Form template hasn't been
+   * seeded yet, the exit is still marked as started — a missing form
    * template shouldn't block HR from beginning the process, it just means
-   * there's nothing to track yet (logged as a warning).
+   * there's nothing to track yet (logged as a warning). Unlike the Exit
+   * Form (tracked but not enforced), the exit document checklist created
+   * here IS enforced — EmployeesService.processExit() blocks finalization
+   * until every assignment created below is marked complete.
    */
   async initiateExit(employeeId: string, actingEmployeeId: string) {
     const employee = await this.employeesService.markExitInitiated(employeeId, actingEmployeeId)
+
+    const activeDocumentTypes = await this.prisma.exitDocumentType.findMany({ where: { isActive: true } })
+    if (activeDocumentTypes.length > 0) {
+      // Upsert with a reset-on-reassign update (not `update: {}`) — a
+      // rehired-then-re-exited employee re-running this gets a fresh
+      // checklist rather than one that reads as already-done from a prior
+      // stint (see ExitDocumentAssignmentsService.bulkAssign's doc comment).
+      await Promise.all(
+        activeDocumentTypes.map((documentType) =>
+          this.prisma.exitDocumentAssignment.upsert({
+            where: { employeeId_documentTypeId: { employeeId, documentTypeId: documentType.id } },
+            update: { isCompleted: false, completedAt: null, completedById: null, assignedById: actingEmployeeId, assignedAt: new Date() },
+            create: { employeeId, documentTypeId: documentType.id, assignedById: actingEmployeeId },
+          })
+        )
+      )
+      await this.safeSendEmail({
+        templateKey: "exit_clearance_checklist",
+        recipientEmail: employee.email,
+        recipientEmployeeId: employee.employeeNumber,
+        relatedModule: "exit",
+        relatedEntityId: employee.employeeNumber,
+        variables: {
+          employee_name: `${employee.firstName} ${employee.lastName}`,
+          last_working_day: "To be confirmed by HR",
+        },
+      })
+    } else {
+      this.logger.warn(`Exit initiated for ${employeeId}, but no active exit document types exist — nothing assigned. Run the seed script or add some from Exit Document Types.`)
+    }
 
     const template = await this.prisma.formTemplate.findUnique({ where: { formCode: EXIT_FORM_CODE } })
 

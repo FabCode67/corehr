@@ -477,6 +477,17 @@ model Employee {
   /// Trainee/Intern don't use this) — set alongside employmentStartDate,
   /// and can be pushed out later ("expanded") by HR editing the field.
   contractEndDate          DateTime?
+  /// Set by ProbationReminderScheduler/ContractReminderScheduler the first
+  /// time each reminder fires for the *current* probationEndDate/
+  /// contractEndDate value, so the daily scan (a "due within N days" range,
+  /// not a single exact-day match — see the schedulers' doc comments for
+  /// why the original exact-day version could silently miss employees)
+  /// doesn't re-notify every day until the date passes. EmployeesService
+  /// resets the relevant field to null whenever HR actually changes the
+  /// corresponding end date (extension, correction, or a fresh rehire), so
+  /// a new deadline always gets its own reminder.
+  probationReminderSentAt DateTime?
+  contractReminderSentAt  DateTime?
   previousEmployee         Boolean       @default(false)
   previousEmployeeNumber   String?
   previousPositionHeld     String?
@@ -537,6 +548,17 @@ model Employee {
   nextMove     String?
   exitComments String?
 
+  /// Set by EmployeesService.rehire() — the one-way reverse of processExit().
+  /// Reuses the same employeeNumber (never deleted) rather than creating a
+  /// new Employee row, so history (PositionHistory, past exit documents,
+  /// etc.) stays attached. The prior stint's details are snapshotted into
+  /// previousEmployee/previousPositionHeld/previousDepartment/
+  /// previousExitDate/previousReasonForLeaving above (the same fields HR
+  /// fills in manually on the Employment Details step for external hires)
+  /// before the current exit* fields are cleared.
+  rehiredAt   DateTime?
+  rehiredById String?
+
   position                 Position?  @relation(fields: [positionId], references: [id])
   band                     Band?      @relation(fields: [bandId], references: [id])
   branch                   Branch?    @relation(fields: [branchId], references: [id])
@@ -544,6 +566,8 @@ model Employee {
   managedOverrides         Employee[] @relation("ReportingOverride")
   exitInitiatedBy          Employee?  @relation("ExitInitiator", fields: [exitInitiatedById], references: [employeeNumber])
   initiatedExits           Employee[] @relation("ExitInitiator")
+  rehiredBy                Employee?  @relation("EmployeeRehirer", fields: [rehiredById], references: [employeeNumber])
+  rehiresPerformed         Employee[] @relation("EmployeeRehirer")
 
   positionHistory PositionHistory[]
   children        EmployeeChild[]
@@ -583,6 +607,11 @@ model Employee {
   onboardingDocumentsAssigned OnboardingDocumentAssignment[] @relation("OnboardingDocumentAssigner")
   onboardingDocumentsReviewed OnboardingDocumentAssignment[] @relation("OnboardingDocumentReviewer")
 
+  // --- Exit Document Management (see module note near ExitDocumentType) ----
+  exitDocuments         ExitDocumentAssignment[] @relation("ExitDocumentEmployee")
+  exitDocumentsAssigned ExitDocumentAssignment[] @relation("ExitDocumentAssigner")
+  exitDocumentsCompleted ExitDocumentAssignment[] @relation("ExitDocumentCompleter")
+
   // --- Performance Management ----------------------------------------------
   performanceReviewsAsSubject  PerformanceReview[]     @relation("PerformanceSubject")
   performanceReviewsAsReviewer PerformanceReview[]     @relation("PerformanceReviewer")
@@ -609,6 +638,8 @@ model Employee {
   offersCreated                 Offer[]                 @relation("OfferCreator")
   onboardingTasksCompleted      OnboardingTask[]        @relation("OnboardingTaskCompleter")
   recruitmentAuditLogs          RecruitmentAuditLog[]   @relation("RecruitmentAuditActor")
+  applicationStageDecisions     ApplicationStageInstance[] @relation("ApplicationStageDecider")
+  stageScoresGiven              ApplicationStageScore[] @relation("StageScoreEvaluator")
   /// Set on the Employee row created when this candidate's onboarding is
   /// completed — see the module doc comment on Application.hiredEmployeeNumber.
   hiredFromApplication           Application?
@@ -1096,6 +1127,8 @@ enum NotificationType {
   /// ~10 days before Employee.contractEndDate (TEMPORARY contracts only).
   CONTRACT_ENDING_SOON
   CONTRACT_ENDING_SOON_ADMIN
+  /// Fired by EmployeesService.rehire() — see that method's doc comment.
+  EMPLOYEE_REHIRED
 }
 
 /// A configurable leave type (Annual, Maternity, Paternity, Sick,
@@ -2557,9 +2590,30 @@ model Application {
   /// that hasn't reached that point (including rejected/withdrawn ones).
   hiredEmployeeNumber String? @unique
 
+  /// Resolved once at creation time (see ApplicationStagesService's
+  /// workflow-resolution logic) from the job posting's requisition band/
+  /// contractType against RecruitmentWorkflow's match conditions, and fixed
+  /// thereafter — re-resolving mid-pipeline would retroactively change a
+  /// candidate's stage history, which HR should do deliberately (re-running
+  /// the resolver as an explicit action) rather than have happen silently.
+  /// Null only for applications created before this feature existed.
+  workflowId String? @db.Uuid
+  /// Points at whichever ApplicationStageInstance is the candidate's current
+  /// position in the pipeline — null once every stage instance has resolved
+  /// to a terminal status (PASSED/FAILED/SKIPPED) with none IN_PROGRESS, or
+  /// before the pipeline has been resolved at all.
+  currentStageId String? @db.Uuid
+  /// Average of every COMPLETED scored stage's score (see
+  /// ApplicationStagesService.recomputeOverallScore) — the "Candidate
+  /// Ranking" spec section's ranking key. Null until at least one scored
+  /// stage has completed.
+  overallScore Float?
+
   candidate  Candidate  @relation(fields: [candidateId], references: [id])
   jobPosting JobPosting @relation(fields: [jobPostingId], references: [id])
   hiredEmployee Employee? @relation(fields: [hiredEmployeeNumber], references: [employeeNumber])
+  workflow      RecruitmentWorkflow?        @relation(fields: [workflowId], references: [id])
+  currentStage  RecruitmentStageDefinition? @relation("ApplicationCurrentStage", fields: [currentStageId], references: [id])
 
   screening        Screening?
   assessments      Assessment[]
@@ -2567,6 +2621,7 @@ model Application {
   backgroundChecks BackgroundCheck[]
   offers           Offer[]
   onboardingTasks  OnboardingTask[]
+  stageInstances   ApplicationStageInstance[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2574,6 +2629,202 @@ model Application {
   @@unique([candidateId, jobPostingId])
   @@index([jobPostingId, status])
   @@map("applications")
+}
+
+// =============================================================================
+// Configurable Candidate Pipeline — the ATS "stage engine". Distinct from
+// RecruitmentStageInstance/RecruitmentStageName above, which track a
+// *requisition's* own 12 fixed project-management phases (Workforce
+// Planning through Onboarding — a Gantt-style plan for filling one role).
+// This engine instead tracks a *candidate's* progress through an
+// HR-configurable interview pipeline (CV Screening -> ... -> Hiring),
+// where which stages apply depends on the position's Band/contract type —
+// see RecruitmentWorkflow's match fields and RecruitmentStageDefinition's
+// doc comment for why this needed its own model family rather than
+// extending ApplicationStatus (a fixed 8-value enum) or the fixed
+// AssessmentType/InterviewType enums, none of which HR can extend without a
+// migration+deploy.
+// =============================================================================
+
+enum RecruitmentStageType {
+  SCREENING
+  REVIEW
+  TEST
+  INTERVIEW
+  ASSESSMENT_CENTRE
+  DECISION
+  OFFER
+  ADMIN
+}
+
+enum ApplicationStageStatus {
+  PENDING
+  IN_PROGRESS
+  PASSED
+  FAILED
+  ON_HOLD
+  SKIPPED
+}
+
+/// One entry in HR's editable stage catalog — "CV Screening", "Competency-
+/// Based Interview", etc. Seeded with the recruitment policy's stage list
+/// (isSystem: true, can't be deleted — only deactivated) but HR can add
+/// further custom stages here in-app, with no code change or deploy, then
+/// reference them from any RecruitmentWorkflow.
+model RecruitmentStageDefinition {
+  id            String               @id @default(uuid()) @db.Uuid
+  key           String               @unique
+  name          String
+  description   String?
+  stageType     RecruitmentStageType
+  /// Whether this stage supports a scoring rubric (RecruitmentScoringCriterion)
+  /// — drives whether the candidate pipeline UI shows a "Enter scores" action
+  /// for a stage instance of this type.
+  isScored      Boolean              @default(false)
+  isSystem      Boolean              @default(false)
+  isActive      Boolean              @default(true)
+  sortOrderHint Int                  @default(0)
+
+  workflowStages         RecruitmentWorkflowStage[]
+  scoringCriteria        RecruitmentScoringCriterion[]
+  applicationStages      ApplicationStageInstance[]
+  currentForApplications Application[]                 @relation("ApplicationCurrentStage")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("recruitment_stage_definitions")
+}
+
+/// A named, ordered set of stages — "Band 8 and Above", "Intern", etc. from
+/// the recruitment policy's example config table. Matched to a requisition
+/// (and thus every Application against its postings) by band-rank range
+/// and/or contract type; see RecruitmentWorkflowsService.resolveWorkflowFor
+/// for the exact matching precedence. Exactly one workflow should have
+/// isDefault: true, used as the fallback when nothing more specific matches
+/// so every application always resolves to some workflow.
+model RecruitmentWorkflow {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+  isDefault   Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  /// Inclusive Band.rank range this workflow applies to — both null means
+  /// "doesn't filter by band" (e.g. a workflow that only matches by
+  /// contract type, like Interns).
+  minBandRank Int?
+  maxBandRank Int?
+  /// Contract types this workflow applies to — empty means "doesn't filter
+  /// by contract type".
+  contractTypes ContractType[]
+
+  stages       RecruitmentWorkflowStage[]
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("recruitment_workflows")
+}
+
+/// Join row: which stages are enabled for a workflow, and in what order —
+/// the checkbox grid from the policy's example config table, normalized.
+model RecruitmentWorkflowStage {
+  id         String  @id @default(uuid()) @db.Uuid
+  workflowId String  @db.Uuid
+  stageId    String  @db.Uuid
+  sequence   Int
+  isRequired Boolean @default(true)
+
+  workflow RecruitmentWorkflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stage    RecruitmentStageDefinition @relation(fields: [stageId], references: [id])
+
+  @@unique([workflowId, stageId])
+  @@unique([workflowId, sequence])
+  @@map("recruitment_workflow_stages")
+}
+
+/// A scoring-rubric criterion for a given stage — e.g. Competency-Based
+/// Interview's "Communication Skills", "Technical Knowledge", etc. HR can
+/// add/edit these per stage without a deploy, same as the stage catalog
+/// itself.
+model RecruitmentScoringCriterion {
+  id          String  @id @default(uuid()) @db.Uuid
+  stageId     String  @db.Uuid
+  name        String
+  description String?
+  maxScore    Int     @default(5)
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  stage  RecruitmentStageDefinition @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  scores ApplicationStageScore[]
+
+  @@unique([stageId, name])
+  @@map("recruitment_scoring_criteria")
+}
+
+/// One candidate's pass through one stage of their resolved workflow — the
+/// actual pipeline-progress record, seeded in full (every stage, PENDING)
+/// when the application's workflow is resolved, same "seed the whole plan
+/// upfront" idiom as JobRequisition's RecruitmentStageInstance rows.
+/// `sequence` is copied from RecruitmentWorkflowStage at seed time so a
+/// later edit to the workflow template doesn't retroactively reorder an
+/// in-flight candidate's already-seeded pipeline.
+model ApplicationStageInstance {
+  id            String                 @id @default(uuid()) @db.Uuid
+  applicationId String                 @db.Uuid
+  stageId       String                 @db.Uuid
+  sequence      Int
+  status        ApplicationStageStatus @default(PENDING)
+  /// Average of this stage's ApplicationStageScore rows, recomputed on each
+  /// score submission — null for un-scored stage types or before any score
+  /// is entered.
+  score       Float?
+  startedAt   DateTime?
+  completedAt DateTime?
+  decidedById String?
+  comments    String?
+
+  application Application                @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  stage       RecruitmentStageDefinition @relation(fields: [stageId], references: [id])
+  decidedBy   Employee?                  @relation("ApplicationStageDecider", fields: [decidedById], references: [employeeNumber])
+  scores      ApplicationStageScore[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicationId, stageId])
+  @@index([applicationId])
+  @@map("application_stage_instances")
+}
+
+/// One panel member's score against one rubric criterion for one stage
+/// instance — e.g. a Competency Interview's "Technical Knowledge" score.
+/// Unique per (stageInstance, criterion): a second submission from the same
+/// or a different scorer overwrites the prior entry rather than averaging
+/// multiple raters — same "single decision of record" simplicity as
+/// Screening's one-decision-per-application design elsewhere in this
+/// module; multi-rater averaging is a reasonable future enhancement, not
+/// built here.
+model ApplicationStageScore {
+  id              String  @id @default(uuid()) @db.Uuid
+  stageInstanceId String  @db.Uuid
+  criterionId     String  @db.Uuid
+  score           Float
+  scoredById      String
+  comments        String?
+
+  stageInstance ApplicationStageInstance    @relation(fields: [stageInstanceId], references: [id], onDelete: Cascade)
+  criterion     RecruitmentScoringCriterion @relation(fields: [criterionId], references: [id])
+  scoredBy      Employee                    @relation("StageScoreEvaluator", fields: [scoredById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([stageInstanceId, criterionId])
+  @@map("application_stage_scores")
 }
 
 /// Current screening decision for an application — see module doc comment
@@ -3531,6 +3782,79 @@ model OnboardingDocumentAssignment {
   @@unique([employeeId, documentTypeId])
   @@index([employeeId, status])
   @@map("onboarding_document_assignments")
+}
+
+// =============================================================================
+// EXIT DOCUMENT MANAGEMENT
+//
+// The offboarding mirror of Onboarding Document Management above, but
+// deliberately simpler: exit items (ID card returned, laptop returned, IT
+// access revoked, final settlement processed, exit interview conducted,
+// clearance certificate signed, ...) are an HR-ticked checklist rather than
+// an employee-uploaded/HR-reviewed workflow, so ExitDocumentAssignment has
+// a single isCompleted boolean (+ completedBy/completedAt/notes) instead of
+// Onboarding's fuller NOT_STARTED/UPLOADED/UNDER_REVIEW/APPROVED status
+// machine. Design notes:
+// - ExitDocumentType is the configurable catalog (HR-extensible, same
+//   data-driven lookup pattern as OnboardingDocumentType/SanctionType/
+//   TrainingCategory), seeded with a sensible default set.
+// - ExitDocumentAssignment rows are created in bulk by
+//   ExitProcessService.initiateExit() (every active ExitDocumentType, at
+//   the moment HR starts the exit process) — see that method's doc
+//   comment. Unlike onboarding documents (assigned once, never repeated),
+//   these are upserted with isCompleted reset to false on each call, so a
+//   rehired-then-re-exited employee gets a fresh checklist rather than one
+//   that reads as already-complete from a prior stint.
+// - EmployeesService.processExit() enforces a hard gate (unlike the Exit
+//   Clearance Form in Forms Management, which is tracked but not
+//   enforced): if the employee has any ExitDocumentAssignment rows and any
+//   are incomplete, the exit cannot be finalized. This is the one place in
+//   Exit Management with a real database-level block, per the spec's
+//   explicit request that exit confirmation wait for every exit document.
+// =============================================================================
+
+model ExitDocumentType {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+  isMandatory Boolean @default(true)
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  assignments ExitDocumentAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("exit_document_types")
+}
+
+/// Permanent per-employee record of one exit checklist item — never
+/// deleted, same "complete history" precedent as onboarding documents.
+model ExitDocumentAssignment {
+  id             String  @id @default(uuid()) @db.Uuid
+  employeeId     String
+  documentTypeId String  @db.Uuid
+  isCompleted    Boolean @default(false)
+  notes          String?
+
+  assignedById String
+  assignedAt   DateTime @default(now())
+
+  completedById String?
+  completedAt   DateTime?
+
+  employee     Employee         @relation("ExitDocumentEmployee", fields: [employeeId], references: [employeeNumber])
+  documentType ExitDocumentType @relation(fields: [documentTypeId], references: [id])
+  assignedBy   Employee         @relation("ExitDocumentAssigner", fields: [assignedById], references: [employeeNumber])
+  completedBy  Employee?        @relation("ExitDocumentCompleter", fields: [completedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, documentTypeId])
+  @@index([employeeId, isCompleted])
+  @@map("exit_document_assignments")
 }
 
 // =============================================================================

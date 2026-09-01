@@ -52,6 +52,7 @@ import {
   RecruitmentEmploymentType,
   RecruitmentPriority,
   RecruitmentStageName,
+  RecruitmentStageType,
   RequisitionStatus,
   ScreeningDecision,
   SignatureStatus,
@@ -724,6 +725,10 @@ async function main() {
     bands,
     headquartersBranch,
   })
+
+  await seedRecruitmentStageEngine()
+
+  await seedExitDocumentTypes()
 
   await seedFormsManagement({
     md: md_employee,
@@ -2382,6 +2387,212 @@ async function seedRecruitment(params: {
 }
 
 /**
+ * Seeds the configurable candidate-pipeline "ATS stage engine" — see the
+ * schema's module doc comment above RecruitmentStageType. This is
+ * deliberately separate from seedRecruitment() above (which seeds a
+ * worked-example requisition/application, not the stage catalog itself):
+ * every environment needs this catalog+workflow data regardless of which
+ * example requisitions/candidates get seeded alongside it.
+ *
+ * Seeds the recruitment policy's stage catalog (13 stages, isSystem: true —
+ * HR can add further custom stages in-app but these ship as the baseline),
+ * a scoring rubric for the Competency-Based Interview (the only rubric the
+ * policy spells out in detail) plus a generic single-criterion rubric for
+ * every other scored stage type, and 8 workflows matching the policy's
+ * example config table exactly (Band 1 through Band 8-and-above, Interns,
+ * Contract Staff/DSA/Graduate Trainee, plus a catch-all Default). Band-rank
+ * matching uses plain integers (1-10 for the regular band ladder, matching
+ * upsertBand()'s rank scheme above) rather than a Band foreign key, since a
+ * workflow describes a *range* of bands, not one specific band.
+ *
+ * Idempotent — safe to re-run, same as the rest of this script.
+ */
+async function seedRecruitmentStageEngine() {
+  async function upsertStage(
+    key: string,
+    name: string,
+    stageType: RecruitmentStageType,
+    opts: { isScored?: boolean; sortOrderHint?: number; description?: string } = {}
+  ) {
+    const data = {
+      name,
+      stageType,
+      isScored: opts.isScored ?? false,
+      sortOrderHint: opts.sortOrderHint ?? 0,
+      description: opts.description,
+    }
+    return prisma.recruitmentStageDefinition.upsert({
+      where: { key },
+      create: { key, isSystem: true, ...data },
+      update: data,
+    })
+  }
+
+  const stageDefs = await Promise.all([
+    upsertStage("CV_SCREENING", "CV Screening", "SCREENING", { sortOrderHint: 1 }),
+    upsertStage("SHORTLISTING", "Shortlisting", "REVIEW", { sortOrderHint: 2 }),
+    upsertStage("CASE_STUDY_INTERVIEW", "Case Study Interview", "INTERVIEW", { isScored: true, sortOrderHint: 3 }),
+    upsertStage("APTITUDE_TEST", "Aptitude Test", "TEST", { isScored: true, sortOrderHint: 4 }),
+    upsertStage("COMPETENCY_BASED_INTERVIEW", "Competency-Based Interview (CBI / Panel Interview)", "INTERVIEW", { isScored: true, sortOrderHint: 5 }),
+    upsertStage("ASSESSMENT_CENTRE", "Assessment Centre", "ASSESSMENT_CENTRE", { isScored: true, sortOrderHint: 6 }),
+    upsertStage("BOARD_INTERVIEW", "Board Interview", "INTERVIEW", { isScored: true, sortOrderHint: 7 }),
+    upsertStage("TECHNICAL_INTERVIEW", "Technical Interview", "INTERVIEW", { isScored: true, sortOrderHint: 8 }),
+    upsertStage("HR_INTERVIEW", "HR Interview", "INTERVIEW", { isScored: true, sortOrderHint: 9 }),
+    upsertStage("MANAGER_REVIEW", "Manager Review & Recommendation", "REVIEW", { sortOrderHint: 10 }),
+    upsertStage("FINAL_APPROVAL", "Final Approval", "DECISION", { sortOrderHint: 11 }),
+    upsertStage("OFFER_STAGE", "Offer", "OFFER", { sortOrderHint: 12 }),
+    upsertStage("HIRING_STAGE", "Hiring", "ADMIN", { sortOrderHint: 13 }),
+  ])
+  const stagesByKey = new Map(
+    ["CV_SCREENING", "SHORTLISTING", "CASE_STUDY_INTERVIEW", "APTITUDE_TEST", "COMPETENCY_BASED_INTERVIEW", "ASSESSMENT_CENTRE", "BOARD_INTERVIEW", "TECHNICAL_INTERVIEW", "HR_INTERVIEW", "MANAGER_REVIEW", "FINAL_APPROVAL", "OFFER_STAGE", "HIRING_STAGE"].map(
+      (key, index) => [key, stageDefs[index]] as const
+    )
+  )
+
+  async function upsertCriterion(stageKey: string, name: string, description?: string, maxScore = 5, sortOrder = 0) {
+    const stageId = stagesByKey.get(stageKey)!.id
+    return prisma.recruitmentScoringCriterion.upsert({
+      where: { stageId_name: { stageId, name } },
+      create: { stageId, name, description, maxScore, sortOrder },
+      update: { description, maxScore, sortOrder },
+    })
+  }
+
+  // The one rubric the policy spells out in full.
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Communication Skills", undefined, 5, 1)
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Technical Knowledge", undefined, 5, 2)
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Problem Solving", undefined, 5, 3)
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Leadership Potential", undefined, 5, 4)
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Teamwork", undefined, 5, 5)
+  await upsertCriterion("COMPETENCY_BASED_INTERVIEW", "Professionalism", undefined, 5, 6)
+
+  // Every other scored stage gets a single generic criterion so scoring
+  // isn't an empty form out of the box — HR can add finer-grained criteria
+  // per stage from the Recruitment Workflows admin page without a deploy.
+  for (const stageKey of ["CASE_STUDY_INTERVIEW", "APTITUDE_TEST", "ASSESSMENT_CENTRE", "BOARD_INTERVIEW", "TECHNICAL_INTERVIEW", "HR_INTERVIEW"]) {
+    await upsertCriterion(stageKey, "Overall Assessment", "Overall rating for this stage.", 5, 1)
+  }
+
+  async function upsertWorkflow(
+    name: string,
+    opts: { description?: string; isDefault?: boolean; minBandRank?: number; maxBandRank?: number; contractTypes?: ContractType[] },
+    stageKeys: string[]
+  ) {
+    const data = {
+      description: opts.description,
+      isDefault: opts.isDefault ?? false,
+      minBandRank: opts.minBandRank,
+      maxBandRank: opts.maxBandRank,
+      contractTypes: opts.contractTypes ?? [],
+    }
+    const workflow = await prisma.recruitmentWorkflow.upsert({
+      where: { name },
+      create: { name, ...data },
+      update: data,
+    })
+    // Rebuilding from scratch each run keeps this idempotent without
+    // fighting the (workflowId, sequence) unique constraint on reorders.
+    await prisma.recruitmentWorkflowStage.deleteMany({ where: { workflowId: workflow.id } })
+    await prisma.recruitmentWorkflowStage.createMany({
+      data: stageKeys.map((key, index) => ({ workflowId: workflow.id, stageId: stagesByKey.get(key)!.id, sequence: index + 1 })),
+    })
+    return workflow
+  }
+
+  await upsertWorkflow(
+    "Default Workflow",
+    { description: "Fallback used when no more specific band/contract-type workflow matches.", isDefault: true },
+    ["CV_SCREENING", "SHORTLISTING", "COMPETENCY_BASED_INTERVIEW", "MANAGER_REVIEW", "OFFER_STAGE", "HIRING_STAGE"]
+  )
+  await upsertWorkflow("Interns", { description: "Matches ContractType.INTERN.", contractTypes: [ContractType.INTERN] }, [
+    "CV_SCREENING",
+    "SHORTLISTING",
+    "APTITUDE_TEST",
+    "COMPETENCY_BASED_INTERVIEW",
+    "OFFER_STAGE",
+    "HIRING_STAGE",
+  ])
+  await upsertWorkflow(
+    "Contract Staff / DSA / Graduate Trainee",
+    { description: "Matches ContractType.TEMPORARY or GRADUATE_TRAINEE.", contractTypes: [ContractType.TEMPORARY, ContractType.GRADUATE_TRAINEE] },
+    ["CV_SCREENING", "SHORTLISTING", "COMPETENCY_BASED_INTERVIEW", "MANAGER_REVIEW", "OFFER_STAGE", "HIRING_STAGE"]
+  )
+  await upsertWorkflow("Band 1", { minBandRank: 1, maxBandRank: 1 }, ["CV_SCREENING", "SHORTLISTING", "COMPETENCY_BASED_INTERVIEW", "MANAGER_REVIEW", "OFFER_STAGE", "HIRING_STAGE"])
+  await upsertWorkflow("Band 2", { minBandRank: 2, maxBandRank: 2 }, [
+    "CV_SCREENING",
+    "SHORTLISTING",
+    "APTITUDE_TEST",
+    "COMPETENCY_BASED_INTERVIEW",
+    "MANAGER_REVIEW",
+    "OFFER_STAGE",
+    "HIRING_STAGE",
+  ])
+  await upsertWorkflow("Band 3-5", { minBandRank: 3, maxBandRank: 5 }, [
+    "CV_SCREENING",
+    "SHORTLISTING",
+    "CASE_STUDY_INTERVIEW",
+    "COMPETENCY_BASED_INTERVIEW",
+    "MANAGER_REVIEW",
+    "OFFER_STAGE",
+    "HIRING_STAGE",
+  ])
+  await upsertWorkflow("Band 6-7", { minBandRank: 6, maxBandRank: 7 }, [
+    "CV_SCREENING",
+    "SHORTLISTING",
+    "CASE_STUDY_INTERVIEW",
+    "COMPETENCY_BASED_INTERVIEW",
+    "ASSESSMENT_CENTRE",
+    "MANAGER_REVIEW",
+    "OFFER_STAGE",
+    "HIRING_STAGE",
+  ])
+  await upsertWorkflow("Band 8 and Above", { minBandRank: 8, maxBandRank: 10 }, [
+    "CV_SCREENING",
+    "SHORTLISTING",
+    "COMPETENCY_BASED_INTERVIEW",
+    "ASSESSMENT_CENTRE",
+    "BOARD_INTERVIEW",
+    "MANAGER_REVIEW",
+    "OFFER_STAGE",
+    "HIRING_STAGE",
+  ])
+
+  // eslint-disable-next-line no-console
+  console.log("Seeded the configurable recruitment stage engine: 13 stages, 1 scoring rubric + 6 generic ones, and 8 band/contract-type workflows.")
+}
+
+/**
+ * Seeds the default Exit Document checklist catalog — see schema.prisma's
+ * Exit Document Management module note. HR can add more from
+ * /exit-documents/document-types without a code change; this just gives
+ * ExitProcessService.initiateExit() something to bulk-assign out of the
+ * box. Upserted by (unique) name, so safe to re-run.
+ */
+async function seedExitDocumentTypes() {
+  const documentTypes: { name: string; description: string; isMandatory: boolean; sortOrder: number }[] = [
+    { name: "Company ID Card Returned", description: "Physical staff ID card handed back to HR/Security.", isMandatory: true, sortOrder: 1 },
+    { name: "Laptop / IT Equipment Returned", description: "Laptop, monitor, phone, and any other issued hardware returned to IT.", isMandatory: true, sortOrder: 2 },
+    { name: "System Access Revoked", description: "Email, core banking, and other system accounts disabled by IT.", isMandatory: true, sortOrder: 3 },
+    { name: "Handover Report Submitted", description: "Outstanding work and pending items handed over to the line manager/team.", isMandatory: true, sortOrder: 4 },
+    { name: "Exit Interview Conducted", description: "HR has conducted the exit interview and logged feedback.", isMandatory: false, sortOrder: 5 },
+    { name: "Final Payslip & Settlement Processed", description: "Final salary, leave encashment, and any other dues processed by Payroll.", isMandatory: true, sortOrder: 6 },
+    { name: "Loan / Advance Clearance", description: "Any outstanding staff loans or salary advances settled or a repayment plan agreed.", isMandatory: false, sortOrder: 7 },
+    { name: "Clearance Certificate Signed", description: "Final sign-off from all relevant departments (Finance, IT, Facilities, HR).", isMandatory: true, sortOrder: 8 },
+  ]
+
+  for (const documentType of documentTypes) {
+    await prisma.exitDocumentType.upsert({
+      where: { name: documentType.name },
+      update: {},
+      create: documentType,
+    })
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(`Seeded Exit Document Types: ${documentTypes.length} default checklist items.`)
+}
+
+/**
  * Seeds 3 Form Categories (Employee/Recruitment/Compliance Forms, matching
  * the spec's own examples), 3 published Form Templates spanning single,
  * sequential-multi-stage and self-acknowledgement signature routing, and 4
@@ -3215,6 +3426,17 @@ async function seedEmployeeRelations(employees: {
       variables: ["candidate_name", "job_title"],
     },
     {
+      key: "recruitment_stage_progress",
+      name: "Application Progressed",
+      category: "recruitment",
+      subject: "Your application has moved forward — {{job_title}}",
+      bodyHtml: emailShell(
+        "You're moving forward",
+        `<p>Hi {{candidate_name}}, good news — your application for {{job_title}} has progressed to the next stage: {{stage_name}}. We'll be in touch with further details.</p>`
+      ),
+      variables: ["candidate_name", "job_title", "stage_name"],
+    },
+    {
       key: "recruitment_interview_invitation",
       name: "Interview Invitation",
       category: "recruitment",
@@ -3343,6 +3565,19 @@ async function seedEmployeeRelations(employees: {
         <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Review employee record</a></p>`
       ),
       variables: ["employee_name", "status", "employee_url"],
+    },
+    {
+      key: "employee_rehired",
+      name: "Employee Rehired",
+      category: "exit",
+      subject: "Welcome back, {{employee_name}}!",
+      bodyHtml: emailShell(
+        "Welcome back",
+        `<p>Hi {{employee_name}}, welcome back to NCBA Rwanda! Your employee record has been reactivated effective {{start_date}}.</p>
+        <p>Please sign in and complete Position Assignment with HR to get set up in your new role.</p>
+        <p><a href="{{employee_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View your profile</a></p>`
+      ),
+      variables: ["employee_name", "start_date", "employee_url"],
     },
 
     // ---- Employee Relations ---------------------------------------------------

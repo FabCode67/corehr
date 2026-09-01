@@ -39,6 +39,9 @@ export interface AssignmentFilters {
   isMandatory?: boolean
   departmentId?: string
   branchId?: string
+  positionId?: string
+  levelId?: string
+  bandId?: string
   priority?: string
   overdueOnly?: boolean
 }
@@ -88,6 +91,9 @@ export class AssignmentsService {
       ...(filters.isMandatory !== undefined ? { isMandatory: filters.isMandatory } : {}),
       ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
       ...(filters.branchId ? { branchId: filters.branchId } : {}),
+      ...(filters.positionId ? { positionId: filters.positionId } : {}),
+      ...(filters.levelId ? { levelId: filters.levelId } : {}),
+      ...(filters.bandId ? { bandId: filters.bandId } : {}),
       ...(filters.priority ? { priority: filters.priority as CourseAssignmentPriority } : {}),
       ...(filters.overdueOnly
         ? { dueDate: { lt: new Date() }, status: { notIn: TERMINAL_STATUSES } }

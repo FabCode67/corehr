@@ -8,6 +8,10 @@
       {
         "include": "modules/forms/pdf/fonts/**/*",
         "outDir": "dist"
+      },
+      {
+        "include": "modules/hr-analytics/assets/**/*",
+        "outDir": "dist"
       }
     ],
     "watchAssets": true

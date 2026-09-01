@@ -50,7 +50,7 @@ export class HrAnalyticsExportController {
   @Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
   async exportXlsx(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
     const filters = await this.resolveFilters(query, actingEmployeeId)
-    const buffer = await this.exportService.generateExcel(filters)
+    const buffer = await this.exportService.generateExcel(filters, actingEmployeeId)
     void this.accessLogService.log(actingEmployeeId, "export-xlsx", query)
     return new StreamableFile(buffer, { disposition: `attachment; filename="hr-analytics-${Date.now()}.xlsx"` })
   }
@@ -59,7 +59,7 @@ export class HrAnalyticsExportController {
   @Header("Content-Type", "text/csv")
   async exportCsv(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
     const filters = await this.resolveFilters(query, actingEmployeeId)
-    const csv = await this.exportService.generateCsv(filters)
+    const csv = await this.exportService.generateCsv(filters, actingEmployeeId)
     void this.accessLogService.log(actingEmployeeId, "export-csv", query)
     return new StreamableFile(Buffer.from(csv, "utf-8"), { disposition: `attachment; filename="hr-analytics-${Date.now()}.csv"` })
   }
@@ -68,7 +68,7 @@ export class HrAnalyticsExportController {
   @Header("Content-Type", "application/pdf")
   async exportPdf(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
     const filters = await this.resolveFilters(query, actingEmployeeId)
-    const buffer = await this.exportService.generatePdf(filters)
+    const buffer = await this.exportService.generatePdf(filters, actingEmployeeId)
     void this.accessLogService.log(actingEmployeeId, "export-pdf", query)
     return new StreamableFile(buffer, { disposition: `attachment; filename="hr-analytics-${Date.now()}.pdf"` })
   }
@@ -113,7 +113,7 @@ export class HrAnalyticsExportController {
       sections = []
     }
 
-    const buffer = await this.exportService.generateCustomReport(sections, filters, format)
+    const buffer = await this.exportService.generateCustomReport(sections, filters, format, actingEmployeeId)
     void this.accessLogService.log(actingEmployeeId, `export-custom-${format}`, query)
 
     const contentType =

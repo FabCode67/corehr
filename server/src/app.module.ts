@@ -30,7 +30,10 @@ import { RequisitionsModule } from "./modules/recruitment/requisitions/requisiti
 import { JobDescriptionsModule } from "./modules/recruitment/job-descriptions/job-descriptions.module"
 import { JobPostingsModule } from "./modules/recruitment/job-postings/job-postings.module"
 import { CandidatesModule } from "./modules/recruitment/candidates/candidates.module"
+import { RecruitmentStageDefinitionsModule } from "./modules/recruitment/stage-definitions/recruitment-stage-definitions.module"
+import { RecruitmentWorkflowsModule } from "./modules/recruitment/workflows/recruitment-workflows.module"
 import { ApplicationsModule } from "./modules/recruitment/applications/applications.module"
+import { ApplicationStagesModule } from "./modules/recruitment/application-stages/application-stages.module"
 import { AssessmentsModule } from "./modules/recruitment/assessments/assessments.module"
 import { InterviewsModule } from "./modules/recruitment/interviews/interviews.module"
 import { BackgroundChecksModule } from "./modules/recruitment/background-checks/background-checks.module"
@@ -55,6 +58,8 @@ import { EmployeeRelationsAnalyticsModule } from "./modules/employee-relations/a
 import { CasePdfModule } from "./modules/employee-relations/pdf/case-pdf.module"
 import { DocumentTypesModule } from "./modules/onboarding-documents/document-types/document-types.module"
 import { AssignmentsModule as OnboardingDocumentAssignmentsModule } from "./modules/onboarding-documents/assignments/assignments.module"
+import { ExitDocumentTypesModule } from "./modules/exit-documents/document-types/document-types.module"
+import { ExitDocumentAssignmentsModule } from "./modules/exit-documents/assignments/assignments.module"
 import { ExitProcessModule } from "./modules/employees/exit-process/exit-process.module"
 import { ExecutiveDashboardModule } from "./modules/executive-dashboard/executive-dashboard.module"
 import { ImportsModule } from "./modules/imports/imports.module"
@@ -101,7 +106,10 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     JobDescriptionsModule,
     JobPostingsModule,
     CandidatesModule,
+    RecruitmentStageDefinitionsModule,
+    RecruitmentWorkflowsModule,
     ApplicationsModule,
+    ApplicationStagesModule,
     AssessmentsModule,
     InterviewsModule,
     BackgroundChecksModule,
@@ -126,6 +134,8 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     CasePdfModule,
     DocumentTypesModule,
     OnboardingDocumentAssignmentsModule,
+    ExitDocumentTypesModule,
+    ExitDocumentAssignmentsModule,
     ExitProcessModule,
     ExecutiveDashboardModule,
     ImportsModule,

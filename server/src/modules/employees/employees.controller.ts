@@ -18,6 +18,7 @@ import { ChangeBandDto } from "./dto/change-band.dto"
 import { CreateEmployeeDto } from "./dto/create-employee.dto"
 import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
+import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { SetAdminAccessDto } from "./dto/set-admin-access.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
@@ -40,6 +41,8 @@ export class EmployeesController {
     @Query("unitId") unitId?: string,
     @Query("positionId") positionId?: string,
     @Query("branchId") branchId?: string,
+    @Query("bandId") bandId?: string,
+    @Query("levelId") levelId?: string,
     @Query("includeInactive") includeInactive?: string,
     @Query("search") search?: string,
     @Query("page") page?: string,
@@ -50,6 +53,8 @@ export class EmployeesController {
       unitId,
       positionId,
       branchId,
+      bandId,
+      levelId,
       includeInactive: includeInactive === "true",
       search,
     }
@@ -98,6 +103,8 @@ export class EmployeesController {
     @Query("unitId") unitId?: string,
     @Query("positionId") positionId?: string,
     @Query("branchId") branchId?: string,
+    @Query("bandId") bandId?: string,
+    @Query("levelId") levelId?: string,
     @Query("includeInactive") includeInactive?: string
   ) {
     const requestedKeys = (columns ?? "").split(",").map((k) => k.trim()).filter(Boolean)
@@ -109,6 +116,8 @@ export class EmployeesController {
         unitId,
         positionId,
         branchId,
+        bandId,
+        levelId,
         includeInactive: includeInactive === "true",
       }),
       this.employeesService.getLineManagersBatch(),
@@ -261,6 +270,11 @@ export class EmployeesController {
   @Post(":id/exit")
   processExit(@Param("id") id: string, @Body() dto: ProcessExitDto) {
     return this.employeesService.processExit(id, dto)
+  }
+
+  @Post(":id/rehire")
+  rehire(@Param("id") id: string, @Body() dto: RehireEmployeeDto) {
+    return this.employeesService.rehire(id, dto)
   }
 
   @Delete(":id")
