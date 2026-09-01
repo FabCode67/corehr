@@ -73,6 +73,18 @@ export class HrAnalyticsExportController {
     return new StreamableFile(buffer, { disposition: `attachment; filename="hr-analytics-${Date.now()}.pdf"` })
   }
 
+  /** Single-page "HR Statistics Snapshot" — a purpose-built infographic
+   *  layout (see HrAnalyticsExportService.generateSnapshotPdf()), distinct
+   *  from the multi-section "pdf" route above. */
+  @Get("snapshot-pdf")
+  @Header("Content-Type", "application/pdf")
+  async exportSnapshotPdf(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {
+    const filters = await this.resolveFilters(query, actingEmployeeId)
+    const buffer = await this.exportService.generateSnapshotPdf(filters, actingEmployeeId)
+    void this.accessLogService.log(actingEmployeeId, "export-snapshot-pdf", query)
+    return new StreamableFile(buffer, { disposition: `attachment; filename="hr-statistics-snapshot-${Date.now()}.pdf"` })
+  }
+
   @Get("pptx")
   @Header("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
   async exportPptx(@Query() query: Query_, @Query("actingEmployeeId") actingEmployeeId: string) {

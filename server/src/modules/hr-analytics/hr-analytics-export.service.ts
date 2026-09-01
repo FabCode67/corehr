@@ -977,6 +977,314 @@ export class HrAnalyticsExportService {
     return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer
   }
 
+  // ==== HR Statistics Snapshot (single-page infographic PDF) =====================
+  // A purpose-built, visually distinct export — not built from ExportBundle
+  // like generatePdf() above (the full multi-section report). Calls
+  // HrAnalyticsService.workforceSnapshot() directly and hand-lays-out every
+  // element with PDFKit's coordinate-based drawing API: this codebase has no
+  // HTML/CSS-to-PDF pipeline (see this file's own doc comment), so an exact
+  // pixel match to a designed reference image isn't achievable — this gets
+  // as close as PDFKit's primitives reasonably allow. NOTE: PDFKit's color
+  // parser silently no-ops on bare hex ("B8860B") and needs the "#" prefix
+  // ("#B8860B") — every color literal below is prefixed for that reason
+  // (REPORT_THEME's own values are NOT prefixed, which is a separate,
+  // pre-existing issue in the other export paths above; left alone here
+  // since fixing that is outside what was asked).
+  async generateSnapshotPdf(filters: HrAnalyticsFilters, actingEmployeeId?: string): Promise<Buffer> {
+    const [snapshot, cover] = await Promise.all([this.hrAnalyticsService.workforceSnapshot(filters), this.buildCoverInfo(filters, actingEmployeeId)])
+
+    const doc = new PDFDocument({ margin: 0, size: "A4" })
+    const chunks: Buffer[] = []
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+    const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))))
+
+    this.renderSnapshotPage(doc, snapshot, cover)
+
+    doc.end()
+    return done
+  }
+
+  private renderSnapshotPage(doc: PDFKit.PDFDocument, snapshot: Awaited<ReturnType<HrAnalyticsService["workforceSnapshot"]>>, cover: ReportCoverInfo) {
+    const PAGE_W = doc.page.width
+    const PAGE_H = doc.page.height
+    const MARGIN = 36
+    const CONTENT_W = PAGE_W - MARGIN * 2
+
+    const CREAM = "#F6F1E7"
+    const CARD_BG = "#FCF8EF"
+    const DARK_BROWN = "#2A1B12"
+    const GOLD = "#B8860B"
+    const TEXT_MUTED = "#7A6A57"
+    const TRACK = "#E9DFC9"
+    const ROSE = "#D4537E"
+    const TEAL = "#2E7D6B"
+
+    doc.rect(0, 0, PAGE_W, PAGE_H).fill(CREAM)
+
+    // ---- Header band ----
+    const headerH = 96
+    doc.rect(0, 0, PAGE_W, headerH).fill(DARK_BROWN)
+    doc.rect(0, headerH, PAGE_W, 3).fill(GOLD)
+
+    const logoPath = resolveLogoPath()
+    let headerLeftX = MARGIN
+    if (logoPath) {
+      doc.image(logoPath, headerLeftX, 18, { width: 60 })
+      headerLeftX += 72
+    }
+    doc.fillColor(GOLD).font("Helvetica-Bold").fontSize(24).text("HR STATISTICS", headerLeftX, 22)
+    doc.fillColor(CREAM).font("Helvetica").fontSize(10).text("NCBA Rwanda · People & Culture Workforce Snapshot", headerLeftX, 52)
+
+    doc.fillColor(CREAM).font("Helvetica").fontSize(9)
+    doc.text(snapshot.periodLabel, 0, 22, { width: PAGE_W - MARGIN, align: "right" })
+    if (cover.departmentLabel) doc.text(`Department: ${cover.departmentLabel}`, 0, 38, { width: PAGE_W - MARGIN, align: "right" })
+    doc.text(`Generated ${cover.generatedAtLabel}`, 0, 54, { width: PAGE_W - MARGIN, align: "right" })
+
+    let y = headerH + 20
+
+    // ---- Workforce at a glance (stat cards) ----
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(12).text("WORKFORCE AT A GLANCE", MARGIN, y)
+    y += 18
+
+    const cardGap = 10
+    const cardW = (CONTENT_W - cardGap * 3) / 4
+    const cardH = 58
+    const cardColors = [DARK_BROWN, GOLD, TEAL, ROSE]
+    snapshot.byEmploymentType.forEach((row, i) => {
+      const x = MARGIN + i * (cardW + cardGap)
+      doc.roundedRect(x, y, cardW, cardH, 6).fill(CARD_BG)
+      doc.rect(x, y, 4, cardH).fill(cardColors[i % cardColors.length])
+      doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(20).text(String(row.count), x + 12, y + 10)
+      doc.fillColor(TEXT_MUTED).font("Helvetica").fontSize(8).text(`${row.label} (${row.percent}%)`, x + 12, y + 34, { width: cardW - 20 })
+    })
+    y += cardH + 26
+
+    // ---- Gender split + Age distribution (two columns) ----
+    const colGap = 24
+    const colW = (CONTENT_W - colGap) / 2
+    const leftX = MARGIN
+    const rightX = MARGIN + colW + colGap
+
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(12).text("GENDER SPLIT", leftX, y)
+    doc.text("AGE DISTRIBUTION", rightX, y)
+    const sectionTopY = y + 20
+
+    const donutCx = leftX + 55
+    const donutCy = sectionTopY + 55
+    const outerR = 50
+    const innerR = 28
+    const genderSegments = [
+      { value: snapshot.gender.male.count, color: DARK_BROWN },
+      { value: snapshot.gender.female.count, color: ROSE },
+    ]
+    this.drawDonutChart(doc, donutCx, donutCy, outerR, innerR, genderSegments, CREAM)
+
+    const genderLegend = [
+      { label: "Male", count: snapshot.gender.male.count, percent: snapshot.gender.male.percent, color: DARK_BROWN },
+      { label: "Female", count: snapshot.gender.female.count, percent: snapshot.gender.female.percent, color: ROSE },
+    ]
+    let legendY = sectionTopY + 8
+    const legendX = leftX + 125
+    for (const seg of genderLegend) {
+      doc.rect(legendX, legendY, 10, 10).fill(seg.color)
+      doc.fillColor(DARK_BROWN).font("Helvetica").fontSize(9).text(`${seg.label}: ${seg.count} (${seg.percent}%)`, legendX + 16, legendY - 1)
+      legendY += 20
+    }
+
+    const ageMax = Math.max(1, ...snapshot.ageDistribution.map((a) => a.count))
+    this.drawBarList(
+      doc,
+      rightX,
+      sectionTopY,
+      colW,
+      snapshot.ageDistribution.map((a) => ({ label: a.bucket, value: a.count, percent: a.percent, color: GOLD })),
+      ageMax,
+      DARK_BROWN,
+      TEXT_MUTED,
+      TRACK
+    )
+
+    y = sectionTopY + 120
+
+    // ---- Tenure + Band distribution (two columns) ----
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(12).text("TENURE DISTRIBUTION", leftX, y)
+    doc.text("BAND DISTRIBUTION", rightX, y)
+    const sectionTopY2 = y + 20
+
+    const tenureMax = Math.max(1, ...snapshot.tenureDistribution.map((t) => t.count))
+    this.drawBarList(
+      doc,
+      leftX,
+      sectionTopY2,
+      colW,
+      snapshot.tenureDistribution.map((t) => ({ label: t.bucket, value: t.count, percent: t.percent, color: TEAL })),
+      tenureMax,
+      DARK_BROWN,
+      TEXT_MUTED,
+      TRACK
+    )
+
+    const bandMax = Math.max(1, ...snapshot.bandDistributionGrouped.map((b) => b.count))
+    this.drawBarList(
+      doc,
+      rightX,
+      sectionTopY2,
+      colW,
+      snapshot.bandDistributionGrouped.map((b) => ({ label: b.label, value: b.count, percent: b.percent, color: DARK_BROWN })),
+      bandMax,
+      DARK_BROWN,
+      TEXT_MUTED,
+      TRACK
+    )
+    doc.fillColor(TEXT_MUTED).font("Helvetica-Oblique").fontSize(7).text(`Based on ${snapshot.permanentStaffCount} permanent staff`, rightX, sectionTopY2 + 100)
+
+    y = sectionTopY2 + 120
+
+    // ---- Turnover & exits ----
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(12).text("TURNOVER & EXITS", MARGIN, y)
+    y += 18
+    doc
+      .fillColor(TEXT_MUTED)
+      .font("Helvetica")
+      .fontSize(8)
+      .text(`${snapshot.turnover.totalExits} exits this period · overall turnover ${snapshot.turnover.overallRatePercent}%`, MARGIN, y)
+    y += 16
+
+    this.drawBarList(
+      doc,
+      MARGIN,
+      y,
+      CONTENT_W,
+      [
+        {
+          label: "Permanent",
+          value: snapshot.turnover.permanent.ratePercent,
+          percent: snapshot.turnover.permanent.ratePercent,
+          color: DARK_BROWN,
+          displayValue: `${snapshot.turnover.permanent.ratePercent}% · ${snapshot.turnover.permanent.exits} exits`,
+        },
+        {
+          label: "DSA / Intern",
+          value: snapshot.turnover.contractual.ratePercent,
+          percent: snapshot.turnover.contractual.ratePercent,
+          color: GOLD,
+          displayValue: `${snapshot.turnover.contractual.ratePercent}% · ${snapshot.turnover.contractual.exits} exits`,
+        },
+      ],
+      Math.max(1, snapshot.turnover.permanent.ratePercent, snapshot.turnover.contractual.ratePercent),
+      DARK_BROWN,
+      TEXT_MUTED,
+      TRACK
+    )
+    y += 56
+
+    // Regrettable vs. non-regrettable — 100%-stacked bar
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(9).text("Regrettable vs. Non-Regrettable Exits", MARGIN, y)
+    y += 14
+    const stackW = CONTENT_W
+    const stackH = 20
+    const regPct = snapshot.exitType.regrettable.percent
+    const nonRegPct = snapshot.exitType.nonRegrettable.percent
+    const totalPct = regPct + nonRegPct
+    const regW = totalPct === 0 ? stackW / 2 : (regPct / totalPct) * stackW
+    doc.roundedRect(MARGIN, y, stackW, stackH, 4).fill(TRACK)
+    if (totalPct > 0) {
+      doc.rect(MARGIN, y, regW, stackH).fill(ROSE)
+      doc.rect(MARGIN + regW, y, stackW - regW, stackH).fill(TEAL)
+    }
+    doc.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(8)
+    if (regW > 60) doc.text(`Regrettable ${regPct}%`, MARGIN + 8, y + 6)
+    if (stackW - regW > 60) doc.text(`Non-regrettable ${nonRegPct}%`, MARGIN + regW + 8, y + 6)
+    y += stackH + 22
+
+    // ---- Key takeaways ----
+    doc.fillColor(DARK_BROWN).font("Helvetica-Bold").fontSize(12).text("KEY TAKEAWAYS", MARGIN, y)
+    y += 18
+    const takeawayGap = 10
+    const takeawayW = (CONTENT_W - takeawayGap * 2) / 3
+    const takeawayH = 70
+    snapshot.keyTakeaways.slice(0, 3).forEach((line, i) => {
+      const x = MARGIN + i * (takeawayW + takeawayGap)
+      doc.roundedRect(x, y, takeawayW, takeawayH, 6).fill(DARK_BROWN)
+      doc.fillColor(GOLD).font("Helvetica-Bold").fontSize(14).text(String(i + 1), x + 10, y + 8)
+      doc.fillColor(CREAM).font("Helvetica").fontSize(8).text(line, x + 10, y + 26, { width: takeawayW - 20 })
+    })
+
+    // ---- Footer ----
+    const footerY = PAGE_H - 34
+    doc.rect(0, footerY, PAGE_W, 2).fill(GOLD)
+    doc.fillColor(TEXT_MUTED).font("Helvetica").fontSize(7)
+    doc.text("Prepared by NCBA Rwanda PeopleSuite — CONFIDENTIAL — INTERNAL USE ONLY", MARGIN, footerY + 8)
+    doc.text(`Generated by: ${cover.generatedByLabel}`, 0, footerY + 8, { width: PAGE_W - MARGIN, align: "right" })
+
+    doc.fillColor("black").font("Helvetica")
+  }
+
+  /** Hand-drawn donut chart — PDFKit has no native pie/donut primitive, so
+   *  each segment is built as a filled wedge (polyline of points along the
+   *  outer-radius arc, closed back to center) and the hole is punched by
+   *  drawing a background-colored circle of `innerR` on top afterward. */
+  private drawDonutChart(doc: PDFKit.PDFDocument, cx: number, cy: number, outerR: number, innerR: number, segments: { value: number; color: string }[], holeColor: string) {
+    const total = segments.reduce((sum, s) => sum + s.value, 0)
+    if (total <= 0) {
+      doc.circle(cx, cy, outerR).fill("#E9DFC9")
+      doc.circle(cx, cy, innerR).fill(holeColor)
+      return
+    }
+    let startAngle = -Math.PI / 2
+    for (const seg of segments) {
+      if (seg.value <= 0) continue
+      const sweep = (seg.value / total) * Math.PI * 2
+      const endAngle = startAngle + sweep
+      const steps = Math.max(2, Math.ceil((sweep / (Math.PI * 2)) * 120))
+      doc.moveTo(cx, cy)
+      for (let i = 0; i <= steps; i++) {
+        const t = startAngle + (sweep * i) / steps
+        doc.lineTo(cx + outerR * Math.cos(t), cy + outerR * Math.sin(t))
+      }
+      doc.closePath()
+      doc.fill(seg.color)
+      startAngle = endAngle
+    }
+    doc.circle(cx, cy, innerR).fill(holeColor)
+  }
+
+  /** Compact horizontal bar-list used for every distribution section of the
+   *  snapshot (age/tenure/band/turnover) — a label, a proportional bar
+   *  against `maxValue`, and a right-hand value label (defaulting to
+   *  "value (percent%)", overridable via `displayValue` for rows like
+   *  turnover that want a different string). */
+  private drawBarList(
+    doc: PDFKit.PDFDocument,
+    x: number,
+    y: number,
+    width: number,
+    rows: { label: string; value: number; percent: number; color: string; displayValue?: string }[],
+    maxValue: number,
+    labelColor: string,
+    valueColor: string,
+    trackColor: string
+  ) {
+    const barHeight = 12
+    const rowGap = 10
+    const labelW = 68
+    const valueW = 78
+    const barMaxW = width - labelW - valueW
+    rows.forEach((row, i) => {
+      const rowY = y + i * (barHeight + rowGap)
+      doc.fillColor(labelColor).font("Helvetica").fontSize(8).text(row.label, x, rowY + 2, { width: labelW })
+      const barX = x + labelW
+      doc.roundedRect(barX, rowY, barMaxW, barHeight, 3).fill(trackColor)
+      const barW = maxValue === 0 ? 0 : Math.max(2, (row.value / maxValue) * barMaxW)
+      doc.roundedRect(barX, rowY, barW, barHeight, 3).fill(row.color)
+      doc
+        .fillColor(valueColor)
+        .font("Helvetica")
+        .fontSize(7.5)
+        .text(row.displayValue ?? `${row.value} (${row.percent}%)`, barX + barMaxW + 6, rowY + 2, { width: valueW })
+    })
+  }
+
   private async generateCustomPptx(bundle: CustomReportBundle, insights: Record<string, string[]>, recommendations: string[], cover: ReportCoverInfo): Promise<Buffer> {
     const pptx = new PptxGenJS()
     pptx.defineLayout({ name: "A4", width: 10, height: 7.5 })

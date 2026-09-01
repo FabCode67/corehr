@@ -7,6 +7,7 @@ import { fetchEmployees, formatEnumLabel } from "@/lib/api/employees"
 import { executiveDashboardPdfUrl, fetchExecutiveDashboardOverview } from "@/lib/api/executive-dashboard"
 import {
   exportUrl,
+  exportSnapshotUrl,
   fetchAttritionRate,
   fetchAverageAge,
   fetchBandDistribution,
@@ -178,6 +179,13 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
               Export {format.toUpperCase()}
             </a>
           ))}
+          <a
+            href={exportSnapshotUrl(filters, actingEmployeeId)}
+            className="inline-flex h-8 items-center rounded-lg border border-border bg-muted px-3 text-xs font-medium text-foreground hover:bg-muted/70"
+            title="A single-page branded infographic — headcount, gender, age/tenure/band, and turnover at a glance"
+          >
+            Export Statistics Snapshot
+          </a>
           {reportSections.length > 0 ? <CustomReportDialog sections={reportSections} filters={filters} actingEmployeeId={actingEmployeeId} /> : null}
         </div>
       </div>

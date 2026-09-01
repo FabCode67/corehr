@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common"
+import { ContractType } from "@prisma/client"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
@@ -586,6 +587,161 @@ export class HrAnalyticsService {
       .sort((a, b) => a.yearsToRetirement - b.yearsToRetirement)
 
     return { averageTenureYears, averageBankingExperienceYears, longestServing, newest, approachingRetirement }
+  }
+
+  /**
+   * Data for the single-page "HR Statistics Snapshot" PDF export — a
+   * purpose-built aggregation for that one infographic layout (see
+   * HrAnalyticsExportService.generateSnapshotPdf()), not a general-purpose
+   * KPI method. The groupings here (decade age bands, tenure bands, banded
+   * rank groups, Permanent-vs-Contractual turnover) are deliberately
+   * different from employeeDemographics()'s Under25/25-35/35-45/45+
+   * histogram and bandDistribution()'s per-band rows — this exists because
+   * the snapshot's fixed visual layout needs exactly these buckets, not
+   * because the existing ones were wrong for their own purposes.
+   */
+  async workforceSnapshot(filters: HrAnalyticsFilters) {
+    const dimensionWhere = buildEmployeeDimensionWhere(filters)
+
+    const active = await this.prisma.employee.findMany({
+      where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
+      select: { gender: true, contractType: true, dateOfBirth: true, employmentStartDate: true, band: { select: { rank: true } } },
+    })
+
+    const totalActive = active.length
+
+    // --- Headcount by employment type ---
+    const employmentTypeOrder: { key: ContractType; label: string }[] = [
+      { key: "PERMANENT", label: "Permanent" },
+      { key: "TEMPORARY", label: "Contract (DSA)" },
+      { key: "GRADUATE_TRAINEE", label: "Graduate Trainee" },
+      { key: "INTERN", label: "Intern" },
+    ]
+    const byEmploymentType = employmentTypeOrder.map(({ key, label }) => {
+      const count = active.filter((e) => e.contractType === key).length
+      return { key, label, count, percent: totalActive === 0 ? 0 : round1((count / totalActive) * 100) }
+    })
+
+    // --- Gender split ---
+    const maleCount = active.filter((e) => e.gender === "MALE").length
+    const femaleCount = active.filter((e) => e.gender === "FEMALE").length
+    const gender = {
+      male: { count: maleCount, percent: totalActive === 0 ? 0 : round1((maleCount / totalActive) * 100) },
+      female: { count: femaleCount, percent: totalActive === 0 ? 0 : round1((femaleCount / totalActive) * 100) },
+    }
+
+    // --- Age distribution (decade buckets, matching the reference infographic) ---
+    const ageBuckets = [
+      { label: "20-29", min: 20, max: 30 },
+      { label: "30-39", min: 30, max: 40 },
+      { label: "40-49", min: 40, max: 50 },
+      { label: "50-59", min: 50, max: 60 },
+    ]
+    const ageDistribution = ageBuckets.map((bucket) => {
+      const count = active.filter((e) => {
+        const age = ageInYears(e.dateOfBirth)
+        return age >= bucket.min && age < bucket.max
+      }).length
+      return { bucket: bucket.label, count, percent: totalActive === 0 ? 0 : round1((count / totalActive) * 100) }
+    })
+
+    // --- Tenure distribution ---
+    const tenureBuckets = [
+      { label: "0-3 yrs", min: 0, max: 3 },
+      { label: "4-6 yrs", min: 4, max: 6 },
+      { label: "7-9 yrs", min: 7, max: 9 },
+      { label: "10+ yrs", min: 10, max: Infinity },
+    ]
+    const withTenure = active.filter((e) => e.employmentStartDate)
+    const tenureDistribution = tenureBuckets.map((bucket) => {
+      const count = withTenure.filter((e) => {
+        const years = ageInYears(e.employmentStartDate as Date)
+        return years >= bucket.min && years < bucket.max + (bucket.max === Infinity ? 0 : 1)
+      }).length
+      return { bucket: bucket.label, count, percent: withTenure.length === 0 ? 0 : round1((count / withTenure.length) * 100) }
+    })
+
+    // --- Band groups — restricted to Permanent staff, matching the
+    // reference infographic's "Based on N permanent staff" caption, since
+    // Contractual Staff (DSA/GT/Intern) sit on their own band-11 rung
+    // rather than the 1-10 ladder these groupings describe. ---
+    const permanentWithBand = active.filter((e) => e.contractType === "PERMANENT" && e.band)
+    const permanentStaffCount = permanentWithBand.length
+    const bandGroups = [
+      { label: "Band 1-3", min: 1, max: 3 },
+      { label: "Band 4-6", min: 4, max: 6 },
+      { label: "Band 7-8", min: 7, max: 8 },
+      { label: "Band 9-10", min: 9, max: 10 },
+    ]
+    const bandDistributionGrouped = bandGroups.map((group) => {
+      const count = permanentWithBand.filter((e) => e.band!.rank >= group.min && e.band!.rank <= group.max).length
+      return { label: group.label, count, percent: permanentStaffCount === 0 ? 0 : round1((count / permanentStaffCount) * 100) }
+    })
+
+    // --- Turnover — grouped Permanent vs. Contractual (DSA/GT/Intern),
+    // scoped to the resolved reporting period (defaults to the current
+    // calendar year when no date filter is set, same convention as
+    // totalStaff()'s referenceYear). ---
+    const { from, to } = resolveDateRange(filters)
+    const referenceYear = filters.year ?? new Date().getUTCFullYear()
+    const periodFrom = from ?? new Date(Date.UTC(referenceYear, 0, 1))
+    const periodTo = to ?? new Date(Date.UTC(referenceYear, 11, 31, 23, 59, 59))
+
+    const exited = await this.prisma.employee.findMany({
+      where: { ...dimensionWhere, exitDate: { gte: periodFrom, lte: periodTo } },
+      select: { contractType: true, exitType: true },
+    })
+    const totalExits = exited.length
+    const permanentExits = exited.filter((e) => e.contractType === "PERMANENT").length
+    const contractualExits = totalExits - permanentExits
+    const permanentBaseline = active.filter((e) => e.contractType === "PERMANENT").length + permanentExits
+    const contractualBaseline = active.filter((e) => e.contractType !== "PERMANENT").length + contractualExits
+
+    const turnover = {
+      totalExits,
+      overallRatePercent: totalActive + totalExits === 0 ? 0 : round1((totalExits / (totalActive + totalExits)) * 100),
+      permanent: { exits: permanentExits, ratePercent: permanentBaseline === 0 ? 0 : round1((permanentExits / permanentBaseline) * 100) },
+      contractual: { exits: contractualExits, ratePercent: contractualBaseline === 0 ? 0 : round1((contractualExits / contractualBaseline) * 100) },
+    }
+
+    // --- Regrettable vs. non-regrettable exits ---
+    const regrettable = exited.filter((e) => e.exitType === "REGRETTABLE").length
+    const nonRegrettable = exited.filter((e) => e.exitType === "NON_REGRETTABLE").length
+    const classifiedExits = regrettable + nonRegrettable
+    const exitType = {
+      regrettable: { count: regrettable, percent: classifiedExits === 0 ? 0 : round1((regrettable / classifiedExits) * 100) },
+      nonRegrettable: { count: nonRegrettable, percent: classifiedExits === 0 ? 0 : round1((nonRegrettable / classifiedExits) * 100) },
+    }
+
+    // --- Key takeaways — rule-based, same spirit as buildInsights()/
+    // buildRecommendations() in hr-analytics-export.service.ts (not
+    // LLM-generated; see that file's doc comments on why). ---
+    const under40Count = active.filter((e) => ageInYears(e.dateOfBirth) < 40).length
+    const under40Percent = totalActive === 0 ? 0 : round1((under40Count / totalActive) * 100)
+    const earlyTenureCount = withTenure.filter((e) => ageInYears(e.employmentStartDate as Date) <= 3).length
+    const earlyTenurePercent = withTenure.length === 0 ? 0 : round1((earlyTenureCount / withTenure.length) * 100)
+
+    const keyTakeaways: string[] = [
+      `${under40Percent}% of active staff are under 40, pointing to a relatively young workforce.`,
+      `${earlyTenurePercent}% of staff have 3 years or less of tenure — a sizeable early-career cohort still building institutional knowledge.`,
+      classifiedExits > 0
+        ? `${exitType.regrettable.percent}% of this period's exits were regrettable, against an overall turnover rate of ${turnover.overallRatePercent}% — worth a closer look if that share keeps climbing.`
+        : `Overall turnover for the period stands at ${turnover.overallRatePercent}%, with no exits recorded to classify as regrettable or not.`,
+    ]
+
+    return {
+      totalActive,
+      permanentStaffCount,
+      periodLabel: String(referenceYear),
+      byEmploymentType,
+      gender,
+      ageDistribution,
+      tenureDistribution,
+      bandDistributionGrouped,
+      turnover,
+      exitType,
+      keyTakeaways,
+    }
   }
 
   private countBy<T>(items: T[], keyOf: (item: T) => { key: string; label: string } | null) {
