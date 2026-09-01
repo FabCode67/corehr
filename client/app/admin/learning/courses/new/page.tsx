@@ -13,7 +13,12 @@ import { CourseForm } from "../course-form"
 export default async function NewCoursePage() {
   const [categoriesResult, institutionsResult, functionsResult, departmentsResult, unitsResult, positionsResult, levelsResult, bandsResult] =
     await Promise.all([
-      fetchTrainingCategories(true),
+      // Active categories only — unlike the edit page, there's no existing
+      // selection here to preserve, so a deactivated category (e.g. one of
+      // the old pre-consolidation ones) shouldn't be offered as a choice
+      // for a brand-new course. See seed.ts's training-category
+      // consolidation comment for why the catalogue is now just 3 rows.
+      fetchTrainingCategories(),
       fetchInstitutions(true),
       fetchFunctions(),
       fetchDepartments(),
