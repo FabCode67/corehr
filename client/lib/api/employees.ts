@@ -347,3 +347,23 @@ export function computeTotalBankingExperienceYears(employee: Pick<Employee, "pre
   if (employee.previousBankingExperienceYears === null && !tenure) return null
   return Math.round((previous + (tenure?.totalYears ?? 0)) * 10) / 10
 }
+
+/** Days remaining until Employee.probationEndDate — null when the employee
+ *  has no probation end date set at all (most staff, once probation is
+ *  over and HR hasn't left a stale date on the record). Negative once the
+ *  date has already passed; the Employees table renders that case as
+ *  "Completed" rather than a negative day count. Same day-granularity
+ *  midnight-to-midnight math as ProbationReminderScheduler on the backend,
+ *  so this reads consistently with the "in N days" wording in that
+ *  reminder's notification/email. */
+export function computeProbationRemainingDays(probationEndDate: string | null): number | null {
+  if (!probationEndDate) return null
+  const end = new Date(probationEndDate)
+  if (Number.isNaN(end.getTime())) return null
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+
+  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}

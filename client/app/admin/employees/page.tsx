@@ -10,6 +10,7 @@ import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
+  computeProbationRemainingDays,
   computeTenure,
   computeTotalBankingExperienceYears,
   fetchEmployeeExportColumns,
@@ -207,6 +208,7 @@ export default async function AdminEmployeesPage({
                   <th className="px-4 py-3 font-medium">Line Manager</th>
                   <th className="px-4 py-3 font-medium">Tenure</th>
                   <th className="px-4 py-3 font-medium">Banking Experience</th>
+                  <th className="px-4 py-3 font-medium">Probation</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">
                     <span className="sr-only">Actions</span>
@@ -249,6 +251,16 @@ export default async function AdminEmployeesPage({
                       {(() => {
                         const total = computeTotalBankingExperienceYears(employee)
                         return total === null ? "—" : `${total} Year${total === 1 ? "" : "s"}`
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const remaining = computeProbationRemainingDays(employee.probationEndDate)
+                        if (remaining === null) return <span className="text-muted-foreground">—</span>
+                        if (remaining < 0) return <span className="text-muted-foreground">Completed</span>
+                        if (remaining === 0) return <Badge variant="destructive">Ends today</Badge>
+                        if (remaining <= 10) return <Badge variant="destructive">{remaining} day{remaining === 1 ? "" : "s"} left</Badge>
+                        return <span className="text-muted-foreground">{remaining} days left</span>
                       })()}
                     </td>
                     <td className="px-4 py-3">
