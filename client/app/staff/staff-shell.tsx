@@ -1,11 +1,9 @@
 "use client"
 
 import {
-  Bell,
   CalendarDays,
   CalendarCheck,
   ClipboardCheck,
-  Clock3,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -35,13 +33,11 @@ const STAFF_NAV: PortalNavItem[] = [
   // link. The page itself renders a clean empty state when there's nothing
   // pending, so no harm in always showing the entry.
   { label: "Team Approvals", href: "/staff/leave/approvals", icon: CalendarCheck },
-  { label: "Attendance", href: "/staff/attendance", icon: Clock3 },
   { label: "Performance", href: "/staff/performance", icon: Target },
   { label: "Learning", href: "/staff/learning", icon: GraduationCap },
   { label: "Family & Dependents", href: "/staff/family", icon: Users },
   { label: "Forms & Requests", href: "/staff/forms", icon: FileText },
   { label: "Employee Relations", href: "/staff/employee-relations", icon: Scale },
-  { label: "Notification Preferences", href: "/staff/notification-preferences", icon: Bell },
 ]
 
 export function StaffShell({
