@@ -1574,34 +1574,59 @@ async function seedLearningManagement(params: {
   await upsertInstitution("LinkedIn Learning")
 
   // ---- Training categories -----------------------------------------------
-  // Mandatory / regulatory + internal.
-  const amlCategory = await upsertCategory("AML (Anti-Money Laundering)", true)
-  const kycCategory = await upsertCategory("KYC", true)
-  await upsertCategory("BNR Compliance", true)
-  const dataPrivacyCategory = await upsertCategory("Data Privacy", true)
-  await upsertCategory("Fraud Prevention", true)
-  const codeOfConductCategory = await upsertCategory("Code of Conduct", true)
-  const infoSecCategory = await upsertCategory("Information Security", true)
-  await upsertCategory("Customer Experience", true)
-  const workplaceEthicsCategory = await upsertCategory("Workplace Ethics", true)
-  await upsertCategory("Occupational Health & Safety", true)
+  // Consolidated to exactly the 3 categories HR wants available when adding
+  // a course (previously an 18-category catalogue — AML, KYC, BNR
+  // Compliance, Data Privacy, Fraud Prevention, Code of Conduct, Information
+  // Security, Customer Experience, Workplace Ethics, Occupational Health &
+  // Safety, Leadership, Project Management, Data Analytics, Artificial
+  // Intelligence, Communication Skills, Banking Products, Microsoft Office,
+  // Cloud Computing, Programming). Every seeded course below is remapped
+  // onto one of these 3 rather than dropped. The old category rows are
+  // deactivated (not deleted) further down, matching
+  // TrainingCategoriesService.remove()'s soft-delete convention — this keeps
+  // re-running `npm run prisma:seed` against an already-seeded database safe
+  // and idempotent, and preserves the historical categoryName snapshot
+  // already stored on any existing CourseAssignment row.
+  const regulatorCategory = await upsertCategory("Regulator Training (BNR)", true)
+  const mandatoryCategory = await upsertCategory("NCBA Mandatory training", true)
+  const othersCategory = await upsertCategory("Others", false)
 
-  // Non-mandatory / professional development.
-  const leadershipCategory = await upsertCategory("Leadership", false)
-  await upsertCategory("Project Management", false)
-  const dataAnalyticsCategory = await upsertCategory("Data Analytics", false)
-  await upsertCategory("Artificial Intelligence", false)
-  await upsertCategory("Communication Skills", false)
-  await upsertCategory("Banking Products", false)
-  await upsertCategory("Microsoft Office", false)
-  await upsertCategory("Cloud Computing", false)
-  await upsertCategory("Programming", false)
+  // Deactivate the old, now-superseded categories (no-op if they were never
+  // seeded on this database in the first place).
+  await prisma.trainingCategory.updateMany({
+    where: {
+      name: {
+        in: [
+          "AML (Anti-Money Laundering)",
+          "KYC",
+          "BNR Compliance",
+          "Data Privacy",
+          "Fraud Prevention",
+          "Code of Conduct",
+          "Information Security",
+          "Customer Experience",
+          "Workplace Ethics",
+          "Occupational Health & Safety",
+          "Leadership",
+          "Project Management",
+          "Data Analytics",
+          "Artificial Intelligence",
+          "Communication Skills",
+          "Banking Products",
+          "Microsoft Office",
+          "Cloud Computing",
+          "Programming",
+        ],
+      },
+    },
+    data: { isActive: false },
+  })
 
   // ---- Courses -------------------------------------------------------------
   const amlFundamentals = await upsertCourse({
     courseCode: "CRS-0001",
     name: "AML Fundamentals",
-    categoryId: amlCategory.id,
+    categoryId: regulatorCategory.id,
     institutionId: ncbaAcademy.id,
     cost: 0,
     durationHours: 8,
@@ -1612,7 +1637,7 @@ async function seedLearningManagement(params: {
   const kycEssentials = await upsertCourse({
     courseCode: "CRS-0002",
     name: "KYC Essentials",
-    categoryId: kycCategory.id,
+    categoryId: regulatorCategory.id,
     institutionId: ncbaAcademy.id,
     cost: 0,
     durationHours: 6,
@@ -1621,7 +1646,7 @@ async function seedLearningManagement(params: {
   const dataPrivacyCourse = await upsertCourse({
     courseCode: "CRS-0003",
     name: "Data Privacy & Protection",
-    categoryId: dataPrivacyCategory.id,
+    categoryId: mandatoryCategory.id,
     institutionId: ncbaAcademy.id,
     durationHours: 4,
     deliveryMethod: CourseDeliveryMethod.ONLINE,
@@ -1629,7 +1654,7 @@ async function seedLearningManagement(params: {
   const codeOfConductCourse = await upsertCourse({
     courseCode: "CRS-0004",
     name: "Code of Conduct Training",
-    categoryId: codeOfConductCategory.id,
+    categoryId: mandatoryCategory.id,
     institutionId: ncbaAcademy.id,
     durationHours: 3,
     deliveryMethod: CourseDeliveryMethod.CLASSROOM,
@@ -1637,7 +1662,7 @@ async function seedLearningManagement(params: {
   const cyberSecurityCourse = await upsertCourse({
     courseCode: "CRS-0005",
     name: "Cyber Security Awareness",
-    categoryId: infoSecCategory.id,
+    categoryId: mandatoryCategory.id,
     institutionId: ncbaAcademy.id,
     durationHours: 5,
     deliveryMethod: CourseDeliveryMethod.ONLINE,
@@ -1646,7 +1671,7 @@ async function seedLearningManagement(params: {
   const workplaceEthicsCourse = await upsertCourse({
     courseCode: "CRS-0006",
     name: "Workplace Ethics",
-    categoryId: workplaceEthicsCategory.id,
+    categoryId: mandatoryCategory.id,
     institutionId: ncbaAcademy.id,
     durationHours: 2,
     deliveryMethod: CourseDeliveryMethod.CLASSROOM,
@@ -1654,7 +1679,7 @@ async function seedLearningManagement(params: {
   const leadershipProgramme = await upsertCourse({
     courseCode: "CRS-0007",
     name: "Leadership Programme",
-    categoryId: leadershipCategory.id,
+    categoryId: othersCategory.id,
     institutionId: rwandaInstitute.id,
     cost: 450000,
     durationHours: 40,
@@ -1669,7 +1694,7 @@ async function seedLearningManagement(params: {
   const dataAnalyticsCourse = await upsertCourse({
     courseCode: "CRS-0008",
     name: "Data Analytics Fundamentals",
-    categoryId: dataAnalyticsCategory.id,
+    categoryId: othersCategory.id,
     institutionId: rwandaInstitute.id,
     cost: 120000,
     durationHours: 16,

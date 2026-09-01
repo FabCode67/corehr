@@ -43,7 +43,11 @@ export class ProbationReminderScheduler {
    * actually changes probationEndDate, so an extension gets its own fresh
    * reminder.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_7AM)
+  // TESTING ONLY — temporarily running every 20 minutes instead of
+  // EVERY_DAY_AT_7AM so the probation reminder pipeline can be verified
+  // end-to-end without waiting a full day. Revert to
+  // `@Cron(CronExpression.EVERY_DAY_AT_7AM)` before shipping to production.
+  @Cron("0 */20 * * * *")
   async checkProbationEndingSoon() {
     try {
       const today = new Date()
