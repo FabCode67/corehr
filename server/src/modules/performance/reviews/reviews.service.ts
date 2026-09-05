@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
-import { ContractType, Gender, PerformanceReviewStatus, PerformanceReviewType, Prisma } from "@prisma/client"
+import { ContractType, Gender, NotificationType, PerformanceReviewStatus, PerformanceReviewType, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
@@ -188,6 +188,20 @@ export class ReviewsService {
     })
 
     await this.log(review.id, "CREATED", dto.actingEmployeeId)
+
+    // Only worth telling the reviewer something's waiting on them when
+    // someone else (typically HR) created it on their behalf — a manager
+    // creating their own team member's review already knows about it.
+    if (reviewerId !== dto.actingEmployeeId) {
+      await this.notify(
+        reviewerId,
+        "PERFORMANCE_REVIEW_DUE",
+        "Performance review due",
+        `A ${review.reviewType.toLowerCase()} review for ${employee.firstName} ${employee.lastName} is waiting for you to complete.`,
+        review.id
+      )
+    }
+
     return review
   }
 
@@ -222,6 +236,15 @@ export class ReviewsService {
     })
 
     await this.log(id, "SUBMITTED", dto.actingEmployeeId)
+
+    await this.notify(
+      updated.employeeId,
+      "PERFORMANCE_REVIEW_SUBMITTED",
+      "Your performance review is ready",
+      `Your ${updated.reviewType.toLowerCase()} performance review has been submitted. Please review and acknowledge it.`,
+      updated.id
+    )
+
     return updated
   }
 
@@ -284,6 +307,15 @@ export class ReviewsService {
     })
 
     await this.log(id, "FINALIZED", dto.actingEmployeeId)
+
+    await this.notify(
+      updated.employeeId,
+      "PERFORMANCE_REVIEW_SUBMITTED",
+      "Your performance review is finalized",
+      `Your ${updated.reviewType.toLowerCase()} performance review has been finalized and added to your permanent record.`,
+      updated.id
+    )
+
     return updated
   }
 
@@ -362,6 +394,28 @@ export class ReviewsService {
   private async log(reviewId: string, action: string, actorId: string, notes?: string) {
     await this.prisma.performanceAuditLog.create({
       data: { reviewId, action, actorId, notes: notes || null },
+    })
+  }
+
+  /** Same "hit prisma.notification directly" convention as Employee
+   *  Relations/Forms (see NotificationsService's own doc comment on why
+   *  that's an equally valid alternative) — Performance had no notification
+   *  wiring at all before this pass. */
+  private async notify(
+    recipientEmployeeId: string,
+    type: Extract<NotificationType, "PERFORMANCE_REVIEW_DUE" | "PERFORMANCE_REVIEW_SUBMITTED">,
+    title: string,
+    message: string,
+    reviewId: string
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        recipientEmployeeId,
+        type,
+        title,
+        message,
+        actionUrl: `/staff/performance/reviews/${reviewId}`,
+      },
     })
   }
 }

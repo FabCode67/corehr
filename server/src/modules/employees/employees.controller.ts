@@ -20,7 +20,6 @@ import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
 import { CreateFamilyMemberDto, UpdateFamilyMemberDto } from "./dto/family-member.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
 import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
-import { SetAdminAccessDto } from "./dto/set-admin-access.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
@@ -219,13 +218,6 @@ export class EmployeesController {
   @Post(":id/band")
   changeBand(@Param("id") id: string, @Body() dto: ChangeBandDto) {
     return this.employeesService.changeBand(id, dto)
-  }
-
-  // ---- Admin Access (Settings > Admin Access) -----------------------------
-
-  @Patch(":id/admin-access")
-  setAdminAccess(@Param("id") id: string, @Body() dto: SetAdminAccessDto) {
-    return this.employeesService.setAdminAccess(id, dto.isAdmin)
   }
 
   // ---- Step 4: Family Information -----------------------------------------

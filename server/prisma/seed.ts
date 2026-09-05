@@ -62,6 +62,7 @@ import {
 } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
 
+import { computeIsAdminForPosition } from "../src/common/admin-eligibility.util"
 import { DEFAULT_EMPLOYEE_PASSWORD } from "../src/modules/auth/default-password.constant"
 
 const prisma = new PrismaClient()
@@ -329,13 +330,15 @@ async function upsertEmployee(params: {
   positionId: string
   bandId: string
   employmentStartDate: Date
-  isAdmin?: boolean
 }) {
-  const { positionId, bandId, branchId, employmentStartDate, isAdmin = false, ...basics } = params
+  const { positionId, bandId, branchId, employmentStartDate, ...basics } = params
 
-  // Re-running the seed resets every demo employee's password back to the
-  // default and re-applies isAdmin — convenient for getting back into a
+  // isAdmin is never passed in — same rule as production (see
+  // computeIsAdminForPosition's doc comment): Human Resources positions get
+  // admin access, everyone else (including the Managing Director) doesn't.
+  // Re-running the seed re-applies it, convenient for getting back into a
   // known-good demo state after messing with a login locally.
+  const isAdmin = await computeIsAdminForPosition(prisma, positionId)
   const passwordHash = await bcrypt.hash(DEFAULT_EMPLOYEE_PASSWORD, 10)
 
   const employee = await prisma.employee.upsert({
@@ -607,7 +610,8 @@ async function main() {
     positionId: md.id,
     bandId: bands.get(10)!.id,
     employmentStartDate,
-    isAdmin: true, // Managing Director — full system access
+    // No isAdmin here — the Managing Director is explicitly excluded from
+    // admin auto-grant, see computeIsAdminForPosition()'s doc comment.
   })
   const itHoD_employee = await upsertEmployee({
     employeeNumber: "EMP-0002",
@@ -624,7 +628,8 @@ async function main() {
     positionId: itHoD.id,
     bandId: bands.get(8)!.id,
     employmentStartDate,
-    isAdmin: true, // IT Head of Department — also an HR admin for demo purposes, and a line manager (useful for testing the leave-approval queue)
+    // No isAdmin here either — IT isn't Human Resources, so this account is
+    // now staff-only. See hrHoD_employee below for the demo's admin login.
   })
   const claudine_employee = await upsertEmployee({
     employeeNumber: "EMP-0003",
@@ -674,10 +679,30 @@ async function main() {
     bandId: bands.get(3)!.id,
     employmentStartDate,
   })
+  // The demo's admin login — Head of the Human Resources department, which
+  // is what actually grants admin access now (see computeIsAdminForPosition()).
+  // Without this, the demo would seed zero admins: neither the Managing
+  // Director nor the IT HoD get it automatically anymore.
+  const hrHoD_employee = await upsertEmployee({
+    employeeNumber: "EMP-0007",
+    firstName: "Aline",
+    lastName: "Uwase",
+    email: "a.uwase@ncbarwanda.com",
+    gender: Gender.FEMALE,
+    dateOfBirth: new Date("1982-05-20"),
+    nationalIdNumber: "1198280012345677",
+    nationality: "Rwandan",
+    maritalStatus: MaritalStatus.MARRIED,
+    phone: "+250788123006",
+    branchId: headquartersBranch.id,
+    positionId: hrHoD.id,
+    bandId: bands.get(8)!.id,
+    employmentStartDate,
+  })
 
   // Give the demo employees Employment Details so Leave Management has a
   // contract type to resolve entitlement categories from.
-  for (const employee of [md_employee, itHoD_employee, claudine_employee, solange_employee, patrick_employee]) {
+  for (const employee of [md_employee, itHoD_employee, claudine_employee, solange_employee, patrick_employee, hrHoD_employee]) {
     await prisma.employee.update({
       where: { employeeNumber: employee.employeeNumber },
       data: {

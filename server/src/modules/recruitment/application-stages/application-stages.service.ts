@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
-import { ApplicationStageStatus, ApplicationStatus } from "@prisma/client"
+import { ApplicationStageStatus, ApplicationStatus, NotificationType } from "@prisma/client"
 
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
@@ -69,6 +69,35 @@ export class ApplicationStagesService {
     })
   }
 
+  /** In-app notice to the requisition's recruiter and hiring manager
+   *  (deduplicated when the same person holds both roles) — this pipeline
+   *  had no internal-facing notifications at all before this pass, only
+   *  candidate-facing emails (see the class doc comment on this being a
+   *  separate concern from ApplicationsService's coarser status). */
+  private async notifyRequisitionOwners(
+    application: { jobPosting: { requisition: { recruiterId: string; hiringManagerId: string | null } | null } },
+    type: Extract<NotificationType, "APPLICATION_STAGE_CHANGED">,
+    title: string,
+    message: string,
+    applicationId: string
+  ) {
+    const requisition = application.jobPosting.requisition
+    if (!requisition) return
+
+    const recipientIds = new Set([requisition.recruiterId, ...(requisition.hiringManagerId ? [requisition.hiringManagerId] : [])])
+    if (recipientIds.size === 0) return
+
+    await this.prisma.notification.createMany({
+      data: Array.from(recipientIds).map((recipientEmployeeId) => ({
+        recipientEmployeeId,
+        type,
+        title,
+        message,
+        actionUrl: `/admin/recruitment/applications/${applicationId}`,
+      })),
+    })
+  }
+
   /** Marks the current stage PASSED and moves to the next PENDING stage
    *  (IN_PROGRESS). If this was the last stage, clears currentStageId
    *  (pipeline complete) and, when the completed stage's type signals a
@@ -115,6 +144,18 @@ export class ApplicationStagesService {
     }
 
     await this.log(applicationId, "STAGE_ADVANCED", dto.actingEmployeeId, `${current.stage.name} -> ${next ? next.stage.name : "complete"}`)
+
+    // Internal-facing — the candidate already got the email above; the
+    // recruiter/hiring manager get an in-app notice too, since this pipeline
+    // previously notified no one internally at all when a stage changed.
+    await this.notifyRequisitionOwners(
+      application,
+      "APPLICATION_STAGE_CHANGED",
+      "Candidate moved forward",
+      `${application.candidate.firstName} ${application.candidate.lastName} moved from ${current.stage.name} to ${next ? next.stage.name : "pipeline complete"} for ${application.jobPosting.postingTitle}.`,
+      applicationId
+    )
+
     return this.getPipeline(applicationId, dto.actingEmployeeId)
   }
 

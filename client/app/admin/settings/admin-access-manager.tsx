@@ -1,27 +1,23 @@
 "use client"
 
-import { useActionState, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { Employee } from "@/lib/api/employees"
 
-import { setAdminAccess, type ActionState } from "./actions"
-
 interface AdminAccessManagerProps {
-  /** Active employees only — an inactive employee can't be granted admin
-   *  access anyway (see EmployeesService.setAdminAccess()'s guard), so
-   *  there's nothing useful to show for them here. */
+  /** Active employees only. */
   employees: Employee[]
 }
 
-function AdminAccessRow({ employee, isLastAdmin }: { employee: Employee; isLastAdmin: boolean }) {
-  const [state, formAction, pending] = useActionState<ActionState | undefined, FormData>(
-    setAdminAccess.bind(null, employee.employeeNumber, !employee.isAdmin),
-    undefined
-  )
-
+/** Read-only — admin access is auto-computed from the org chart (Human
+ *  Resources department = admin, Managing Director excluded regardless; see
+ *  server/src/common/admin-eligibility.util.ts) and kept in sync whenever an
+ *  employee's position changes, so there is nothing to grant or revoke here
+ *  by hand. This list exists purely so HR can see, at a glance, who
+ *  currently has admin access and why (their department). */
+function AdminAccessRow({ employee }: { employee: Employee }) {
   return (
     <div className="flex flex-col gap-1.5 border-b border-border py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -38,25 +34,6 @@ function AdminAccessRow({ employee, isLastAdmin }: { employee: Employee; isLastA
           {employee.position?.department ? ` · ${employee.position.department.name}` : ""}
         </p>
       </div>
-
-      <form action={formAction} className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
-        <Button
-          type="submit"
-          size="sm"
-          variant={employee.isAdmin ? "outline" : "default"}
-          disabled={pending || (employee.isAdmin && isLastAdmin)}
-          title={employee.isAdmin && isLastAdmin ? "Cannot remove the last remaining admin." : undefined}
-        >
-          {pending ? "Saving…" : employee.isAdmin ? "Revoke admin access" : "Grant admin access"}
-        </Button>
-        {state?.error ? (
-          <p role="alert" className="text-xs text-destructive">
-            {state.error}
-          </p>
-        ) : employee.isAdmin && isLastAdmin ? (
-          <p className="text-xs text-muted-foreground">Last remaining admin</p>
-        ) : null}
-      </form>
     </div>
   )
 }
@@ -64,34 +41,25 @@ function AdminAccessRow({ employee, isLastAdmin }: { employee: Employee; isLastA
 export function AdminAccessManager({ employees }: AdminAccessManagerProps) {
   const [search, setSearch] = useState("")
 
-  const adminCount = useMemo(() => employees.filter((employee) => employee.isAdmin).length, [employees])
+  const admins = useMemo(() => employees.filter((employee) => employee.isAdmin), [employees])
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const sorted = [...employees].sort((a, b) => {
-      if (a.isAdmin !== b.isAdmin) return a.isAdmin ? -1 : 1
-      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
-    })
+    const sorted = [...admins].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
     if (!query) return sorted
     return sorted.filter((employee) =>
-      [
-        employee.firstName,
-        employee.lastName,
-        employee.email,
-        employee.employeeNumber,
-        employee.position?.department?.name ?? "",
-      ]
+      [employee.firstName, employee.lastName, employee.email, employee.employeeNumber, employee.position?.department?.name ?? ""]
         .join(" ")
         .toLowerCase()
         .includes(query)
     )
-  }, [employees, search])
+  }, [admins, search])
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {adminCount} of {employees.length} active employees currently have admin access.
+          {admins.length} of {employees.length} active employees currently have admin access.
         </p>
         <Input
           value={search}
@@ -103,15 +71,9 @@ export function AdminAccessManager({ employees }: AdminAccessManagerProps) {
 
       <div className="max-h-[32rem] overflow-y-auto rounded-lg border border-border px-4">
         {filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">No employees match “{search}”.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">No admins match “{search}”.</p>
         ) : (
-          filtered.map((employee) => (
-            <AdminAccessRow
-              key={employee.employeeNumber}
-              employee={employee}
-              isLastAdmin={employee.isAdmin && adminCount <= 1}
-            />
-          ))
+          filtered.map((employee) => <AdminAccessRow key={employee.employeeNumber} employee={employee} />)
         )}
       </div>
     </div>

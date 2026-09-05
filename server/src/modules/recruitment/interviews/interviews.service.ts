@@ -1,5 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
+import { NotificationType } from "@prisma/client"
+
 import { RecruitmentAccessService } from "../access/recruitment-access.service"
 import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
@@ -123,6 +125,25 @@ export class InterviewsService {
           },
         })
       }
+    }
+
+    // INTERVIEW_SCHEDULED existed in the NotificationType enum already but
+    // was never actually fired anywhere — the recruiter only ever got an
+    // email (above), and panelists got nothing at all. In-app notice for
+    // everyone with a stake in showing up.
+    const candidateName = `${interview.application.candidate.firstName} ${interview.application.candidate.lastName}`
+    const notifyMessage = `Interview for ${interview.application.jobPosting.postingTitle} with ${candidateName} is scheduled for ${interviewDateStr} at ${interviewTimeStr}.`
+    const recipientIds = new Set([...(recruiterId ? [recruiterId] : []), ...interview.panelists.map((panelist) => panelist.employeeId)])
+    if (recipientIds.size > 0) {
+      await this.prisma.notification.createMany({
+        data: Array.from(recipientIds).map((recipientEmployeeId) => ({
+          recipientEmployeeId,
+          type: NotificationType.INTERVIEW_SCHEDULED,
+          title: "Interview scheduled",
+          message: notifyMessage,
+          actionUrl: `/admin/recruitment/applications/${interview.applicationId}`,
+        })),
+      })
     }
 
     return interview

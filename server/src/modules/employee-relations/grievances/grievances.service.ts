@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
-import { GrievanceStatus, Prisma } from "@prisma/client"
+import { GrievanceStatus, NotificationType, Prisma } from "@prisma/client"
 
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
@@ -62,11 +62,23 @@ export class GrievancesService {
       include: GRIEVANCE_INCLUDE,
     })
     await this.log(grievance.id, "SUBMITTED", dto.employeeId)
+
+    // Unlike disciplinary cases (which notify the line manager instead —
+    // see DisciplinaryCasesService.submit()), a grievance has no manager
+    // step at all: it's HR-only from the start (see this file's class doc
+    // comment), so HR needs to be told directly that one landed.
+    await this.notifyAllAdmins(
+      "GRIEVANCE_SUBMITTED",
+      "New grievance submitted",
+      `${grievance.employee.firstName} ${grievance.employee.lastName} submitted a new grievance (${grievance.grievanceNumber}).`,
+      grievance.id
+    )
+
     return grievance
   }
 
   async updateStatus(id: string, dto: UpdateGrievanceStatusDto) {
-    await this.findOne(id, dto.actingEmployeeId)
+    const existing = await this.findOne(id, dto.actingEmployeeId)
     const resolved = RESOLVED_STATUSES.includes(dto.status)
     const updated = await this.prisma.grievance.update({
       where: { id },
@@ -74,6 +86,17 @@ export class GrievancesService {
       include: GRIEVANCE_INCLUDE,
     })
     await this.log(id, `STATUS_CHANGED_TO_${dto.status}`, dto.actingEmployeeId, dto.resolutionComments)
+
+    if (resolved && !RESOLVED_STATUSES.includes(existing.status)) {
+      await this.notify(
+        updated.employeeId,
+        "GRIEVANCE_RESOLVED",
+        "Your grievance has been resolved",
+        `Grievance ${updated.grievanceNumber} has been marked ${dto.status.toLowerCase()}.${dto.resolutionComments ? ` ${dto.resolutionComments}` : ""}`,
+        id
+      )
+    }
+
     return updated
   }
 
@@ -85,6 +108,9 @@ export class GrievancesService {
       include: GRIEVANCE_INCLUDE,
     })
     await this.log(id, "ASSIGNED", dto.actingEmployeeId, `Assigned to ${dto.assignedToId}`)
+
+    await this.notify(dto.assignedToId, "GRIEVANCE_ASSIGNED", "Grievance assigned to you", `Grievance ${updated.grievanceNumber} has been assigned to you for review.`, id, true)
+
     return updated
   }
 
@@ -104,5 +130,43 @@ export class GrievancesService {
 
   private async log(id: string, action: string, actorId: string | null, notes?: string) {
     await this.prisma.employeeRelationsAuditLog.create({ data: { entityType: "Grievance", entityId: id, action, actorId, notes: notes || null } })
+  }
+
+  /** Same shape as DisciplinaryCasesService's private notify() — see that
+   *  file's doc comment on the admin-facing-vs-staff-facing actionUrl split. */
+  private async notify(
+    recipientEmployeeId: string,
+    type: Extract<NotificationType, "GRIEVANCE_SUBMITTED" | "GRIEVANCE_ASSIGNED" | "GRIEVANCE_RESOLVED">,
+    title: string,
+    message: string,
+    grievanceId: string,
+    forAdmin = false
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        recipientEmployeeId,
+        type,
+        title,
+        message,
+        actionUrl: forAdmin ? `/admin/employee-relations/grievances/${grievanceId}` : `/staff/employee-relations/grievances/${grievanceId}`,
+      },
+    })
+  }
+
+  /** Grievances have no manager-input step to notify instead (see create()'s
+   *  doc comment), so this is the one place in Employee Relations that
+   *  actually broadcasts to every admin — disciplinary cases never do. */
+  private async notifyAllAdmins(type: Extract<NotificationType, "GRIEVANCE_SUBMITTED">, title: string, message: string, grievanceId: string) {
+    const admins = await this.prisma.employee.findMany({ where: { isAdmin: true, isActive: true }, select: { employeeNumber: true } })
+    if (admins.length === 0) return
+    await this.prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        recipientEmployeeId: admin.employeeNumber,
+        type,
+        title,
+        message,
+        actionUrl: `/admin/employee-relations/grievances/${grievanceId}`,
+      })),
+    })
   }
 }

@@ -4,12 +4,14 @@ import * as bcrypt from "bcryptjs"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
 import { buildClientUrl } from "../../common/client-url.util"
+import { computeIsAdminForPosition } from "../../common/admin-eligibility.util"
 import { resolveDepartmentFilterIds } from "../../common/department-hierarchy.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { DEFAULT_EMPLOYEE_PASSWORD } from "../auth/default-password.constant"
 import { computeTemporaryPasswordExpiry } from "../auth/temporary-password.constant"
 import { EmailService } from "../email/email.service"
 import { LeaveBalancesService } from "../leave/leave-balances/leave-balances.service"
+import { NotificationsService } from "../leave/notifications/notifications.service"
 import { AssignmentsService } from "../learning/assignments/assignments.service"
 
 import { AssignPositionDto } from "./dto/assign-position.dto"
@@ -89,7 +91,8 @@ export class EmployeesService {
     private readonly prisma: PrismaService,
     private readonly leaveBalancesService: LeaveBalancesService,
     private readonly assignmentsService: AssignmentsService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly notifications: NotificationsService
   ) {}
 
   private async buildFindAllWhere(params: {
@@ -452,11 +455,18 @@ export class EmployeesService {
           })
         }
 
+        // isAdmin is never set by hand — it's a cache of computeIsAdminForPosition()
+        // that's kept in sync at every point positionId changes (see that
+        // util's doc comment). Human Resources positions become admin here;
+        // moving out of HR (or into an excluded title) revokes it the same way.
+        const isAdmin = await computeIsAdminForPosition(tx, dto.positionId)
+
         const employee = await tx.employee.update({
           where: { employeeNumber: id },
           data: {
             positionId: dto.positionId,
             bandId: dto.bandId,
+            isAdmin,
             ...(dto.reportingManagerOverrideId !== undefined
               ? { reportingManagerOverrideId: dto.reportingManagerOverrideId }
               : {}),
@@ -557,6 +567,10 @@ export class EmployeesService {
           employmentStatus: EmploymentStatus.EXIT,
           isActive: false,
           positionId: null,
+          // No position means no admin access — see computeIsAdminForPosition()'s
+          // doc comment on why isAdmin always follows positionId rather than
+          // ever being set independently.
+          isAdmin: false,
           exitDate: dto.exitDate,
           exitReason: dto.exitReason,
           exitType: dto.exitType,
@@ -650,6 +664,10 @@ export class EmployeesService {
         contractReminderSentAt: null,
         contractType: null,
         positionId: null,
+        // Rehired employees re-enter in the same "no position yet" state as
+        // a brand-new hire — HR must re-run Position Assignment, which is
+        // what (re-)computes isAdmin for whatever position they're given.
+        isAdmin: false,
         bandId: null,
         exitDate: null,
         exitReason: null,
@@ -738,12 +756,69 @@ export class EmployeesService {
         },
       })
 
-      return tx.employee.update({
+      // Same isAdmin-follows-position sync as assignPosition() — a transfer
+      // into or out of Human Resources grants/revokes admin access here too.
+      const isAdmin = await computeIsAdminForPosition(tx, dto.positionId)
+
+      const updated = await tx.employee.update({
         where: { employeeNumber: id },
-        data: { positionId: dto.positionId },
+        data: { positionId: dto.positionId, isAdmin },
         include: EMPLOYEE_DETAIL_INCLUDE,
       })
+
+      return updated
     }, TRANSACTION_OPTIONS)
+      .then(async (updated) => {
+        // Best-effort, same as assignPosition()'s welcome email — a broken
+        // template or notification hiccup must never fail a successful
+        // transfer that's already committed.
+        const employeeUrl = `/admin/employees/${updated.employeeNumber}`
+        const positionTitle = updated.position?.title ?? "a new position"
+        const departmentName = updated.position?.department?.name ?? "a new department"
+        const effectiveDateStr = dto.effectiveFrom.toISOString().slice(0, 10)
+
+        await this.notifications
+          .create({
+            recipientEmployeeId: updated.employeeNumber,
+            type: NotificationType.POSITION_CHANGED,
+            title: "Your position has changed",
+            message: `Effective ${effectiveDateStr}, your position is now ${positionTitle} in ${departmentName}.`,
+            relatedEmployeeId: updated.employeeNumber,
+            actionUrl: "/staff/profile",
+          })
+          .catch(() => undefined)
+
+        await this.notifications
+          .createForAllAdmins({
+            type: NotificationType.POSITION_CHANGED_ADMIN,
+            title: "Employee position changed",
+            message: `${updated.firstName} ${updated.lastName} (${updated.employeeNumber}) moved to ${positionTitle} in ${departmentName}, effective ${effectiveDateStr}.`,
+            relatedEmployeeId: updated.employeeNumber,
+            actionUrl: employeeUrl,
+          })
+          .catch(() => undefined)
+
+        try {
+          await this.emailService.enqueue({
+            templateKey: "position_changed",
+            recipientEmail: updated.email,
+            recipientEmployeeId: updated.employeeNumber,
+            relatedModule: "employees",
+            relatedEntityId: updated.employeeNumber,
+            variables: {
+              employee_name: `${updated.firstName} ${updated.lastName}`,
+              effective_date: effectiveDateStr,
+              position_title: positionTitle,
+              department_name: departmentName,
+              employee_url: buildClientUrl("/staff/profile"),
+            },
+          })
+        } catch {
+          // EmailService.enqueue() already logs internally.
+        }
+
+        return updated
+      })
   }
 
   /** Changes only the Band, independent of Position, per the spec. Requires
@@ -791,41 +866,6 @@ export class EmployeesService {
   }
 
   // ---- Step 4: Family Information ---------------------------------------
-
-  /**
-   * Admin Access management (Settings > Admin Access). isAdmin is a plain
-   * boolean on Employee (see its schema doc comment) that AuthService's
-   * login flow reads to decide session.role — this is the first place in
-   * the app that lets an admin flip it for someone else through the UI
-   * rather than editing the seed/DB directly. Two guardrails:
-   *   - Can't grant admin access to an inactive/exited employee — the
-   *     account would have no password-login path worth protecting anyway.
-   *   - Can't revoke the very last remaining admin — this app has no
-   *     "forgot password"/superuser recovery flow (see AuthService's doc
-   *     comment), so that would permanently lock everyone out of /admin.
-   */
-  async setAdminAccess(id: string, isAdmin: boolean) {
-    const employee = await this.findOne(id)
-
-    if (isAdmin && !employee.isActive) {
-      throw new BadRequestException("Cannot grant admin access to an inactive employee.")
-    }
-
-    if (!isAdmin && employee.isAdmin) {
-      const otherAdmins = await this.prisma.employee.count({
-        where: { isAdmin: true, isActive: true, employeeNumber: { not: id } },
-      })
-      if (otherAdmins === 0) {
-        throw new BadRequestException("Cannot remove admin access from the last remaining admin.")
-      }
-    }
-
-    return this.prisma.employee.update({
-      where: { employeeNumber: id },
-      data: { isAdmin },
-      include: EMPLOYEE_DETAIL_INCLUDE,
-    })
-  }
 
   async updatePartner(id: string, dto: UpdatePartnerDto) {
     await this.findOne(id)

@@ -71,6 +71,22 @@ export class ExitDocumentAssignmentsService {
       })
       created.push(row)
     }
+
+    // One notification for the whole checklist, not one per document type —
+    // this was previously silent (only completion notified, see
+    // setCompleted() below), leaving the exiting employee unaware anything
+    // had been assigned to them at all.
+    if (created.length > 0) {
+      await this.notificationsService.create({
+        recipientEmployeeId: dto.employeeId,
+        type: NotificationType.EXIT_DOCUMENTS_ASSIGNED,
+        title: "Exit checklist assigned",
+        message: `${created.length} exit document${created.length === 1 ? "" : "s"} ${created.length === 1 ? "has" : "have"} been assigned to you as part of your exit process.`,
+        relatedEmployeeId: dto.employeeId,
+        actionUrl: `/admin/employees/${dto.employeeId}`,
+      })
+    }
+
     return created
   }
 
@@ -92,11 +108,15 @@ export class ExitDocumentAssignmentsService {
     })
 
     if (dto.isCompleted) {
+      // Was EXIT_PROCESS_STARTED by copy-paste mistake — that type is
+      // ExitProcessService's own "exit just began" event and means
+      // something completely different from one checklist item finishing.
       await this.notificationsService.create({
         recipientEmployeeId: assignment.employeeId,
-        type: NotificationType.EXIT_PROCESS_STARTED,
+        type: NotificationType.EXIT_DOCUMENT_COMPLETED,
         title: "Exit document completed",
         message: `${assignment.documentType.name} has been marked complete.`,
+        relatedEmployeeId: assignment.employeeId,
         actionUrl: `/admin/employees/${assignment.employeeId}`,
       })
     }

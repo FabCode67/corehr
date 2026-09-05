@@ -437,12 +437,18 @@ model Employee {
   /// app from here on always gets one. NEVER returned by the API: see the
   /// global `omit` config in PrismaService.
   passwordHash String?
-  /// Grants access to the Admin portal (see middleware.ts). Defaults to
-  /// false — seeded manually for the first admin(s); from there, any admin
-  /// can grant/revoke it for anyone else via Settings > Admin Access (see
-  /// EmployeesService.setAdminAccess()). Every other employee is staff-only.
-  /// An admin is still also an employee and keeps full access to their own
-  /// Staff Portal — see middleware.ts's admin-into-/staff carve-out.
+  /// Grants access to the Admin portal (see middleware.ts). Auto-computed,
+  /// not manually set: true for every position inside the Human Resources
+  /// department, false for everyone else, and always false for the
+  /// Managing Director regardless of placement — see
+  /// server/src/common/admin-eligibility.util.ts's computeIsAdminForPosition(),
+  /// which is the single source of truth. Kept in sync at every point
+  /// Employee.positionId changes (assignPosition, transferPosition,
+  /// processExit, rehire — see each method's call to that util) — there is
+  /// no manual grant/revoke UI anywhere in the app; this column is a cache
+  /// of that computation, never an independently-set value. An admin is
+  /// still also an employee and keeps full access to their own Staff
+  /// Portal — see middleware.ts's admin-into-/staff carve-out.
   isAdmin      Boolean @default(false)
 
   /// First Login Security (Email Notification & Automation module). Set to
@@ -1129,6 +1135,30 @@ enum NotificationType {
   CONTRACT_ENDING_SOON_ADMIN
   /// Fired by EmployeesService.rehire() — see that method's doc comment.
   EMPLOYEE_REHIRED
+  /// Fired by EmployeesService.transferPosition() — employee-facing +
+  /// admin-facing pair, same convention as PROBATION_ENDING_SOON above.
+  POSITION_CHANGED
+  POSITION_CHANGED_ADMIN
+  /// Recruitment — ApplicationStagesService.advance()/InterviewsService's
+  /// internal-facing notifications (recruiter/hiring manager/interviewer).
+  /// INTERVIEW_SCHEDULED already existed but was never actually fired
+  /// anywhere before this pass.
+  APPLICATION_STAGE_CHANGED
+  /// Performance — ReviewsService cycle-due reminder (to the reviewing
+  /// manager) and review-submitted notice (to the reviewed employee).
+  PERFORMANCE_REVIEW_DUE
+  PERFORMANCE_REVIEW_SUBMITTED
+  /// Employee Relations — Grievances (mirrors the ERC_* disciplinary-case
+  /// pattern above, which never had an admin-broadcast; grievances get one
+  /// since there's no manager-input step to notify instead).
+  GRIEVANCE_SUBMITTED
+  GRIEVANCE_ASSIGNED
+  GRIEVANCE_RESOLVED
+  /// Exit Management — fired when exit documents are first assigned to an
+  /// exiting employee (assignment was previously silent; only completion
+  /// notified, and used EXIT_PROCESS_STARTED by copy-paste mistake).
+  EXIT_DOCUMENTS_ASSIGNED
+  EXIT_DOCUMENT_COMPLETED
 }
 
 /// A configurable leave type (Annual, Maternity, Paternity, Sick,

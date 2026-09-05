@@ -17,8 +17,10 @@ export default async function AdminSettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Admin Access</CardTitle>
           <CardDescription>
-            Grant or revoke access to the Admin Portal. Admins keep full access to their own Staff Portal too —
-            use the “My Profile Portal” switch at the top of the sidebar. At least one admin must always remain.
+            Admin Portal access is automatic: every active employee in the Human Resources department has it,
+            except the Managing Director. There&apos;s nothing to grant or revoke here — moving someone into or
+            out of HR (via Position Assignment or Transfer) updates this immediately. Admins keep full access to
+            their own Staff Portal too — use the “My Profile Portal” switch at the top of the sidebar.
           </CardDescription>
         </CardHeader>
         <CardContent>
