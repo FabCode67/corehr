@@ -18,6 +18,21 @@ function tableRow(cells: Array<string | number>): PptxGenJS.TableCell[] {
   return cells.map((cell) => ({ text: String(cell) }))
 }
 
+/** Same per-department bar palette as the dashboard's charts.tsx `COLORS`
+ *  array (bare hex, no "#" — that's the format pptxgenjs's chartColors
+ *  option wants, unlike PDFKit elsewhere in this codebase which needs the
+ *  "#" prefix). Keep these two arrays in sync if the dashboard's palette
+ *  ever changes. */
+const CHART_PALETTE = ["0A2647", "B8860B", "3B2412", "2E7D6B", "7F77DD", "D85A30", "5DCAA5", "D4537E"]
+
+/** Mirrors charts.tsx's fillRateColor() so a department's PPTX bar color
+ *  agrees with the dashboard's red/amber/green thresholds. */
+function fillRateColor(rate: number): string {
+  if (rate < 50) return "D4537E"
+  if (rate < 75) return "B8860B"
+  return "5DCAA5"
+}
+
 /** One row of the Custom Report Builder's section checklist (see
  *  hr-analytics-export.controller.ts's `reports/custom` route and the
  *  client's custom-report-dialog.tsx). Every section shows a date-range
@@ -524,7 +539,12 @@ export class HrAnalyticsExportService {
    *  not images), workforce trends, performance/leave/recruitment/learning
    *  sections, and key HR insights — matching the spec's content list. */
   async generatePptx(filters: HrAnalyticsFilters, actingEmployeeId: string): Promise<Buffer> {
-    const [bundle, cover] = await Promise.all([this.buildBundle(filters), this.buildCoverInfo(filters, actingEmployeeId)])
+    const [bundle, cover, hiringExitTrend, ratingsByDepartment] = await Promise.all([
+      this.buildBundle(filters),
+      this.buildCoverInfo(filters, actingEmployeeId),
+      this.hrAnalyticsService.hiringExitTrend(filters),
+      this.delegated.performanceByDepartment(filters),
+    ])
     const recruitment = await this.delegated.recruitmentAnalyticsFor(actingEmployeeId)
 
     const pptx = new PptxGenJS()
@@ -537,20 +557,41 @@ export class HrAnalyticsExportService {
     summarySlide.addText("Executive Summary", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
     summarySlide.addText(this.buildExecutiveSummary(bundle), { x: 0.5, y: 1.1, w: 9, h: 5.5, fontSize: 15, color: "333333", valign: "top" })
 
-    const kpiSlide = pptx.addSlide()
-    kpiSlide.addText("KPI Summary", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
-    kpiSlide.addTable(
-      [
-        tableRow(["Metric", "Value"]),
-        tableRow(["Total Active Staff", String(bundle.totalStaff.activeCount)]),
-        tableRow(["New Joiners (period)", String(bundle.totalStaff.newJoined)]),
-        tableRow(["Exits (period)", String(bundle.totalStaff.exited)]),
-        tableRow(["Average Age", String(bundle.averageAge.overall ?? "N/A")]),
-        tableRow(["Attrition Rate", `${bundle.attritionRate.rate}%`]),
-        tableRow(["Position Fill Rate", `${bundle.positionFillRate.fillRate}%`]),
-        tableRow(["Leave Utilization", `${bundle.leaveUtilization.utilizationPercent}%`]),
-      ],
-      { x: 0.4, y: 1.0, w: 9, colW: [5, 4], fontSize: 12, border: { type: "solid", color: "CCCCCC", pt: 0.5 } }
+    // ---- Key Metrics — 6 KPI cards, same layout/colors/breakdowns as the
+    // dashboard's KpiCards component (client/app/admin/hr-analytics/kpi-cards.tsx)
+    // rather than the old plain metric/value table.
+    this.addKeyMetricsSlide(pptx, bundle)
+
+    // ---- Charts & Trends — same chart set, colors, and pairing as the
+    // dashboard's charts.tsx, using pptxgenjs's native chart types so these
+    // stay real, editable PowerPoint charts (not embedded images).
+    const deptSlide = pptx.addSlide()
+    deptSlide.addText("Employee Distribution by Department", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const deptSorted = [...bundle.employeeDistribution].sort((a, b) => b.count - a.count)
+    deptSlide.addChart(
+      pptx.ChartType.bar,
+      [{ name: "Employees", labels: deptSorted.map((d) => d.departmentName), values: deptSorted.map((d) => d.count) }],
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, barDir: "bar", chartColors: CHART_PALETTE, showLegend: false, catAxisLabelFontSize: 10, valAxisLabelFontSize: 10 }
+    )
+
+    const fillRateSlide = pptx.addSlide()
+    fillRateSlide.addText("Position Fill Rate by Department", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const fillSorted = [...bundle.positionFillRate.byDepartment].sort((a, b) => a.fillRate - b.fillRate)
+    fillRateSlide.addChart(
+      pptx.ChartType.bar,
+      [{ name: "Fill Rate", labels: fillSorted.map((d) => d.name), values: fillSorted.map((d) => d.fillRate) }],
+      {
+        x: 0.5,
+        y: 1.0,
+        w: 9,
+        h: 5.8,
+        barDir: "bar",
+        chartColors: fillSorted.map((d) => fillRateColor(d.fillRate)),
+        showLegend: false,
+        catAxisLabelFontSize: 10,
+        valAxisLabelFontSize: 10,
+        valAxisMaxVal: 100,
+      }
     )
 
     const bandSlide = pptx.addSlide()
@@ -558,44 +599,199 @@ export class HrAnalyticsExportService {
     bandSlide.addChart(
       pptx.ChartType.bar,
       [{ name: "Employees", labels: bundle.bandDistribution.map((b) => b.bandName), values: bundle.bandDistribution.map((b) => b.count) }],
-      { x: 0.5, y: 1.0, w: 9, h: 5.5 }
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, barDir: "bar", chartColors: CHART_PALETTE, showLegend: false, catAxisLabelFontSize: 10, valAxisLabelFontSize: 10 }
     )
 
-    const deptSlide = pptx.addSlide()
-    deptSlide.addText("Workforce Distribution by Department", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
-    deptSlide.addChart(
+    // ---- Additional demographic breakdowns already computed in the bundle
+    // (employeeDemographics()) but previously only surfaced as tiny KPI-card
+    // mini-visualizations or not at all — given their own full-size slides
+    // per the "bring more charts where applicable" request.
+    const genderSlide = pptx.addSlide()
+    genderSlide.addText("Gender Distribution", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const genderColorFor = (key: string) => (key === "MALE" ? "0A2647" : key === "FEMALE" ? "D4537E" : "B8860B")
+    genderSlide.addChart(
       pptx.ChartType.doughnut,
-      [{ name: "Employees", labels: bundle.employeeDistribution.map((d) => d.departmentName), values: bundle.employeeDistribution.map((d) => d.count) }],
-      { x: 1.5, y: 1.0, w: 7, h: 5.5 }
+      [{ name: "Employees", labels: bundle.demographics.genderDistribution.map((g) => g.label), values: bundle.demographics.genderDistribution.map((g) => g.count) }],
+      {
+        x: 2.5,
+        y: 1.0,
+        w: 5,
+        h: 5.5,
+        chartColors: bundle.demographics.genderDistribution.map((g) => genderColorFor(g.key)),
+        showLegend: true,
+        legendPos: "b",
+        showPercent: true,
+        dataBorder: { pt: 1, color: "FFFFFF" },
+        holeSize: 55,
+      }
+    )
+
+    const contractTypeSlide = pptx.addSlide()
+    contractTypeSlide.addText("Contract Type Distribution", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    contractTypeSlide.addChart(
+      pptx.ChartType.bar,
+      [
+        {
+          name: "Employees",
+          labels: bundle.demographics.contractTypeDistribution.map((c) => c.label),
+          values: bundle.demographics.contractTypeDistribution.map((c) => c.count),
+        },
+      ],
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, barDir: "bar", chartColors: CHART_PALETTE, showLegend: false, catAxisLabelFontSize: 10, valAxisLabelFontSize: 10 }
+    )
+
+    const ageSlide = pptx.addSlide()
+    ageSlide.addText("Age Distribution", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    ageSlide.addChart(
+      pptx.ChartType.bar,
+      [{ name: "Employees", labels: bundle.demographics.ageHistogram.map((a) => a.bucket), values: bundle.demographics.ageHistogram.map((a) => a.count) }],
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, chartColors: ["7F77DD"], showLegend: false, catAxisLabelFontSize: 11, valAxisLabelFontSize: 10 }
     )
 
     const trendSlide = pptx.addSlide()
-    trendSlide.addText("Workforce Trends — Exits by Year", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    trendSlide.addText("Hiring vs. Exit Trend", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    // Line, not area — two overlapping semi-transparent area fills render as
+    // a muddy blend in PowerPoint/LibreOffice (no per-series gradient fade
+    // like the dashboard's SVG version), where distinct lines stay crisp.
     trendSlide.addChart(
       pptx.ChartType.line,
-      [{ name: "Exits", labels: bundle.exitSummary.trend.map((t) => String(t.year)), values: bundle.exitSummary.trend.map((t) => t.exits) }],
-      { x: 0.5, y: 1.0, w: 9, h: 5.5 }
-    )
-
-    const perfSlide = pptx.addSlide()
-    perfSlide.addText("Performance Distribution", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
-    const perfRows = bundle.performanceDistribution as { label: string; actualPercentage: number }[]
-    perfSlide.addChart(pptx.ChartType.bar, [{ name: "% of reviews", labels: perfRows.map((p) => p.label), values: perfRows.map((p) => p.actualPercentage) }], { x: 0.5, y: 1.0, w: 9, h: 5.5 })
-
-    const leaveSlide = pptx.addSlide()
-    leaveSlide.addText("Leave & Recruitment & Learning", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
-    leaveSlide.addTable(
       [
-        tableRow(["Section", "Metric", "Value"]),
-        tableRow(["Leave", "Utilization", `${bundle.leaveUtilization.utilizationPercent}%`]),
-        tableRow(["Recruitment", "Open Requisitions", String(recruitment.overview.openRequisitions)]),
-        tableRow(["Recruitment", "Time to Hire (days)", String(recruitment.timeToHire.averageDays ?? "N/A")]),
-        tableRow(["Recruitment", "Offer Acceptance Rate", `${recruitment.offerStats.acceptanceRate ?? "N/A"}%`]),
-        tableRow(["Learning", "Completion Rate", `${bundle.learning.trainingCompletionRate}%`]),
-        tableRow(["Learning", "AML Compliance", bundle.learning.amlCompletionRate === null ? "Not tracked" : `${bundle.learning.amlCompletionRate}%`]),
+        { name: "Hires", labels: hiringExitTrend.map((t) => String(t.year)), values: hiringExitTrend.map((t) => t.hires) },
+        { name: "Exits", labels: hiringExitTrend.map((t) => String(t.year)), values: hiringExitTrend.map((t) => t.exits) },
       ],
-      { x: 0.4, y: 1.0, w: 9, colW: [2.5, 3.5, 3], fontSize: 11, border: { type: "solid", color: "CCCCCC", pt: 0.5 } }
+      {
+        x: 0.5,
+        y: 1.0,
+        w: 9,
+        h: 5.8,
+        chartColors: ["5DCAA5", "D85A30"],
+        lineSize: 2.5,
+        lineDataSymbol: "circle",
+        lineDataSymbolSize: 6,
+        showLegend: true,
+        legendPos: "b",
+        catAxisLabelFontSize: 10,
+        valAxisLabelFontSize: 10,
+      }
     )
+
+    const exitReasonsSlide = pptx.addSlide()
+    exitReasonsSlide.addText("Exit Reasons", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const exitReasonsSorted = [...bundle.exitSummary.byReason].sort((a, b) => b.count - a.count)
+    exitReasonsSlide.addChart(
+      pptx.ChartType.bar,
+      [{ name: "Exits", labels: exitReasonsSorted.map((r) => r.label), values: exitReasonsSorted.map((r) => r.count) }],
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, barDir: "bar", chartColors: ["D4537E"], showLegend: false, catAxisLabelFontSize: 10, valAxisLabelFontSize: 10 }
+    )
+
+    const perfDistSlide = pptx.addSlide()
+    perfDistSlide.addText("Performance Distribution — Actual vs. Expected", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const perfRows = [...(bundle.performanceDistribution as { rank: number; label: string; actualPercentage: number; expectedPercentage: number | null }[])].sort((a, b) => a.rank - b.rank)
+    perfDistSlide.addChart(
+      pptx.ChartType.line,
+      [
+        { name: "Expected % (bell curve)", labels: perfRows.map((p) => p.label), values: perfRows.map((p) => p.expectedPercentage ?? 0) },
+        { name: "Actual %", labels: perfRows.map((p) => p.label), values: perfRows.map((p) => p.actualPercentage) },
+      ],
+      {
+        x: 0.5,
+        y: 1.0,
+        w: 9,
+        h: 5.8,
+        chartColors: ["B8860B", "0A2647"],
+        lineSmooth: true,
+        lineSize: 2.5,
+        lineDataSymbol: "circle",
+        lineDataSymbolSize: 6,
+        showLegend: true,
+        legendPos: "b",
+        catAxisLabelFontSize: 10,
+        valAxisLabelFontSize: 10,
+      }
+    )
+
+    const ratingsSlide = pptx.addSlide()
+    ratingsSlide.addText("Ratings by Department", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    const ratingsSorted = [...ratingsByDepartment].sort((a: { averageRating: number }, b: { averageRating: number }) => b.averageRating - a.averageRating) as {
+      departmentName: string
+      averageRating: number
+    }[]
+    ratingsSlide.addChart(
+      pptx.ChartType.bar,
+      [{ name: "Avg. Rating", labels: ratingsSorted.map((r) => r.departmentName), values: ratingsSorted.map((r) => r.averageRating) }],
+      { x: 0.5, y: 1.0, w: 9, h: 5.8, barDir: "bar", chartColors: ["B8860B"], showLegend: false, catAxisLabelFontSize: 10, valAxisLabelFontSize: 10, valAxisMaxVal: 5 }
+    )
+
+    // Leave & Recruitment & Learning — 3 KPI-style cards (same shell as Key
+    // Metrics) instead of a plain metric/value table, so this slide matches
+    // the rest of the deck's visual language rather than reverting to text.
+    const leaveSlide = pptx.addSlide()
+    leaveSlide.addText("Leave, Recruitment & Learning", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    leaveSlide.addText("Snapshot across the three areas HR tracks outside core headcount.", { x: 0.4, y: 0.68, fontSize: 11, color: "666666" })
+
+    const CARD3_W = 2.9333
+    const CARD3_H = 3.4
+    const CARD3_X = [0.4, 3.5333, 6.6667]
+
+    {
+      const body = this.addKpiShell(
+        pptx,
+        leaveSlide,
+        { x: CARD3_X[0], y: 1.15, w: CARD3_W, h: CARD3_H },
+        "0A2647",
+        "Leave Utilization",
+        `${bundle.leaveUtilization.utilizationPercent}%`,
+        `${bundle.leaveUtilization.totalTaken} of ${bundle.leaveUtilization.totalEntitlement} days used`
+      )
+      this.addGaugeDonut(pptx, leaveSlide, body.x + body.w / 2 - 0.6, body.y + 0.1, 1.2, bundle.leaveUtilization.utilizationPercent, "0A2647")
+      leaveSlide.addText(`On leave now: ${bundle.leaveUtilization.currentlyOnLeaveCount} employee${bundle.leaveUtilization.currentlyOnLeaveCount === 1 ? "" : "s"}`, {
+        x: body.x,
+        y: body.y + 1.5,
+        w: body.w,
+        h: 0.3,
+        fontSize: 9,
+        align: "center",
+        color: "666666",
+      })
+    }
+
+    {
+      const body = this.addKpiShell(
+        pptx,
+        leaveSlide,
+        { x: CARD3_X[1], y: 1.15, w: CARD3_W, h: CARD3_H },
+        "5DCAA5",
+        "Recruitment",
+        String(recruitment.overview.openRequisitions),
+        "Open requisitions"
+      )
+      const rows = [
+        ["Time to hire", recruitment.timeToHire.averageDays !== null ? `${recruitment.timeToHire.averageDays} days` : "N/A"],
+        ["Offer acceptance", recruitment.offerStats.acceptanceRate !== null ? `${recruitment.offerStats.acceptanceRate}%` : "N/A"],
+      ]
+      rows.forEach(([label, value], i) => {
+        const rowY = body.y + 0.15 + i * 0.55
+        leaveSlide.addText(label, { x: body.x, y: rowY, w: body.w, h: 0.22, fontSize: 8.5, color: "888888" })
+        leaveSlide.addText(value, { x: body.x, y: rowY + 0.2, w: body.w, h: 0.3, fontSize: 15, bold: true, color: "1A1A1A" })
+      })
+    }
+
+    {
+      const body = this.addKpiShell(
+        pptx,
+        leaveSlide,
+        { x: CARD3_X[2], y: 1.15, w: CARD3_W, h: CARD3_H },
+        "B8860B",
+        "Learning",
+        `${bundle.learning.trainingCompletionRate}%`,
+        "Training completion rate"
+      )
+      this.addGaugeDonut(pptx, leaveSlide, body.x + body.w / 2 - 0.6, body.y + 0.1, 1.2, bundle.learning.trainingCompletionRate, "B8860B")
+      leaveSlide.addText(
+        bundle.learning.amlCompletionRate === null ? "AML compliance: not tracked" : `AML compliance: ${bundle.learning.amlCompletionRate}%`,
+        { x: body.x, y: body.y + 1.5, w: body.w, h: 0.3, fontSize: 9, align: "center", color: "666666" }
+      )
+    }
 
     const insightsSlide = pptx.addSlide()
     insightsSlide.addText("Key HR Insights", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
@@ -603,7 +799,7 @@ export class HrAnalyticsExportService {
       this.buildInsights(bundle)
         .map((line) => ({ text: line, options: { bullet: true, breakLine: true } }))
         .flatMap((item) => [item]),
-      { x: 0.5, y: 1.1, w: 9, h: 5, fontSize: 14, color: "333333" }
+      { x: 0.5, y: 1.1, w: 9, h: 5, fontSize: 14, color: "333333", valign: "top" }
     )
 
     const recommendationsSlide = pptx.addSlide()
@@ -618,11 +814,238 @@ export class HrAnalyticsExportService {
     })
     recommendationsSlide.addText(
       this.buildRecommendations(bundle).map((line) => ({ text: line, options: { bullet: true, breakLine: true } })),
-      { x: 0.5, y: 1.3, w: 9, h: 4.8, fontSize: 14, color: "333333" }
+      { x: 0.5, y: 1.3, w: 9, h: 4.8, fontSize: 14, color: "333333", valign: "top" }
     )
 
     const output = await pptx.write({ outputType: "nodebuffer" })
     return output as Buffer
+  }
+
+  /** Rounded card shell (border, colored accent strip, icon dot, label,
+   *  headline value, subtitle) shared by every Key Metrics card — mirrors
+   *  KpiShell in the dashboard's kpi-cards.tsx. Callers draw whatever
+   *  card-specific mid-section content they need (segmented bar, mini bars,
+   *  gauge, etc.) into the returned body box, then optionally addPill(). */
+  private addKpiShell(
+    pptx: PptxGenJS,
+    slide: PptxGenJS.Slide,
+    box: { x: number; y: number; w: number; h: number },
+    accentHex: string,
+    label: string,
+    value: string,
+    subtitle: string
+  ): { x: number; y: number; w: number; h: number } {
+    const { x, y, w, h } = box
+    slide.addShape(pptx.ShapeType.roundRect, { x, y, w, h, rectRadius: 0.06, fill: { color: "FFFFFF" }, line: { color: "E5E7EB", width: 0.75 } })
+    slide.addShape(pptx.ShapeType.rect, { x: x + 0.02, y, w: w - 0.04, h: 0.05, fill: { color: accentHex } })
+    slide.addText(label.toUpperCase(), { x: x + 0.15, y: y + 0.14, w: w - 0.65, h: 0.22, fontSize: 8.5, bold: true, color: "666666", charSpacing: 1 })
+    slide.addShape(pptx.ShapeType.ellipse, { x: x + w - 0.48, y: y + 0.12, w: 0.3, h: 0.3, fill: { color: accentHex, transparency: 82 }, line: { type: "none" } })
+    slide.addText(value, { x: x + 0.15, y: y + 0.42, w: w - 0.3, h: 0.46, fontSize: 21, bold: true, color: "1A1A1A" })
+    slide.addText(subtitle, { x: x + 0.15, y: y + 0.88, w: w - 0.3, h: 0.3, fontSize: 8, color: "666666" })
+    return { x: x + 0.15, y: y + 1.22, w: w - 0.3, h: h - 1.55 }
+  }
+
+  /** Status pill at the bottom of a card — mirrors attritionPill()/
+   *  fillRatePill()/leaveUtilizationPill() in kpi-cards.tsx (same three
+   *  tones, same thresholds are applied by the caller before calling this). */
+  private addPill(pptx: PptxGenJS, slide: PptxGenJS.Slide, box: { x: number; y: number; w: number }, tone: "good" | "warn" | "bad", text: string) {
+    const tones = {
+      good: { bg: "5DCAA5", text: "2F6E56" },
+      warn: { bg: "B8860B", text: "6B4E06" },
+      bad: { bg: "D4537E", text: "8A2C46" },
+    }[tone]
+    slide.addShape(pptx.ShapeType.roundRect, { x: box.x, y: box.y, w: box.w, h: 0.3, rectRadius: 0.05, fill: { color: tones.bg, transparency: 82 }, line: { type: "none" } })
+    slide.addText(text, { x: box.x, y: box.y, w: box.w, h: 0.3, fontSize: 8, bold: true, align: "center", valign: "middle", color: tones.text })
+  }
+
+  /** Small ring "gauge" for the two percent-of-a-whole cards (Fill Rate,
+   *  Leave Utilization) — a native doughnut chart standing in for the
+   *  dashboard's hand-drawn SVG radial gauge, with the percentage overlaid
+   *  as plain text since pptxgenjs doughnut charts don't support a center
+   *  label natively. */
+  private addGaugeDonut(pptx: PptxGenJS, slide: PptxGenJS.Slide, x: number, y: number, size: number, percent: number, colorHex: string) {
+    slide.addChart(pptx.ChartType.doughnut, [{ name: "Value", labels: ["Filled", "Remaining"], values: [percent, Math.max(0, 100 - percent)] }], {
+      x,
+      y,
+      w: size,
+      h: size,
+      chartColors: [colorHex, "EDEDED"],
+      showLegend: false,
+      showTitle: false,
+      showValue: false,
+      showPercent: false,
+      dataBorder: { pt: 1, color: "FFFFFF" },
+      holeSize: 68,
+    })
+    slide.addText(`${Math.round(percent)}%`, { x, y: y + size / 2 - 0.15, w: size, h: 0.3, fontSize: 11, bold: true, align: "center", color: "1A1A1A" })
+  }
+
+  /** "Key Metrics" slide — 6 KPI cards in a 2x3 grid reproducing the
+   *  dashboard's KpiCards component (client/app/admin/hr-analytics/kpi-cards.tsx):
+   *  same 6 metrics, same accent colors, same per-card mini-visualization and
+   *  status pill, so the exported deck reads as a direct snapshot of what's
+   *  on screen instead of a plain metric/value table. */
+  private addKeyMetricsSlide(pptx: PptxGenJS, bundle: ExportBundle) {
+    const slide = pptx.addSlide()
+    slide.addText("Key Metrics", { x: 0.4, y: 0.3, fontSize: 22, bold: true, color: "0A2647" })
+    slide.addText("Headline workforce numbers for the selected filters.", { x: 0.4, y: 0.68, fontSize: 11, color: "666666" })
+
+    const CARD_W = 2.9333
+    const CARD_H = 3.0
+    const COLS_X = [0.4, 3.5333, 6.6667]
+    const ROWS_Y = [1.05, 4.15]
+    const box = (index: number) => ({ x: COLS_X[index % 3], y: ROWS_Y[Math.floor(index / 3)], w: CARD_W, h: CARD_H })
+
+    const notActive = bundle.totalStaff.exited
+    const totalHeadcount = bundle.totalStaff.activeCount + notActive
+    const male = bundle.demographics.genderDistribution.find((g) => g.key === "MALE")?.count ?? 0
+    const female = bundle.demographics.genderDistribution.find((g) => g.key === "FEMALE")?.count ?? 0
+
+    // Card 1 — Staff Headcount (gold)
+    {
+      const body = this.addKpiShell(pptx, slide, box(0), "B8860B", "Staff Headcount", totalHeadcount.toLocaleString(), `${bundle.totalStaff.activeCount} active · ${notActive} not active`)
+      const total = male + female || 1
+      const maleW = body.w * (male / total)
+      slide.addShape(pptx.ShapeType.rect, { x: body.x, y: body.y, w: maleW, h: 0.14, fill: { color: "0A2647" }, line: { type: "none" } })
+      slide.addShape(pptx.ShapeType.rect, { x: body.x + maleW, y: body.y, w: Math.max(0, body.w - maleW), h: 0.14, fill: { color: "D4537E" }, line: { type: "none" } })
+      slide.addText(`♂ ${male} male`, { x: body.x, y: body.y + 0.24, w: body.w / 2, h: 0.25, fontSize: 8.5, color: "666666" })
+      slide.addText(`♀ ${female} female`, { x: body.x + body.w / 2, y: body.y + 0.24, w: body.w / 2, h: 0.25, fontSize: 8.5, color: "666666", align: "right" })
+    }
+
+    // Card 2 — Average Age (purple)
+    {
+      const ageHistogram = bundle.demographics.ageHistogram
+      const body = this.addKpiShell(
+        pptx,
+        slide,
+        box(1),
+        "7F77DD",
+        "Average Age",
+        bundle.averageAge.overall !== null ? `${bundle.averageAge.overall} yrs` : "—",
+        `Across ${bundle.averageAge.byDepartment.length} department${bundle.averageAge.byDepartment.length === 1 ? "" : "s"}`
+      )
+      const maxCount = Math.max(1, ...ageHistogram.map((a) => a.count))
+      const slotW = body.w / Math.max(1, ageHistogram.length)
+      const maxBarH = 0.45
+      ageHistogram.forEach((bucket, i) => {
+        const barH = bucket.count === 0 ? 0 : 0.06 + (bucket.count / maxCount) * (maxBarH - 0.06)
+        const slotX = body.x + i * slotW
+        slide.addText(String(bucket.count), { x: slotX, y: body.y, w: slotW, h: 0.2, fontSize: 9, bold: true, align: "center", color: "1A1A1A" })
+        slide.addShape(pptx.ShapeType.rect, {
+          x: slotX + slotW * 0.3,
+          y: body.y + 0.22 + (maxBarH - barH),
+          w: slotW * 0.4,
+          h: Math.max(0.02, barH),
+          fill: { color: "7F77DD" },
+          line: { type: "none" },
+        })
+        slide.addText(bucket.bucket, { x: slotX, y: body.y + 0.22 + maxBarH + 0.04, w: slotW, h: 0.3, fontSize: 6.5, align: "center", color: "666666" })
+      })
+    }
+
+    // Card 3 — Band Distribution (mint)
+    {
+      const bandTotal = bundle.bandDistribution.reduce((sum, b) => sum + b.count, 0)
+      const topBands = [...bundle.bandDistribution].sort((a, b) => b.count - a.count).slice(0, 4)
+      const body = this.addKpiShell(pptx, slide, box(2), "5DCAA5", "Band Distribution", bandTotal.toLocaleString(), "Employees with a band assigned")
+      const labelW = 0.85
+      const pctW = 0.4
+      const barW = body.w - labelW - pctW
+      topBands.forEach((band, i) => {
+        const rowY = body.y + i * 0.3
+        slide.addText(band.bandName, { x: body.x, y: rowY, w: labelW, h: 0.22, fontSize: 7.5, color: "666666" })
+        slide.addShape(pptx.ShapeType.roundRect, { x: body.x + labelW, y: rowY + 0.16, w: barW, h: 0.08, rectRadius: 0.04, fill: { color: "E5E7EB" }, line: { type: "none" } })
+        slide.addShape(pptx.ShapeType.roundRect, {
+          x: body.x + labelW,
+          y: rowY + 0.16,
+          w: Math.max(0.04, barW * (band.percent / 100)),
+          h: 0.08,
+          rectRadius: 0.04,
+          fill: { color: "5DCAA5" },
+          line: { type: "none" },
+        })
+        slide.addText(`${band.percent}%`, { x: body.x + labelW + barW, y: rowY, w: pctW, h: 0.22, fontSize: 7.5, align: "right", color: "666666" })
+      })
+    }
+
+    // Card 4 — Attrition Rate (pink)
+    {
+      const retainedPercent = Math.max(0, Math.round((100 - bundle.attritionRate.rate) * 10) / 10)
+      const voluntaryExits = bundle.exitSummary.byReason.find((r) => r.key === "RESIGNATION")?.count ?? 0
+      const body = this.addKpiShell(
+        pptx,
+        slide,
+        box(3),
+        "D4537E",
+        "Attrition Rate",
+        `${bundle.attritionRate.rate}%`,
+        `${bundle.attritionRate.exits} exits · ${retainedPercent}% retained`
+      )
+      slide.addText("Voluntary exits", { x: body.x, y: body.y, w: body.w / 2, h: 0.2, fontSize: 8, color: "888888" })
+      slide.addText(String(voluntaryExits), { x: body.x, y: body.y + 0.2, w: body.w / 2, h: 0.3, fontSize: 13, bold: true, color: "1A1A1A" })
+      slide.addText("YoY change", { x: body.x + body.w / 2, y: body.y, w: body.w / 2, h: 0.2, fontSize: 8, color: "888888" })
+      const yoy = bundle.attritionRate.changePercent
+      slide.addText(`${yoy > 0 ? "+" : ""}${yoy}%`, {
+        x: body.x + body.w / 2,
+        y: body.y + 0.2,
+        w: body.w / 2,
+        h: 0.3,
+        fontSize: 13,
+        bold: true,
+        color: yoy > 0 ? "D4537E" : "5DCAA5",
+      })
+      const rate = bundle.attritionRate.rate
+      const pill = rate >= 15 ? ({ tone: "bad", text: "● High — review urgently" } as const) : rate >= 8 ? ({ tone: "warn", text: "● Moderate — monitor" } as const) : ({ tone: "good", text: "✓ Healthy attrition" } as const)
+      this.addPill(pptx, slide, { x: body.x, y: body.y + body.h - 0.32, w: body.w }, pill.tone, pill.text)
+    }
+
+    // Card 5 — Fill Rate (orange)
+    {
+      const vacant = bundle.positionFillRate.total - bundle.positionFillRate.filled
+      const body = this.addKpiShell(
+        pptx,
+        slide,
+        box(4),
+        "D85A30",
+        "Fill Rate",
+        `${bundle.positionFillRate.fillRate}%`,
+        `${bundle.positionFillRate.filled} of ${bundle.positionFillRate.total} positions filled`
+      )
+      this.addGaugeDonut(pptx, slide, body.x, body.y, 1.1, bundle.positionFillRate.fillRate, "D85A30")
+      slide.addText(`${bundle.positionFillRate.filled} filled`, { x: body.x + 1.2, y: body.y + 0.3, w: body.w - 1.2, h: 0.25, fontSize: 8.5, color: "666666" })
+      slide.addText(`${vacant} vacant`, { x: body.x + 1.2, y: body.y + 0.6, w: body.w - 1.2, h: 0.25, fontSize: 8.5, color: "666666" })
+      const fillRate = bundle.positionFillRate.fillRate
+      const pill =
+        fillRate < 50
+          ? ({ tone: "bad", text: "● Critical vacancies" } as const)
+          : fillRate < 75
+            ? ({ tone: "warn", text: "● Some vacancies — plan hiring" } as const)
+            : ({ tone: "good", text: "✓ Well staffed" } as const)
+      this.addPill(pptx, slide, { x: body.x, y: body.y + body.h - 0.32, w: body.w }, pill.tone, pill.text)
+    }
+
+    // Card 6 — Leave Utilization (navy)
+    {
+      const body = this.addKpiShell(
+        pptx,
+        slide,
+        box(5),
+        "0A2647",
+        "Leave Utilization",
+        `${bundle.leaveUtilization.utilizationPercent}%`,
+        `${bundle.leaveUtilization.totalTaken} of ${bundle.leaveUtilization.totalEntitlement} days used`
+      )
+      this.addGaugeDonut(pptx, slide, body.x, body.y, 1.1, bundle.leaveUtilization.utilizationPercent, "0A2647")
+      slide.addText(`On leave now: ${bundle.leaveUtilization.currentlyOnLeaveCount}`, { x: body.x + 1.2, y: body.y + 0.4, w: body.w - 1.2, h: 0.4, fontSize: 8.5, color: "666666" })
+      const utilization = bundle.leaveUtilization.utilizationPercent
+      const pill =
+        utilization >= 80
+          ? ({ tone: "bad", text: "● High usage — check coverage" } as const)
+          : utilization < 40
+            ? ({ tone: "warn", text: "● Low usage — encourage leave" } as const)
+            : ({ tone: "good", text: "✓ Healthy utilization" } as const)
+      this.addPill(pptx, slide, { x: body.x, y: body.y + body.h - 0.32, w: body.w }, pill.tone, pill.text)
+    }
   }
 
   /** Cover slide shared by generatePptx() and generateCustomPptx() —

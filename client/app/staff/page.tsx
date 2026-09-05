@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, Clock3, Target, Users } from "lucide-react"
+import { CalendarDays, CheckCircle2, Target, Users } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-banner"
@@ -55,12 +55,6 @@ export default async function StaffDashboardPage() {
       value: annualBalance === null ? "—" : `${annualBalance} days`,
       hint: annualBalance === null ? "Couldn't load your leave balance" : `Annual leave remaining (${currentYear})`,
       icon: CalendarDays,
-    },
-    {
-      label: "Attendance",
-      value: "Not tracked yet",
-      hint: "Attendance module is coming soon",
-      icon: Clock3,
     },
     {
       label: "Next review",

@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Download } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FamilyTree } from "@/components/family-tree/family-tree"
 import { fetchBands } from "@/lib/api/bands"
@@ -12,6 +13,7 @@ import { fetchExitDocumentProgress } from "@/lib/api/exit-documents"
 import {
   computeTenure,
   computeTotalBankingExperienceYears,
+  employeeFamilyTreeExportUrl,
   fetchEmployee,
   fetchEmployeeFamilyTree,
   fetchEmployeeHistory,
@@ -253,11 +255,19 @@ export default async function EmployeeDetailPage({
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Family Tree</CardTitle>
-          <CardDescription>
-            Partner/children entered above, plus any parents, siblings, and other family members on file (including anyone bulk-imported via the Family Members module).
-          </CardDescription>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Family Tree</CardTitle>
+            <CardDescription>
+              Partner/children entered above, plus any parents, siblings, and other family members on file (including anyone bulk-imported via the Family Members module).
+            </CardDescription>
+          </div>
+          <a
+            href={employeeFamilyTreeExportUrl(employee.employeeNumber, session?.employeeId ?? "")}
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            <Download className="mr-1 size-3.5" /> Export Family Tree (PDF)
+          </a>
         </CardHeader>
         <CardContent>
           {familyTreeResult.ok ? <FamilyTree tree={familyTreeResult.data} /> : <p className="text-sm text-destructive">{familyTreeResult.error}</p>}

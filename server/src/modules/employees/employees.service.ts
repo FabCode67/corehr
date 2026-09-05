@@ -4,6 +4,7 @@ import * as bcrypt from "bcryptjs"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../common/pagination"
 import { buildClientUrl } from "../../common/client-url.util"
+import { resolveDepartmentFilterIds } from "../../common/department-hierarchy.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { DEFAULT_EMPLOYEE_PASSWORD } from "../auth/default-password.constant"
 import { computeTemporaryPasswordExpiry } from "../auth/temporary-password.constant"
@@ -18,6 +19,7 @@ import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
 import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
+import { CreateFamilyMemberDto, UpdateFamilyMemberDto } from "./dto/family-member.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
 import { UpdateEmploymentDetailsDto } from "./dto/update-employment-details.dto"
@@ -52,6 +54,26 @@ export const EMPLOYEE_EXPORT_INCLUDE = {
   branch: true,
 } as const
 
+/** Shared select for the Family Tree read paths — see getFamilyTree()'s doc
+ *  comment. Includes Position -> Department purely for the PDF export's
+ *  page header (name/title/department); the JSON API callers simply ignore
+ *  the extra fields, so this is a safe additive change to the existing
+ *  single-employee endpoint's response shape. */
+const FAMILY_TREE_SELECT = {
+  employeeNumber: true,
+  firstName: true,
+  lastName: true,
+  profilePictureUrl: true,
+  partnerName: true,
+  partnerPhone: true,
+  partnerDateOfBirth: true,
+  position: { select: { title: true, department: { select: { name: true } } } },
+  children: { orderBy: { dateOfBirth: "asc" } },
+  familyMembers: { orderBy: { createdAt: "asc" } },
+} as const
+
+type FamilyTreeEmployee = Prisma.EmployeeGetPayload<{ select: typeof FAMILY_TREE_SELECT }>
+
 export interface ReportingManagerResult {
   manager: { id: string; firstName: string; lastName: string; positionId: string } | null
   source: "OVERRIDE" | "POSITION_HIERARCHY" | "NONE"
@@ -70,7 +92,7 @@ export class EmployeesService {
     private readonly emailService: EmailService
   ) {}
 
-  private buildFindAllWhere(params: {
+  private async buildFindAllWhere(params: {
     departmentId?: string
     unitId?: string
     positionId?: string
@@ -79,18 +101,25 @@ export class EmployeesService {
     levelId?: string
     includeInactive?: boolean
     search?: string
-  }): Prisma.EmployeeWhereInput {
+  }): Promise<Prisma.EmployeeWhereInput> {
     const { departmentId, unitId, positionId, branchId, bandId, levelId, includeInactive, search } = params
+
+    // Filtering by a department also pulls in staff sitting in any
+    // sub-department that reports to it (Department.parentDepartmentId) —
+    // see resolveDepartmentFilterIds()'s doc comment. Units don't need
+    // separate handling: Position.departmentId already points at the
+    // owning department regardless of unit.
+    const departmentIds = departmentId ? await resolveDepartmentFilterIds(this.prisma, departmentId) : undefined
 
     return {
       ...(includeInactive ? {} : { isActive: true }),
       ...(positionId ? { positionId } : {}),
       ...(branchId ? { branchId } : {}),
       ...(bandId ? { bandId } : {}),
-      ...(departmentId || unitId || levelId
+      ...(departmentIds || unitId || levelId
         ? {
             position: {
-              ...(departmentId ? { departmentId } : {}),
+              ...(departmentIds ? { departmentId: { in: departmentIds } } : {}),
               ...(unitId ? { unitId } : {}),
               ...(levelId ? { levelId } : {}),
             },
@@ -114,7 +143,7 @@ export class EmployeesService {
   /** Full, unpaginated list — used by dropdowns/cascading selects
    *  throughout the app (e.g. delegate pickers) that need every match, not
    *  just a page of them. See findAllPaginated() for the admin table view. */
-  findAll(params: {
+  async findAll(params: {
     departmentId?: string
     unitId?: string
     positionId?: string
@@ -124,7 +153,7 @@ export class EmployeesService {
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
-      where: this.buildFindAllWhere(params),
+      where: await this.buildFindAllWhere(params),
       include: EMPLOYEE_LIST_INCLUDE,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     })
@@ -146,7 +175,7 @@ export class EmployeesService {
     page?: number,
     pageSize?: number
   ): Promise<PaginatedResult<Prisma.EmployeeGetPayload<{ include: typeof EMPLOYEE_LIST_INCLUDE }>>> {
-    const where = this.buildFindAllWhere(params)
+    const where = await this.buildFindAllWhere(params)
     const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(
       page,
       pageSize
@@ -170,7 +199,7 @@ export class EmployeesService {
    *  backs the Employees table's column-picker export. Not paginated: an
    *  export is meant to cover every row matching the current filters, same
    *  reasoning as findAll() above. */
-  findAllForExport(params: {
+  async findAllForExport(params: {
     departmentId?: string
     unitId?: string
     positionId?: string
@@ -180,7 +209,7 @@ export class EmployeesService {
     includeInactive?: boolean
   } = {}) {
     return this.prisma.employee.findMany({
-      where: this.buildFindAllWhere(params),
+      where: await this.buildFindAllWhere(params),
       include: EMPLOYEE_EXPORT_INCLUDE,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     })
@@ -823,6 +852,33 @@ export class EmployeesService {
   }
 
   /**
+   * CRUD for the generic "additional family member" sub-resource (see
+   * EmployeeFamilyMember's schema doc comment) — until now this table could
+   * only be populated via the Bulk Import framework's Family Members
+   * module; this is the first UI-driven write path for it, backing both the
+   * staff self-service Family & Dependents page and the admin employee
+   * detail page. Same ownership-check pattern as
+   * assertChildBelongsToEmployee below, since :id in the route is
+   * caller-supplied (the staff page always passes the logged-in employee's
+   * own ID, but nothing at the HTTP layer stops a crafted request otherwise
+   * — this is what actually prevents editing someone else's record).
+   */
+  async addFamilyMember(employeeId: string, dto: CreateFamilyMemberDto) {
+    await this.findOne(employeeId)
+    return this.prisma.employeeFamilyMember.create({ data: { employeeId, ...dto } })
+  }
+
+  async updateFamilyMember(employeeId: string, familyMemberId: string, dto: UpdateFamilyMemberDto) {
+    await this.assertFamilyMemberBelongsToEmployee(employeeId, familyMemberId)
+    return this.prisma.employeeFamilyMember.update({ where: { id: familyMemberId }, data: dto })
+  }
+
+  async removeFamilyMember(employeeId: string, familyMemberId: string) {
+    await this.assertFamilyMemberBelongsToEmployee(employeeId, familyMemberId)
+    await this.prisma.employeeFamilyMember.delete({ where: { id: familyMemberId } })
+  }
+
+  /**
    * Visual "Family Tree" data — this is the first read path this app has
    * ever had for EmployeeFamilyMember (spouse/parent/sibling/other), which
    * until now could only be created via the Bulk Import framework's Family
@@ -835,26 +891,7 @@ export class EmployeesService {
    *     relationship (bulk-imported, or any relationship the wizard has no
    *     field for at all — parents/siblings/other).
    */
-  async getFamilyTree(id: string) {
-    const employee = await this.prisma.employee.findUnique({
-      where: { employeeNumber: id },
-      select: {
-        employeeNumber: true,
-        firstName: true,
-        lastName: true,
-        profilePictureUrl: true,
-        partnerName: true,
-        partnerPhone: true,
-        partnerDateOfBirth: true,
-        children: { orderBy: { dateOfBirth: "asc" } },
-        familyMembers: { orderBy: { createdAt: "asc" } },
-      },
-    })
-
-    if (!employee) {
-      throw new NotFoundException(`Employee ${id} not found`)
-    }
-
+  private mapFamilyTree(employee: FamilyTreeEmployee) {
     const byRelationship = (relationship: FamilyRelationship) => employee.familyMembers.filter((member) => member.relationship === relationship)
 
     return {
@@ -863,6 +900,8 @@ export class EmployeesService {
         firstName: employee.firstName,
         lastName: employee.lastName,
         profilePictureUrl: employee.profilePictureUrl,
+        positionTitle: employee.position?.title ?? null,
+        departmentName: employee.position?.department.name ?? null,
       },
       parents: byRelationship("PARENT"),
       siblings: byRelationship("SIBLING"),
@@ -878,6 +917,32 @@ export class EmployeesService {
         additional: byRelationship("CHILD"),
       },
     }
+  }
+
+  async getFamilyTree(id: string) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { employeeNumber: id },
+      select: FAMILY_TREE_SELECT,
+    })
+
+    if (!employee) {
+      throw new NotFoundException(`Employee ${id} not found`)
+    }
+
+    return this.mapFamilyTree(employee)
+  }
+
+  /** Bulk counterpart of getFamilyTree() for the admin "export for all
+   *  staff" Family Tree report — one batched query instead of N+1 calls to
+   *  the single-employee path, reusing the exact same mapping logic. */
+  async getAllFamilyTrees(includeInactive = false) {
+    const employees = await this.prisma.employee.findMany({
+      where: includeInactive ? {} : { isActive: true },
+      select: FAMILY_TREE_SELECT,
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    })
+
+    return employees.map((employee) => this.mapFamilyTree(employee))
   }
 
   // ---- Step 5: Education & Professional Development ----------------------
@@ -1078,6 +1143,13 @@ export class EmployeesService {
     const child = await this.prisma.employeeChild.findUnique({ where: { id: childId } })
     if (!child || child.employeeId !== employeeId) {
       throw new NotFoundException(`Child record ${childId} not found for this employee`)
+    }
+  }
+
+  private async assertFamilyMemberBelongsToEmployee(employeeId: string, familyMemberId: string) {
+    const member = await this.prisma.employeeFamilyMember.findUnique({ where: { id: familyMemberId } })
+    if (!member || member.employeeId !== employeeId) {
+      throw new NotFoundException(`Family member record ${familyMemberId} not found for this employee`)
     }
   }
 

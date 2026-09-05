@@ -17,6 +17,7 @@ import { AssignPositionDto } from "./dto/assign-position.dto"
 import { ChangeBandDto } from "./dto/change-band.dto"
 import { CreateEmployeeDto } from "./dto/create-employee.dto"
 import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
+import { CreateFamilyMemberDto, UpdateFamilyMemberDto } from "./dto/family-member.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
 import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { SetAdminAccessDto } from "./dto/set-admin-access.dto"
@@ -26,13 +27,15 @@ import { UpdateEmployeeDto } from "./dto/update-employee.dto"
 import { UpdateEmploymentDetailsDto } from "./dto/update-employment-details.dto"
 import { EMPLOYEE_EXPORT_COLUMNS, EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
+import { FamilyTreePdfService } from "./family-tree-pdf.service"
 
 @ApiTags("Employees")
 @Controller("employees")
 export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
-    private readonly exportService: EmployeesExportService
+    private readonly exportService: EmployeesExportService,
+    private readonly familyTreePdfService: FamilyTreePdfService
   ) {}
 
   @Get()
@@ -132,6 +135,26 @@ export class EmployeesController {
     return new StreamableFile(buffer, {
       type: isCsv ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       disposition: `attachment; filename="employees-${Date.now()}.${extension}"`,
+    })
+  }
+
+  /** Bulk "Family Tree Report" export — must stay above the `:id` route
+   *  below, same reasoning as export/export-columns/line-managers. */
+  @Get("family-tree/export")
+  async exportAllFamilyTrees(
+    @Query("includeInactive") includeInactive?: string,
+    @Query("actingEmployeeId") actingEmployeeId?: string
+  ) {
+    const trees = await this.employeesService.getAllFamilyTrees(includeInactive === "true")
+    const scopeLabel = includeInactive === "true" ? "All staff, including inactive" : "All active staff"
+    const buffer = await this.familyTreePdfService.generate(trees, {
+      scopeLabel: `${scopeLabel} (${trees.length} employee${trees.length === 1 ? "" : "s"})`,
+      actingEmployeeId,
+    })
+
+    return new StreamableFile(buffer, {
+      type: "application/pdf",
+      disposition: `attachment; filename="family-tree-report-${Date.now()}.pdf"`,
     })
   }
 
@@ -239,6 +262,50 @@ export class EmployeesController {
   @Get(":id/family-tree")
   getFamilyTree(@Param("id") id: string) {
     return this.employeesService.getFamilyTree(id)
+  }
+
+  /** Single-employee counterpart of the bulk export above — an "Export
+   *  Family Tree" button on the admin employee detail page. */
+  @Get(":id/family-tree/export")
+  async exportFamilyTree(@Param("id") id: string, @Query("actingEmployeeId") actingEmployeeId?: string) {
+    const tree = await this.employeesService.getFamilyTree(id)
+    const buffer = await this.familyTreePdfService.generate([tree], {
+      scopeLabel: `${tree.employee.firstName} ${tree.employee.lastName} (${tree.employee.id})`,
+      actingEmployeeId,
+    })
+
+    return new StreamableFile(buffer, {
+      type: "application/pdf",
+      disposition: `attachment; filename="family-tree-${tree.employee.id}-${Date.now()}.pdf"`,
+    })
+  }
+
+  /** CRUD for the generic "additional family member" record (parents,
+   *  siblings, other dependents, or a second spouse/child beyond the Step 4
+   *  wizard's own single-spouse/EmployeeChild fields) — see
+   *  EmployeesService.addFamilyMember()'s doc comment. Backs both the staff
+   *  self-service Family & Dependents page and the admin employee detail
+   *  page. */
+  @Post(":id/family-members")
+  addFamilyMember(@Param("id") id: string, @Body() dto: CreateFamilyMemberDto) {
+    return this.employeesService.addFamilyMember(id, dto)
+  }
+
+  @Patch(":id/family-members/:familyMemberId")
+  updateFamilyMember(
+    @Param("id") id: string,
+    @Param("familyMemberId", ParseUUIDPipe) familyMemberId: string,
+    @Body() dto: UpdateFamilyMemberDto
+  ) {
+    return this.employeesService.updateFamilyMember(id, familyMemberId, dto)
+  }
+
+  @Delete(":id/family-members/:familyMemberId")
+  removeFamilyMember(
+    @Param("id") id: string,
+    @Param("familyMemberId", ParseUUIDPipe) familyMemberId: string
+  ) {
+    return this.employeesService.removeFamilyMember(id, familyMemberId)
   }
 
   // ---- Step 5: Education & Professional Development ------------------------

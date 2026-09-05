@@ -4,6 +4,7 @@ import { CourseAssignmentPriority, CourseAssignmentStatus, NotificationType, Pri
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { buildClientUrl } from "../../../common/client-url.util"
+import { resolveDepartmentFilterIds } from "../../../common/department-hierarchy.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { NotificationsService } from "../../leave/notifications/notifications.service"
@@ -80,8 +81,13 @@ export class AssignmentsService {
     }
   }
 
-  private buildWhere(filters: AssignmentFilters, scope: Awaited<ReturnType<LearningAccessService["resolveScope"]>>): Prisma.CourseAssignmentWhereInput {
+  private async buildWhere(filters: AssignmentFilters, scope: Awaited<ReturnType<LearningAccessService["resolveScope"]>>): Promise<Prisma.CourseAssignmentWhereInput> {
     const accessWhere = this.accessService.buildAssignmentWhere(scope)
+
+    // Same sub-department cascade as EmployeesService.buildFindAllWhere —
+    // filtering by a parent department also pulls in assignments snapshotted
+    // against a department that reports to it.
+    const departmentIds = filters.departmentId ? await resolveDepartmentFilterIds(this.prisma, filters.departmentId) : undefined
 
     const filterWhere: Prisma.CourseAssignmentWhereInput = {
       ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
@@ -89,7 +95,7 @@ export class AssignmentsService {
       ...(filters.categoryId ? { course: { categoryId: filters.categoryId } } : {}),
       ...(filters.status ? { status: filters.status as CourseAssignmentStatus } : {}),
       ...(filters.isMandatory !== undefined ? { isMandatory: filters.isMandatory } : {}),
-      ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
+      ...(departmentIds ? { departmentId: { in: departmentIds } } : {}),
       ...(filters.branchId ? { branchId: filters.branchId } : {}),
       ...(filters.positionId ? { positionId: filters.positionId } : {}),
       ...(filters.levelId ? { levelId: filters.levelId } : {}),
@@ -106,7 +112,7 @@ export class AssignmentsService {
 
   async findAllPaginated(filters: AssignmentFilters, actingEmployeeId: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {
     const scope = await this.accessService.resolveScope(actingEmployeeId)
-    const where = this.buildWhere(filters, scope)
+    const where = await this.buildWhere(filters, scope)
     const { skip, take, page: normalizedPage, pageSize: normalizedPageSize } = normalizePagination(page, pageSize)
 
     const [data, total] = await Promise.all([
@@ -125,7 +131,7 @@ export class AssignmentsService {
 
   async findAll(filters: AssignmentFilters, actingEmployeeId: string) {
     const scope = await this.accessService.resolveScope(actingEmployeeId)
-    const where = this.buildWhere(filters, scope)
+    const where = await this.buildWhere(filters, scope)
     return this.prisma.courseAssignment.findMany({
       where,
       include: ASSIGNMENT_INCLUDE,

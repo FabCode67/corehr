@@ -9,12 +9,13 @@ import { ContractReminderScheduler } from "./contract-reminder.scheduler"
 import { EmployeesController } from "./employees.controller"
 import { EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
+import { FamilyTreePdfService } from "./family-tree-pdf.service"
 import { ProbationReminderScheduler } from "./probation-reminder.scheduler"
 
 @Module({
   imports: [LeaveBalancesModule, AssignmentsModule, EmailModule, NotificationsModule],
   controllers: [EmployeesController],
-  providers: [EmployeesService, EmployeesExportService, ProbationReminderScheduler, ContractReminderScheduler],
+  providers: [EmployeesService, EmployeesExportService, FamilyTreePdfService, ProbationReminderScheduler, ContractReminderScheduler],
   exports: [EmployeesService],
 })
 export class EmployeesModule {}

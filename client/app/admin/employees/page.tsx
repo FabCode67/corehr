@@ -1,5 +1,7 @@
 import Link from "next/link"
 
+import { Download } from "lucide-react"
+
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +12,7 @@ import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
+  allEmployeesFamilyTreeExportUrl,
   computeProbationRemainingDays,
   computeTenure,
   computeTotalBankingExperienceYears,
@@ -91,6 +94,12 @@ export default async function AdminEmployeesPage({
         <div className="flex flex-wrap items-center gap-2">
           <ImportManager moduleKey="employees" moduleLabel="Employees" actingEmployeeId={actingEmployeeId} />
           {exportColumns.length > 0 ? <ExportColumnsDialog columns={exportColumns} /> : null}
+          <a
+            href={allEmployeesFamilyTreeExportUrl(actingEmployeeId)}
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+          >
+            <Download className="mr-1 size-3.5" /> Export Family Tree (all staff)
+          </a>
           <Link href="/admin/employees/new" className={buttonVariants({ size: "sm" })}>
             New employee
           </Link>

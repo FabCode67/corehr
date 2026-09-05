@@ -258,6 +258,25 @@ export function fetchEmployeeFamilyTree(id: string) {
   return apiFetchSafe<EmployeeFamilyTree>(`/employees/${id}/family-tree`)
 }
 
+/** Points at the Next.js proxy route (app/api/employees/[id]/family-tree/export/route.ts)
+ *  for the admin employee detail page's "Export Family Tree" button — same
+ *  reasoning as employeeExportUrl() above (API_URL is server-only). */
+export function employeeFamilyTreeExportUrl(id: string, actingEmployeeId: string) {
+  const params = new URLSearchParams()
+  if (actingEmployeeId) params.set("actingEmployeeId", actingEmployeeId)
+  return `/api/employees/${id}/family-tree/export?${params.toString()}`
+}
+
+/** Bulk counterpart — "Export Family Tree" for all staff, from the admin
+ *  Employees list page. Active-only by default, matching how most other
+ *  exports/reports in this app scope themselves unless told otherwise. */
+export function allEmployeesFamilyTreeExportUrl(actingEmployeeId: string, includeInactive = false) {
+  const params = new URLSearchParams()
+  if (actingEmployeeId) params.set("actingEmployeeId", actingEmployeeId)
+  if (includeInactive) params.set("includeInactive", "true")
+  return `/api/employees/family-tree/export?${params.toString()}`
+}
+
 // ---- Column-picker export (Employees table "Export" button) ----------------
 
 export interface EmployeeExportColumn {
