@@ -80,8 +80,8 @@ export class ImportsController {
 
   @Get(":module/template")
   @Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-  downloadTemplate(@Param("module") module: string) {
-    const { buffer, fileName } = this.importsService.downloadTemplate(module)
+  async downloadTemplate(@Param("module") module: string) {
+    const { buffer, fileName } = await this.importsService.downloadTemplate(module)
     return new StreamableFile(buffer, { disposition: `attachment; filename="${fileName}"` })
   }
 

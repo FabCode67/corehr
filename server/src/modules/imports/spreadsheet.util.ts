@@ -76,13 +76,22 @@ export function parseSpreadsheet(buffer: Buffer, fileName: string): { headers: s
 /**
  * Builds a downloadable .xlsx template for a module: a header row (exactly
  * the ImportTemplateColumn.header values, required columns marked with
- * " *") plus one example row so users can see the expected format.
+ * " *") plus either one generic example row (default), or — when a config
+ * supplies `rows` (see ImportModuleConfig.buildTemplateRows) — one real row
+ * per entry, each column falling back to its own `example` value for keys
+ * the row object doesn't set.
  */
-export function buildTemplateWorkbook(columns: ImportTemplateColumn[]): Buffer {
+export function buildTemplateWorkbook(columns: ImportTemplateColumn[], rows?: Record<string, string>[]): Buffer {
   const headerRow = columns.map((column) => (column.required ? `${column.header} *` : column.header))
-  const exampleRow = columns.map((column) => column.example)
-  const sheet = XLSX.utils.aoa_to_sheet([headerRow, exampleRow])
-  sheet["!cols"] = columns.map((column) => ({ wch: Math.max(column.header.length + 2, column.example.length + 2, 14) }))
+  const dataRows =
+    rows && rows.length > 0
+      ? rows.map((row) => columns.map((column) => row[column.key] ?? column.example))
+      : [columns.map((column) => column.example)]
+  const sheet = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows])
+  sheet["!cols"] = columns.map((column, index) => {
+    const widestCell = dataRows.reduce((max, row) => Math.max(max, row[index]?.length ?? 0), 0)
+    return { wch: Math.max(column.header.length + 2, widestCell + 2, 14) }
+  })
 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, "Template")

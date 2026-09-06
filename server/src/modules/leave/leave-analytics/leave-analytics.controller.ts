@@ -1,12 +1,16 @@
-import { Controller, Get, Query } from "@nestjs/common"
+import { Controller, Get, Query, StreamableFile } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
 
 import { AnalyticsFilters, LeaveAnalyticsService } from "./leave-analytics.service"
+import { LeaveExportService } from "./leave-export.service"
 
 @ApiTags("Leave / Analytics")
 @Controller("leave/analytics")
 export class LeaveAnalyticsController {
-  constructor(private readonly leaveAnalyticsService: LeaveAnalyticsService) {}
+  constructor(
+    private readonly leaveAnalyticsService: LeaveAnalyticsService,
+    private readonly leaveExportService: LeaveExportService
+  ) {}
 
   private parseFilters(query: {
     departmentId?: string
@@ -130,5 +134,27 @@ export class LeaveAnalyticsController {
     return this.leaveAnalyticsService.currentlyOnLeave(
       this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
     )
+  }
+
+  /** Downloads the whole Leave Analytics page (every section above) as one
+   *  file — same filter query params as the individual endpoints. */
+  @Get("export")
+  async export(
+    @Query("departmentId") departmentId?: string,
+    @Query("functionId") functionId?: string,
+    @Query("branchId") branchId?: string,
+    @Query("employeeId") employeeId?: string,
+    @Query("year") year?: string,
+    @Query("format") format?: string
+  ) {
+    const filters = this.parseFilters({ departmentId, functionId, branchId, employeeId, year })
+    const isCsv = format === "csv"
+    const buffer = isCsv ? await this.leaveExportService.generateCsv(filters) : await this.leaveExportService.generateXlsx(filters)
+    const extension = isCsv ? "csv" : "xlsx"
+
+    return new StreamableFile(buffer, {
+      type: isCsv ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: `attachment; filename="leave-report-${Date.now()}.${extension}"`,
+    })
   }
 }

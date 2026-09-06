@@ -29,11 +29,24 @@ export class CreateCourseDto {
   @IsOptional()
   institutionId?: string
 
+  /// Legacy — no longer collected by the New Course form (see isBudgeted/
+  /// memoUrl below), kept optional so historical rows and the Cost
+  /// Analysis reports/AI tool that already key off it keep working.
   @ApiPropertyOptional()
   @IsInt()
   @Min(0)
   @IsOptional()
   cost?: number
+
+  @ApiPropertyOptional({ description: "Whether this course's cost is already covered by an approved budget." })
+  @IsBoolean()
+  @IsOptional()
+  isBudgeted?: boolean
+
+  @ApiPropertyOptional({ description: "Justification memo URL — expected when isBudgeted is false." })
+  @IsString()
+  @IsOptional()
+  memoUrl?: string
 
   @ApiPropertyOptional()
   @IsInt()

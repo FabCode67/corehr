@@ -153,7 +153,12 @@ export interface WorkforcePlan {
   priority: RecruitmentPriority
   expectedHiringDate: string | null
   businessJustification: string
+  /** What the New Workforce Plan form actually collects going forward — see
+   *  the schema doc comment on WorkforcePlan.isBudgeted for why budget above
+   *  still exists (historical data + Budget by Department report). */
   budget: number | null
+  isBudgeted: boolean | null
+  memoUrl: string | null
   status: WorkforcePlanStatus
   approvedById: string | null
   approvedAt: string | null

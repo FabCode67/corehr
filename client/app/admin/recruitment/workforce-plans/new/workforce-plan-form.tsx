@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useRef, useState, type ChangeEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
 import type { Employee } from "@/lib/api/employees"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
+import { uploadFile } from "@/lib/api/uploads"
 
 interface WorkforcePlanFormProps {
   departments: Department[]
@@ -25,9 +26,33 @@ interface WorkforcePlanFormProps {
 export function WorkforcePlanForm({ departments, units, branches, employees, actingEmployeeId, action, submitLabel }: WorkforcePlanFormProps) {
   const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(action, undefined)
 
+  const [isBudgeted, setIsBudgeted] = useState("")
+  const [memoUrl, setMemoUrl] = useState("")
+  const [memoFileName, setMemoFileName] = useState("")
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleMemoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const result = await uploadFile("workforce-plan-memos", file)
+    setUploading(false)
+    if (!result.ok) {
+      setUploadError(result.error)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+    setMemoUrl(result.url)
+    setMemoFileName(file.name)
+  }
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="actingEmployeeId" value={actingEmployeeId} />
+      <input type="hidden" name="memoUrl" value={memoUrl} />
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="title">Title</Label>
@@ -109,9 +134,47 @@ export function WorkforcePlanForm({ departments, units, branches, employees, act
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="budget">Budget, RWF (optional)</Label>
-          <Input id="budget" name="budget" type="number" min={0} />
+          <Label htmlFor="isBudgeted">Is this budgeted?</Label>
+          <Select
+            id="isBudgeted"
+            name="isBudgeted"
+            value={isBudgeted}
+            onChange={(event) => setIsBudgeted(event.target.value)}
+            required
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </Select>
         </div>
+
+        {isBudgeted === "false" ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="memo">Justification memo</Label>
+            <input
+              ref={fileInputRef}
+              id="memo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleMemoChange}
+              className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1 file:text-xs file:font-medium"
+            />
+            {uploading ? <p className="text-xs text-muted-foreground">Uploading…</p> : null}
+            {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
+            {!uploading && memoUrl ? (
+              <p className="text-xs text-muted-foreground">
+                {memoFileName || "Memo uploaded"} —{" "}
+                <a href={memoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  view
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div />
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="hiringManagerId">Hiring manager</Label>

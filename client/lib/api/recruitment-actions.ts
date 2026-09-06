@@ -36,9 +36,18 @@ export async function createWorkforcePlan(
   const numberOfPositions = trimmedOrUndefined(formData.get("numberOfPositions"))
   const employmentType = trimmedOrUndefined(formData.get("employmentType"))
   const businessJustification = trimmedOrUndefined(formData.get("businessJustification"))
+  const isBudgetedRaw = trimmedOrUndefined(formData.get("isBudgeted"))
+  const isBudgeted = isBudgetedRaw === undefined ? undefined : isBudgetedRaw === "true"
+  const memoUrl = trimmedOrUndefined(formData.get("memoUrl"))
 
   if (!actingEmployeeId || !title || !departmentId || !branchId || !hiringManagerId || !recruiterId || !numberOfPositions || !employmentType || !businessJustification) {
     return { error: "Title, department, branch, hiring manager, recruiter, number of positions, employment type, and business justification are all required." }
+  }
+  if (isBudgeted === undefined) {
+    return { error: "Please specify whether this workforce plan is budgeted." }
+  }
+  if (isBudgeted === false && !memoUrl) {
+    return { error: "Please upload a memo justifying the unbudgeted cost." }
   }
 
   let planId: string
@@ -57,7 +66,8 @@ export async function createWorkforcePlan(
         priority: trimmedOrUndefined(formData.get("priority")),
         expectedHiringDate: trimmedOrUndefined(formData.get("expectedHiringDate")),
         businessJustification,
-        budget: trimmedOrUndefined(formData.get("budget")) ? Number(formData.get("budget")) : undefined,
+        isBudgeted,
+        memoUrl,
       }),
     })
     planId = plan.id

@@ -33,6 +33,10 @@ const ALLOWED_FOLDERS = new Set([
   "leave-attachments",
   "onboarding-documents",
   "professional-profile",
+  // Budget-justification memos — New Course / New Workforce Plan forms,
+  // uploaded when "Is this budgeted?" is answered No.
+  "course-memos",
+  "workforce-plan-memos",
 ])
 
 @ApiTags("Uploads")

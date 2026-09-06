@@ -345,6 +345,59 @@ export class ReviewsService {
     return updated
   }
 
+  /** Deletes one review. Admin-only (same guard as finalize/reassign) — a
+   *  review is a permanent record once created, so removing one is reserved
+   *  for correcting a mistake (e.g. a bad bulk import row), not everyday
+   *  workflow. Audit log rows are deleted first since PerformanceAuditLog
+   *  has a required FK to the review with no cascade configured. */
+  async remove(id: string, actingEmployeeId: string) {
+    const actor = await this.prisma.employee.findUnique({ where: { employeeNumber: actingEmployeeId } })
+    if (!actor?.isAdmin) {
+      throw new ForbiddenException("Only an HR administrator can delete a review")
+    }
+
+    const review = await this.prisma.performanceReview.findUnique({ where: { id } })
+    if (!review) {
+      throw new NotFoundException(`Performance review ${id} not found`)
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.performanceAuditLog.deleteMany({ where: { reviewId: id } }),
+      this.prisma.performanceReview.delete({ where: { id } }),
+    ])
+
+    return { id }
+  }
+
+  /** Bulk delete every review matching the current filters — the "Remove
+   *  All" counterpart to remove() above, for clearing out a bad bulk import
+   *  in one action rather than one row at a time. Scoped by whatever
+   *  filters the caller passes (the client always passes the reviews page's
+   *  active filters); pass no filters to delete literally every review.
+   *  Admin-only, same reasoning as remove(). */
+  async removeAll(filters: ReviewFilters, actingEmployeeId: string) {
+    const actor = await this.prisma.employee.findUnique({ where: { employeeNumber: actingEmployeeId } })
+    if (!actor?.isAdmin) {
+      throw new ForbiddenException("Only an HR administrator can bulk-delete reviews")
+    }
+
+    const scope = await this.accessService.resolveScope(actingEmployeeId)
+    const where = this.buildWhere(filters, scope)
+    const matching = await this.prisma.performanceReview.findMany({ where, select: { id: true } })
+    const ids = matching.map((review) => review.id)
+
+    if (ids.length === 0) {
+      return { deletedCount: 0 }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.performanceAuditLog.deleteMany({ where: { reviewId: { in: ids } } }),
+      this.prisma.performanceReview.deleteMany({ where: { id: { in: ids } } }),
+    ])
+
+    return { deletedCount: ids.length }
+  }
+
   private async getWithAccessCheck(id: string, actingEmployeeId: string, opts: { requireEditor: boolean }) {
     const review = await this.prisma.performanceReview.findUnique({ where: { id } })
     if (!review) {

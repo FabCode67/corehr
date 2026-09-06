@@ -144,18 +144,19 @@ export async function deactivateTrainingCategory(id: string) {
 // ---- Courses (HR admin) ------------------------------------------------------
 
 function courseFieldsFromForm(formData: FormData) {
-  const cost = trimmedOrUndefined(formData.get("cost"))
   const durationHours = trimmedOrUndefined(formData.get("durationHours"))
   const autoAssignDueMonths = trimmedOrUndefined(formData.get("autoAssignDueMonths"))
   const startDate = trimmedOrUndefined(formData.get("startDate"))
   const endDate = trimmedOrUndefined(formData.get("endDate"))
+  const isBudgeted = trimmedOrUndefined(formData.get("isBudgeted"))
 
   return {
     name: trimmedOrUndefined(formData.get("name")),
     description: trimmedOrUndefined(formData.get("description")),
     categoryId: trimmedOrUndefined(formData.get("categoryId")),
     institutionId: trimmedOrUndefined(formData.get("institutionId")),
-    cost: cost ? Number(cost) : undefined,
+    isBudgeted: isBudgeted === undefined ? undefined : isBudgeted === "true",
+    memoUrl: trimmedOrUndefined(formData.get("memoUrl")),
     durationHours: durationHours ? Number(durationHours) : undefined,
     deliveryMethod: trimmedOrUndefined(formData.get("deliveryMethod")) as CourseDeliveryMethod | undefined,
     startDate,
@@ -180,6 +181,12 @@ export async function createCourse(
   if (!fields.name || !fields.categoryId || !fields.deliveryMethod) {
     return { error: "Course name, training category, and delivery method are required." }
   }
+  if (fields.isBudgeted === undefined) {
+    return { error: "Please specify whether this course is budgeted." }
+  }
+  if (fields.isBudgeted === false && !fields.memoUrl) {
+    return { error: "Please upload a memo justifying the unbudgeted cost." }
+  }
 
   let courseId: string
   try {
@@ -201,10 +208,15 @@ export async function updateCourse(
   _prevState: LearningActionState | undefined,
   formData: FormData
 ): Promise<LearningActionState> {
+  const fields = courseFieldsFromForm(formData)
+  if (fields.isBudgeted === false && !fields.memoUrl) {
+    return { error: "Please upload a memo justifying the unbudgeted cost." }
+  }
+
   try {
     await apiFetch(`/learning/courses/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(courseFieldsFromForm(formData)),
+      body: JSON.stringify(fields),
     })
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to update the course." }

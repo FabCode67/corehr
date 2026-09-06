@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useRef, useState, type ChangeEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import type { Band } from "@/lib/api/bands"
 import type { Course, Institution, TrainingCategory } from "@/lib/api/learning"
 import type { LearningActionState } from "@/lib/api/learning-actions"
 import type { Position, PositionLevel } from "@/lib/api/positions"
+import { uploadFile } from "@/lib/api/uploads"
 
 const CONTRACT_TYPES = ["PERMANENT", "TEMPORARY", "GRADUATE_TRAINEE", "INTERN"] as const
 
@@ -52,8 +53,32 @@ export function CourseForm({
     undefined
   )
 
+  const [isBudgeted, setIsBudgeted] = useState(() => (course?.isBudgeted === false ? "false" : course?.isBudgeted === true ? "true" : ""))
+  const [memoUrl, setMemoUrl] = useState(course?.memoUrl ?? "")
+  const [memoFileName, setMemoFileName] = useState("")
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleMemoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const result = await uploadFile("course-memos", file)
+    setUploading(false)
+    if (!result.ok) {
+      setUploadError(result.error)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+    setMemoUrl(result.url)
+    setMemoFileName(file.name)
+  }
+
   return (
     <form action={formAction} className="flex flex-col gap-6">
+      <input type="hidden" name="memoUrl" value={memoUrl} />
       <div className="flex flex-col gap-4">
         <h3 className="text-sm font-semibold text-foreground">Basic information</h3>
 
@@ -95,9 +120,47 @@ export function CourseForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cost">Cost, RWF (optional)</Label>
-            <Input id="cost" name="cost" type="number" min={0} defaultValue={course?.cost ?? ""} />
+            <Label htmlFor="isBudgeted">Is this budgeted?</Label>
+            <Select
+              id="isBudgeted"
+              name="isBudgeted"
+              value={isBudgeted}
+              onChange={(event) => setIsBudgeted(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Select…
+              </option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </Select>
           </div>
+
+          {isBudgeted === "false" ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="memo">Justification memo</Label>
+              <input
+                ref={fileInputRef}
+                id="memo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleMemoChange}
+                className="text-xs text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1 file:text-xs file:font-medium"
+              />
+              {uploading ? <p className="text-xs text-muted-foreground">Uploading…</p> : null}
+              {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
+              {!uploading && memoUrl ? (
+                <p className="text-xs text-muted-foreground">
+                  {memoFileName || "Memo uploaded"} —{" "}
+                  <a href={memoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    view
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <div />
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="durationHours">Duration, hours (optional)</Label>

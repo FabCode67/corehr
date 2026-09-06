@@ -3,7 +3,16 @@
 import { revalidatePath } from "next/cache"
 
 import { apiFetch, ApiError } from "./client"
-import type { PerformanceReviewType } from "./performance"
+import type { PerformanceReviewType, ReviewFilters } from "./performance"
+
+function toQuery(params: Record<string, string | number | undefined>) {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `?${query}` : ""
+}
 
 export interface PerformanceActionState {
   error?: string
@@ -239,4 +248,38 @@ export async function reassignReviewer(
 
   revalidatePerformancePaths()
   return {}
+}
+
+/** Deletes one review — admin-only (enforced server-side). For correcting a
+ *  mistake (e.g. a bad row from a bulk import), not everyday workflow. */
+export async function deleteReview(id: string, actingEmployeeId: string): Promise<PerformanceActionState> {
+  try {
+    await apiFetch(`/performance/reviews/${id}${toQuery({ actingEmployeeId })}`, { method: "DELETE" })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to remove the review." }
+  }
+
+  revalidatePerformancePaths()
+  return {}
+}
+
+/** Bulk-deletes every review matching `filters` — the "Remove All"
+ *  counterpart to deleteReview() above, for clearing out a bad bulk import
+ *  in one action. Pass the Reviews page's currently-applied filters so this
+ *  only removes what's actually on screen; an empty filters object removes
+ *  every review in the system. Admin-only (enforced server-side). */
+export async function deleteAllReviews(
+  filters: ReviewFilters,
+  actingEmployeeId: string
+): Promise<PerformanceActionState & { deletedCount?: number }> {
+  try {
+    const result = await apiFetch<{ deletedCount: number }>(
+      `/performance/reviews${toQuery({ ...filters, actingEmployeeId })}`,
+      { method: "DELETE" }
+    )
+    revalidatePerformancePaths()
+    return { deletedCount: result.deletedCount }
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to remove the reviews." }
+  }
 }

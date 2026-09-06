@@ -12,10 +12,13 @@ import {
   fetchReviewsPaginated,
   REVIEW_STATUS_LABELS,
   REVIEW_TYPE_LABELS,
+  type ReviewFilters,
 } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
 
+import { ImportManager } from "../../imports/import-manager"
 import { PerformanceTabs } from "../performance-tabs"
+import { RemoveAllReviewsButton, RemoveReviewButton } from "./review-remove-actions"
 
 const STATUS_VARIANT: Record<string, "outline" | "secondary" | "success" | "destructive"> = {
   DRAFT: "outline",
@@ -42,19 +45,18 @@ export default async function AdminPerformanceReviewsPage({
   const filters = await searchParams
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
+  const isAdmin = session?.role === "admin"
+
+  const reviewFilters: ReviewFilters = {
+    periodId: filters.periodId,
+    reviewType: filters.reviewType as "MID_YEAR" | "ANNUAL" | undefined,
+    status: filters.status,
+    departmentId: filters.departmentId,
+    branchId: filters.branchId,
+  }
 
   const [reviewsResult, periodsResult, departmentsResult, branchesResult] = await Promise.all([
-    fetchReviewsPaginated(
-      {
-        periodId: filters.periodId,
-        reviewType: filters.reviewType as "MID_YEAR" | "ANNUAL" | undefined,
-        status: filters.status,
-        departmentId: filters.departmentId,
-        branchId: filters.branchId,
-      },
-      actingEmployeeId,
-      filters.page ? Number(filters.page) : 1
-    ),
+    fetchReviewsPaginated(reviewFilters, actingEmployeeId, filters.page ? Number(filters.page) : 1),
     fetchReviewPeriods(),
     fetchDepartments(),
     fetchBranches(),
@@ -64,10 +66,11 @@ export default async function AdminPerformanceReviewsPage({
   const departments = departmentsResult.ok ? departmentsResult.data : []
   const branches = branchesResult.ok ? branchesResult.data : []
   const reviews = reviewsResult.ok ? reviewsResult.data.data : []
+  const totalReviews = reviewsResult.ok ? reviewsResult.data.total : 0
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Performance Management</h1>
           <p className="text-sm text-muted-foreground">
@@ -76,9 +79,17 @@ export default async function AdminPerformanceReviewsPage({
               : "Reviews you can access — your own, your direct reports', and your department."}
           </p>
         </div>
-        <Link href="/admin/performance/reviews/new" className={buttonVariants({ size: "sm" })}>
-          New review
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin ? (
+            <>
+              <ImportManager moduleKey="performance" moduleLabel="Performance" actingEmployeeId={actingEmployeeId} />
+              <RemoveAllReviewsButton filters={reviewFilters} actingEmployeeId={actingEmployeeId} count={totalReviews} />
+            </>
+          ) : null}
+          <Link href="/admin/performance/reviews/new" className={buttonVariants({ size: "sm" })}>
+            New review
+          </Link>
+        </div>
       </div>
 
       <PerformanceTabs />
@@ -214,6 +225,7 @@ export default async function AdminPerformanceReviewsPage({
                         >
                           Open
                         </Link>
+                        {isAdmin ? <RemoveReviewButton id={review.id} actingEmployeeId={actingEmployeeId} /> : null}
                       </div>
                     </td>
                   </tr>

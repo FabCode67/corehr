@@ -98,13 +98,34 @@ export default async function AdminLeaveAnalyticsPage({
   const currentYear = new Date().getUTCFullYear()
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
 
+  const exportParams = new URLSearchParams()
+  if (filters.departmentId) exportParams.set("departmentId", filters.departmentId)
+  if (filters.branchId) exportParams.set("branchId", filters.branchId)
+  exportParams.set("year", String(analyticsFilters.year ?? currentYear))
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Leave Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Approve or reject leave requests, review policy, and track the leave calendar.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Leave Management</h1>
+          <p className="text-sm text-muted-foreground">
+            Approve or reject leave requests, review policy, and track the leave calendar.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <a
+            href={`/api/leave/analytics/export?${exportParams.toString()}&format=xlsx`}
+            className="inline-flex h-9 items-center rounded-lg border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"
+          >
+            Export XLSX
+          </a>
+          <a
+            href={`/api/leave/analytics/export?${exportParams.toString()}&format=csv`}
+            className="inline-flex h-9 items-center rounded-lg border border-input px-3 text-sm font-medium text-foreground hover:bg-muted"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       <LeaveTabs />

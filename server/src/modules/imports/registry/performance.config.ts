@@ -21,6 +21,13 @@ const REVIEW_TYPE_VALUES = Object.values(PerformanceReviewType)
  */
 const COLUMNS: ImportTemplateColumn[] = [
   { key: "employeeNumber", header: "Employee Number", required: true, example: "EMP-0001" },
+  {
+    key: "department",
+    header: "Department",
+    required: false,
+    example: "",
+    description: "Read-only reference — the employee's current department, prefilled from their record. Not read by the import.",
+  },
   { key: "reviewPeriod", header: "Review Period", required: true, example: "2026 Annual Review", description: "Must match an existing Review Period name." },
   { key: "reviewType", header: "Review Type", required: false, example: "ANNUAL", description: REVIEW_TYPE_VALUES.join(" | ") + " (defaults to ANNUAL)" },
   { key: "kpi", header: "KPI", required: false, example: "Achieved 110% of sales target" },
@@ -45,6 +52,36 @@ async function buildContext(deps: ImportDeps): Promise<ImportContext> {
     maxRating: ranks.length ? Math.max(...ranks) : 5,
     existingKeys: new Set(existingReviews.map((r) => `${r.periodId}|${r.employeeId}|${r.reviewType}`)),
   }
+}
+
+/**
+ * Prefills the downloadable template with one row per active employee so
+ * the Department reference column shows real, current data instead of a
+ * single generic example row (see ImportModuleConfig.buildTemplateRows's
+ * doc comment). Department is read-only/ignored by validateRow/applyRow
+ * above — this only affects what the user sees when they open the
+ * downloaded file. The review-specific columns are left blank per employee
+ * (rather than repeating one static example) since those are what HR
+ * actually has to fill in per row.
+ */
+async function buildTemplateRows(deps: ImportDeps): Promise<Record<string, string>[]> {
+  const { prisma } = deps
+  const employees = await prisma.employee.findMany({
+    where: { isActive: true },
+    select: { employeeNumber: true, position: { select: { department: { select: { name: true } } } } },
+    orderBy: { employeeNumber: "asc" },
+  })
+
+  return employees.map((employee) => ({
+    employeeNumber: employee.employeeNumber,
+    department: employee.position?.department?.name ?? "",
+    reviewPeriod: "",
+    reviewType: "",
+    kpi: "",
+    rating: "",
+    reviewer: "",
+    comments: "",
+  }))
 }
 
 function validateRow(raw: Record<string, string>, rowNumber: number, ctx: ImportContext, seen: Set<string>): ImportRowResult {
@@ -146,6 +183,7 @@ export const performanceImportConfig: ImportModuleConfig = {
   referenceKeyLabel: "Employee Number",
   matchStrategy: "compositeKeyUpdate",
   columns: COLUMNS,
+  buildTemplateRows,
   buildContext,
   validateRow,
   applyRow,

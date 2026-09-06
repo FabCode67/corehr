@@ -123,6 +123,11 @@ export interface Course {
   categoryId: string
   institutionId: string | null
   cost: number | null
+  /** What the New Course form actually collects going forward — see the
+   *  schema doc comment on Course.isBudgeted for why cost above still
+   *  exists (historical data + Cost Analysis reports). */
+  isBudgeted: boolean | null
+  memoUrl: string | null
   durationHours: number | null
   deliveryMethod: CourseDeliveryMethod
   startDate: string | null

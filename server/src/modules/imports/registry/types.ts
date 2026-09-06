@@ -86,6 +86,16 @@ export interface ImportModuleConfig {
    *  around a call that was never going to use it. */
   usesTransaction?: boolean
   columns: ImportTemplateColumn[]
+  /**
+   * Optional — when provided, the downloadable template is prefilled with
+   * these real rows (one object per row, keyed by ImportTemplateColumn.key)
+   * instead of the single generic example row every other module gets.
+   * Used for reference-only columns that are genuinely useful when they
+   * show real data (e.g. Leave's Department/Branch/Balance columns) rather
+   * than a static placeholder — see leave.config.ts. Columns not present in
+   * a given row object fall back to that column's own `example` value.
+   */
+  buildTemplateRows?(deps: ImportDeps): Promise<Record<string, string>[]>
   buildContext(deps: ImportDeps): Promise<ImportContext>
   /** Pure(ish) validation — no writes. `seen` is a per-job Set the config
    *  can use to detect duplicate rows within the same uploaded file

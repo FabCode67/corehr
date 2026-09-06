@@ -51,9 +51,10 @@ export class ImportsService {
     return config
   }
 
-  downloadTemplate(moduleKey: string): { buffer: Buffer; fileName: string } {
+  async downloadTemplate(moduleKey: string): Promise<{ buffer: Buffer; fileName: string }> {
     const config = this.getConfig(moduleKey)
-    return { buffer: buildTemplateWorkbook(config.columns), fileName: `${config.key}-import-template.xlsx` }
+    const rows = config.buildTemplateRows ? await config.buildTemplateRows(this.deps) : undefined
+    return { buffer: buildTemplateWorkbook(config.columns, rows), fileName: `${config.key}-import-template.xlsx` }
   }
 
   async preview(moduleKey: string, file: UploadedFileLike, importedById: string) {

@@ -20,6 +20,20 @@ const ACTIVE_STATUSES = new Set<string>(["SUBMITTED", "PENDING_APPROVAL", "APPRO
 
 const COLUMNS: ImportTemplateColumn[] = [
   { key: "employeeNumber", header: "Employee Number", required: true, example: "EMP-0001" },
+  {
+    key: "department",
+    header: "Department",
+    required: false,
+    example: "",
+    description: "Read-only reference — the employee's current department, prefilled from their record. Not read by the import; edit Leave Type/Start Date/End Date/etc. instead.",
+  },
+  {
+    key: "branch",
+    header: "Location (Branch)",
+    required: false,
+    example: "",
+    description: "Read-only reference — the employee's current branch/location, prefilled from their record. Ignored by the import.",
+  },
   { key: "leaveType", header: "Leave Type", required: true, example: "Annual Leave" },
   { key: "startDate", header: "Start Date", required: true, example: "2026-02-03" },
   { key: "endDate", header: "End Date", required: true, example: "2026-02-07" },
@@ -27,6 +41,20 @@ const COLUMNS: ImportTemplateColumn[] = [
   { key: "status", header: "Status", required: true, example: "APPROVED", description: STATUS_VALUES.join(" | ") },
   { key: "approver", header: "Approver", required: false, example: "EMP-0002", description: "Employee Number. Validated but not linked to a formal approval step — this import lands historical records, not live approvals." },
   { key: "comments", header: "Comments", required: false, example: "" },
+  {
+    key: "leaveBalance",
+    header: "Leave Balance (Annual, current year)",
+    required: false,
+    example: "",
+    description: "Read-only reference — entitled + carried-forward + adjustment days for the current year, prefilled at template download time. Ignored by the import; the real balance is always computed live.",
+  },
+  {
+    key: "remainingDays",
+    header: "Remaining Days (Annual, current year)",
+    required: false,
+    example: "",
+    description: "Read-only reference — Leave Balance above minus days already taken/pending, prefilled at template download time. Ignored by the import.",
+  },
 ]
 
 async function buildContext(deps: ImportDeps): Promise<ImportContext> {
@@ -55,6 +83,71 @@ async function buildContext(deps: ImportDeps): Promise<ImportContext> {
     // already in the database before this upload.
     overlapsByEmployee,
   }
+}
+
+/**
+ * Prefills the downloadable template with one row per active employee so
+ * the Department/Location/Leave Balance/Remaining Days reference columns
+ * show real, current data instead of a single generic example row (see
+ * ImportModuleConfig.buildTemplateRows's doc comment). All four are
+ * read-only/ignored by validateRow/applyRow above — this only affects what
+ * the user sees when they open the downloaded file. Balance/remaining are
+ * scoped to Annual Leave for the current year specifically, since that's
+ * the leave type virtually every employee has a balance for; other leave
+ * types' balances aren't shown here (the columns would need to repeat per
+ * type otherwise, which doesn't fit a flat spreadsheet cleanly).
+ */
+async function buildTemplateRows(deps: ImportDeps): Promise<Record<string, string>[]> {
+  const { prisma } = deps
+  const year = new Date().getUTCFullYear()
+
+  const [employees, annualLeaveType] = await Promise.all([
+    prisma.employee.findMany({
+      where: { isActive: true },
+      select: {
+        employeeNumber: true,
+        branch: { select: { name: true } },
+        position: { select: { department: { select: { name: true } } } },
+      },
+      orderBy: { employeeNumber: "asc" },
+    }),
+    prisma.leaveType.findFirst({ where: { category: "ANNUAL" }, select: { id: true } }),
+  ])
+
+  const balancesByEmployee = new Map<string, { entitledDays: number; carriedForwardDays: number; adjustmentDays: number; takenDays: number; pendingDays: number }>()
+  if (annualLeaveType) {
+    const balances = await prisma.leaveBalance.findMany({
+      where: { leaveTypeId: annualLeaveType.id, year },
+      select: { employeeId: true, entitledDays: true, carriedForwardDays: true, adjustmentDays: true, takenDays: true, pendingDays: true },
+    })
+    for (const balance of balances) balancesByEmployee.set(balance.employeeId, balance)
+  }
+
+  return employees.map((employee) => {
+    const balance = balancesByEmployee.get(employee.employeeNumber)
+    const leaveBalance = balance ? balance.entitledDays + balance.carriedForwardDays + balance.adjustmentDays : undefined
+    const remainingDays = leaveBalance !== undefined && balance ? leaveBalance - balance.takenDays - balance.pendingDays : undefined
+
+    return {
+      employeeNumber: employee.employeeNumber,
+      department: employee.position?.department?.name ?? "",
+      branch: employee.branch?.name ?? "",
+      leaveBalance: leaveBalance !== undefined ? String(leaveBalance) : "",
+      remainingDays: remainingDays !== undefined ? String(remainingDays) : "",
+      // Left blank (rather than falling back to each column's static
+      // `example`) since these are the fields HR actually has to fill in
+      // per row — repeating the same example Leave Type/dates/status across
+      // every employee's row would look like real data and invites an
+      // accidental bulk-upload of identical, wrong leave requests.
+      leaveType: "",
+      startDate: "",
+      endDate: "",
+      numberOfDays: "",
+      status: "",
+      approver: "",
+      comments: "",
+    }
+  })
 }
 
 function rangesOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
@@ -187,6 +280,7 @@ export const leaveImportConfig: ImportModuleConfig = {
   referenceKeyLabel: "Employee Number",
   matchStrategy: "insertOnly",
   columns: COLUMNS,
+  buildTemplateRows,
   buildContext,
   validateRow,
   applyRow,

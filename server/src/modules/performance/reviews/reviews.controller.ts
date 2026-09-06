@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
 
 import { PerformanceReviewType } from "@prisma/client"
@@ -93,5 +93,47 @@ export class ReviewsController {
   @Post(":id/reassign-reviewer")
   reassignReviewer(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ReassignReviewerDto) {
     return this.reviewsService.reassignReviewer(id, dto)
+  }
+
+  // ---- Remove one / Remove all — admin-only, see ReviewsService's doc
+  // comments on remove()/removeAll() for why this exists (undoing a bad
+  // bulk import) and why it stays admin-gated. --------------------------
+
+  @Delete()
+  removeAll(
+    @Query("actingEmployeeId") actingEmployeeId: string,
+    @Query("periodId") periodId?: string,
+    @Query("reviewType") reviewType?: PerformanceReviewType,
+    @Query("status") status?: string,
+    @Query("employeeId") employeeId?: string,
+    @Query("departmentId") departmentId?: string,
+    @Query("unitId") unitId?: string,
+    @Query("branchId") branchId?: string,
+    @Query("positionId") positionId?: string,
+    @Query("levelId") levelId?: string,
+    @Query("bandId") bandId?: string,
+    @Query("contractType") contractType?: string,
+    @Query("gender") gender?: string
+  ) {
+    const filters: ReviewFilters = {
+      periodId,
+      reviewType,
+      status,
+      employeeId,
+      departmentId,
+      unitId,
+      branchId,
+      positionId,
+      levelId,
+      bandId,
+      contractType,
+      gender,
+    }
+    return this.reviewsService.removeAll(filters, actingEmployeeId)
+  }
+
+  @Delete(":id")
+  remove(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.reviewsService.remove(id, actingEmployeeId)
   }
 }

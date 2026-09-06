@@ -2002,7 +2002,22 @@ model Course {
 
   /// Whole-currency-unit cost (RWF) — plain Int, same "no Decimal in this
   /// schema yet" simplification already used for Leave's day counts.
+  /// Superseded by isBudgeted/memoUrl below as the field the New Course form
+  /// actually collects — kept only so historical data and the Cost
+  /// Analysis reports/AI tool that already key off it keep working; no new
+  /// UI writes to it going forward.
   cost Int?
+  /// Whether this course's cost is already covered by an approved budget.
+  /// Nullable so pre-existing rows (created before this field existed)
+  /// don't need a backfill — the New Course form always sets it going
+  /// forward. When false, memoUrl below should be set too (soft
+  /// requirement, enforced client-side and in CreateCourseDto, not at the
+  /// database level, same as this app's other conditionally-required
+  /// fields).
+  isBudgeted Boolean?
+  /// Cloudinary URL of the justification memo uploaded when isBudgeted is
+  /// false — same storage pattern as OnboardingDocumentAssignment.fileUrl.
+  memoUrl String?
   /// Nullable — used for "Average Training Hours" analytics when known;
   /// not every course (e.g. self-paced online) has a fixed duration.
   durationHours Int?
@@ -2389,8 +2404,16 @@ model WorkforcePlan {
   expectedHiringDate DateTime?
   businessJustification String
   /// Whole-currency-unit (RWF), same "no Decimal in this schema" pattern as
-  /// Course.cost.
+  /// Course.cost. Superseded by isBudgeted/memoUrl below as the field the
+  /// New Workforce Plan form actually collects — kept only for historical
+  /// data and the existing Budget by Department report/AI tool.
   budget Int?
+  /// Whether this hiring plan's cost is already covered by an approved
+  /// budget — same isBudgeted/memoUrl pair as Course above, same rationale.
+  isBudgeted Boolean?
+  /// Cloudinary URL of the justification memo uploaded when isBudgeted is
+  /// false.
+  memoUrl String?
 
   status           WorkforcePlanStatus @default(DRAFT)
   approvedById     String?
