@@ -31,8 +31,6 @@ export async function createWorkforcePlan(
   const title = trimmedOrUndefined(formData.get("title"))
   const departmentId = trimmedOrUndefined(formData.get("departmentId"))
   const branchId = trimmedOrUndefined(formData.get("branchId"))
-  const hiringManagerId = trimmedOrUndefined(formData.get("hiringManagerId"))
-  const recruiterId = trimmedOrUndefined(formData.get("recruiterId"))
   const numberOfPositions = trimmedOrUndefined(formData.get("numberOfPositions"))
   const employmentType = trimmedOrUndefined(formData.get("employmentType"))
   const businessJustification = trimmedOrUndefined(formData.get("businessJustification"))
@@ -40,9 +38,15 @@ export async function createWorkforcePlan(
   const isBudgeted = isBudgetedRaw === undefined ? undefined : isBudgetedRaw === "true"
   const memoUrl = trimmedOrUndefined(formData.get("memoUrl"))
 
-  if (!actingEmployeeId || !title || !departmentId || !branchId || !hiringManagerId || !recruiterId || !numberOfPositions || !employmentType || !businessJustification) {
-    return { error: "Title, department, branch, hiring manager, recruiter, number of positions, employment type, and business justification are all required." }
+  if (!actingEmployeeId || !title || !departmentId || !branchId || !numberOfPositions || !employmentType || !businessJustification) {
+    return { error: "Title, department, branch, number of positions, employment type, and business justification are all required." }
   }
+
+  // Hiring manager / recruiter are no longer collected on this form — the
+  // person creating the plan is recorded as both, same as any other
+  // "who's handling this" field the app defaults to the acting employee.
+  const hiringManagerId = actingEmployeeId
+  const recruiterId = actingEmployeeId
   if (isBudgeted === undefined) {
     return { error: "Please specify whether this workforce plan is budgeted." }
   }
@@ -129,11 +133,15 @@ export async function createRequisition(
   const employmentType = trimmedOrUndefined(formData.get("employmentType"))
   const hiringReason = trimmedOrUndefined(formData.get("hiringReason"))
   const requestedById = trimmedOrUndefined(formData.get("requestedById"))
-  const hiringManagerId = trimmedOrUndefined(formData.get("hiringManagerId"))
 
-  if (!actingEmployeeId || !workforcePlanId || !bandId || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason || !requestedById || !hiringManagerId) {
+  if (!actingEmployeeId || !workforcePlanId || !bandId || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason || !requestedById) {
     return { error: "All required requisition fields must be filled in." }
   }
+
+  // Hiring manager is no longer collected on this form — default to
+  // whoever requested the position, same "who's handling this" default
+  // used on the Workforce Plan form.
+  const hiringManagerId = requestedById
   if (!positionId && !newPositionTitle) {
     return { error: "Select an existing position or provide a title for a new one." }
   }

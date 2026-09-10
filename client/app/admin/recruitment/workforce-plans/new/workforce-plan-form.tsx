@@ -9,7 +9,6 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
-import type { Employee } from "@/lib/api/employees"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
 import { uploadFile } from "@/lib/api/uploads"
 
@@ -17,13 +16,12 @@ interface WorkforcePlanFormProps {
   departments: Department[]
   units: UnitWithDepartment[]
   branches: Branch[]
-  employees: Employee[]
   actingEmployeeId: string
   action: (prevState: RecruitmentActionState | undefined, formData: FormData) => Promise<RecruitmentActionState>
   submitLabel: string
 }
 
-export function WorkforcePlanForm({ departments, units, branches, employees, actingEmployeeId, action, submitLabel }: WorkforcePlanFormProps) {
+export function WorkforcePlanForm({ departments, units, branches, actingEmployeeId, action, submitLabel }: WorkforcePlanFormProps) {
   const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(action, undefined)
 
   const [isBudgeted, setIsBudgeted] = useState("")
@@ -176,33 +174,6 @@ export function WorkforcePlanForm({ departments, units, branches, employees, act
           <div />
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="hiringManagerId">Hiring manager</Label>
-          <Select id="hiringManagerId" name="hiringManagerId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="recruiterId">Recruiter</Label>
-          <Select id="recruiterId" name="recruiterId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
-        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">

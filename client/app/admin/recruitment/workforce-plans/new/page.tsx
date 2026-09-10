@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchUnits } from "@/lib/api/departments"
-import { fetchEmployees } from "@/lib/api/employees"
 import { createWorkforcePlan } from "@/lib/api/recruitment-actions"
 import { getSession } from "@/lib/get-session"
 
@@ -12,11 +11,10 @@ import { WorkforcePlanForm } from "./workforce-plan-form"
 
 export default async function NewWorkforcePlanPage() {
   const session = await getSession()
-  const [departmentsResult, unitsResult, branchesResult, employeesResult] = await Promise.all([
+  const [departmentsResult, unitsResult, branchesResult] = await Promise.all([
     fetchDepartments(),
     fetchUnits(),
     fetchBranches(),
-    fetchEmployees(),
   ])
 
   if (!departmentsResult.ok) {
@@ -49,7 +47,6 @@ export default async function NewWorkforcePlanPage() {
             departments={departmentsResult.data}
             units={unitsResult.ok ? unitsResult.data : []}
             branches={branchesResult.ok ? branchesResult.data : []}
-            employees={employeesResult.ok ? employeesResult.data : []}
             actingEmployeeId={session?.employeeId ?? ""}
             action={createWorkforcePlan}
             submitLabel="Create workforce plan"

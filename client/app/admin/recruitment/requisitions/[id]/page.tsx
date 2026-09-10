@@ -5,8 +5,15 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { fetchEmployeeByNumber } from "@/lib/api/employees"
 import { fetchJobPostings, fetchRequisition, fetchRequisitionStages } from "@/lib/api/recruitment"
 import { getSession } from "@/lib/get-session"
+
+/** Same convention as the backend's DIRECTOR_LEVEL_CODE (positions.service.ts,
+ *  requisitions.service.ts) — the one PositionLevel.code that marks "the
+ *  single head of the whole bank." That position deliberately never gets
+ *  isAdmin, so the Approve/Reject buttons need this separate check. */
+const DIRECTOR_LEVEL_CODE = "E1"
 
 import { RequisitionActions } from "./requisition-actions"
 import { StageTimeline } from "./stage-timeline"
@@ -25,11 +32,17 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [requisitionResult, stagesResult, postingsResult] = await Promise.all([
+  const [requisitionResult, stagesResult, postingsResult, actingEmployeeResult] = await Promise.all([
     fetchRequisition(id, actingEmployeeId),
     fetchRequisitionStages(id, actingEmployeeId),
     fetchJobPostings({ requisitionId: id }, actingEmployeeId),
+    actingEmployeeId ? fetchEmployeeByNumber(actingEmployeeId) : Promise.resolve(null),
   ])
+
+  const isDirector =
+    !!actingEmployeeResult &&
+    actingEmployeeResult.ok &&
+    actingEmployeeResult.data.position?.level?.code === DIRECTOR_LEVEL_CODE
 
   if (!requisitionResult.ok) {
     if (requisitionResult.status === 404) notFound()
@@ -99,7 +112,7 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
             requisitionId={requisition.id}
             actingEmployeeId={actingEmployeeId}
             status={requisition.status}
-            isAdmin={session?.role === "admin"}
+            canApprove={session?.role === "admin" || isDirector}
           />
         </CardContent>
       </Card>

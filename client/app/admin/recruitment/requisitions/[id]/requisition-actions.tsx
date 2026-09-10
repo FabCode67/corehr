@@ -20,12 +20,15 @@ export function RequisitionActions({
   requisitionId,
   actingEmployeeId,
   status,
-  isAdmin,
+  canApprove,
 }: {
   requisitionId: string
   actingEmployeeId: string
   status: RequisitionStatus
-  isAdmin: boolean
+  /** HR admins can approve/reject, and so can the Director-level position
+   *  holder even though that position never gets isAdmin — see
+   *  RequisitionsService.assertCanApproveRequisition on the backend. */
+  canApprove: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -47,7 +50,7 @@ export function RequisitionActions({
   }
 
   const canSubmit = status === "DRAFT"
-  const canDecide = isAdmin && status === "PENDING_APPROVAL"
+  const canDecide = canApprove && status === "PENDING_APPROVAL"
   const canClose = status === "APPROVED"
   const canReopen = status === "CLOSED"
   const canEdit = status !== "CLOSED"

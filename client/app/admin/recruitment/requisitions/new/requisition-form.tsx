@@ -241,20 +241,6 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="hiringManagerId">Hiring manager</Label>
-          <Select id="hiringManagerId" name="hiringManagerId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
           <Label htmlFor="priority">Priority</Label>
           <Select id="priority" name="priority" defaultValue="MEDIUM">
             <option value="LOW">Low</option>

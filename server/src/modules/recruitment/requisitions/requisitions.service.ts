@@ -29,6 +29,14 @@ export const REQUISITION_INCLUDE = {
   approvedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
 } as const
 
+/** The PositionLevel.code this codebase treats as "the single head of the
+ *  whole bank" — same convention as MANAGING_DIRECTOR_LEVEL_CODE in
+ *  admin-eligibility.util.ts and DIRECTOR_LEVEL_CODE in
+ *  positions.service.ts. The Director is deliberately never granted
+ *  isAdmin (see that constant's doc comment), so approve()/reject() below
+ *  check for it explicitly alongside isAdmin. */
+const DIRECTOR_LEVEL_CODE = "E1"
+
 /** All 12 tracked stages, in workflow order — see the schema's module doc
  *  comment on RecruitmentStageName. */
 const ALL_STAGES: RecruitmentStageName[] = [
@@ -241,7 +249,7 @@ export class RequisitionsService {
   }
 
   async approve(id: string, dto: ActingEmployeeDto) {
-    await this.assertIsAdmin(dto.actingEmployeeId)
+    await this.assertCanApproveRequisition(dto.actingEmployeeId)
     const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
     if (!requisition) {
       throw new NotFoundException(`Job requisition ${id} not found`)
@@ -259,7 +267,7 @@ export class RequisitionsService {
   }
 
   async reject(id: string, dto: RejectRequisitionDto) {
-    await this.assertIsAdmin(dto.actingEmployeeId)
+    await this.assertCanApproveRequisition(dto.actingEmployeeId)
     const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
     if (!requisition) {
       throw new NotFoundException(`Job requisition ${id} not found`)
@@ -337,10 +345,19 @@ export class RequisitionsService {
     }
   }
 
-  private async assertIsAdmin(actingEmployeeId: string) {
-    const actor = await this.prisma.employee.findUnique({ where: { employeeNumber: actingEmployeeId } })
-    if (!actor?.isAdmin) {
-      throw new ForbiddenException("Only an HR administrator can perform this action")
+  /** HR admins can approve/reject any requisition. The Director-level
+   *  position holder can too, even though that position is deliberately
+   *  never granted isAdmin (see DIRECTOR_LEVEL_CODE's doc comment) —
+   *  approving hiring across the bank is exactly the kind of decision
+   *  that sits with the bank's head. */
+  private async assertCanApproveRequisition(actingEmployeeId: string) {
+    const actor = await this.prisma.employee.findUnique({
+      where: { employeeNumber: actingEmployeeId },
+      select: { isAdmin: true, position: { select: { level: { select: { code: true } } } } },
+    })
+    const isDirector = actor?.position?.level?.code === DIRECTOR_LEVEL_CODE
+    if (!actor?.isAdmin && !isDirector) {
+      throw new ForbiddenException("Only an HR administrator or the Director can approve or reject a job requisition")
     }
   }
 
