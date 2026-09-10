@@ -9,6 +9,21 @@ import { UpdatePositionDto } from "./dto/update-position.dto"
 
 const POSITION_LIST_INCLUDE = { department: true, unit: true, level: true, reportsTo: true } as const
 
+/**
+ * The PositionLevel.code this codebase treats as "the single head of the
+ * whole bank" — same convention as MANAGING_DIRECTOR_LEVEL_CODE in
+ * admin-eligibility.util.ts and the equivalent check in
+ * leave-balances.service.ts. Enforced here as a standing business rule:
+ * only one active position may sit at this level; it never reports to
+ * anyone else; and the moment a position becomes this level, every other
+ * active position that doesn't already have a manager of its own
+ * (reportsToPositionId === null) is automatically re-pointed to report to
+ * it instead of sitting as its own separate root. Ordinary departments
+ * keep using General Manager as their head-of-department level — this
+ * rule only ever applies to the one Director-level position.
+ */
+const DIRECTOR_LEVEL_CODE = "E1"
+
 @Injectable()
 export class PositionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -105,16 +120,41 @@ export class PositionsService {
   async create(dto: CreatePositionDto) {
     await this.assertDepartmentExists(dto.departmentId)
     await this.assertUnitBelongsToDepartment(dto.unitId, dto.departmentId)
-    await this.assertLevelExists(dto.levelId)
+    const level = await this.assertLevelExists(dto.levelId)
+    const isDirector = level.code === DIRECTOR_LEVEL_CODE
 
-    if (dto.reportsToPositionId) {
-      await this.assertPositionExists(dto.reportsToPositionId)
-      await this.assertReportsToLevelSufficient(dto.levelId, dto.reportsToPositionId)
+    let reportsToPositionId = dto.reportsToPositionId ?? null
+
+    if (isDirector) {
+      // Only one Director-level position may exist at a time, and it never
+      // reports to anyone — it's the head of the whole bank.
+      await this.assertSingleDirector()
+      if (reportsToPositionId) {
+        throw new BadRequestException(
+          `"${dto.title}" is at the Director level — the head of the whole bank — and cannot report to another position.`
+        )
+      }
+    } else if (!reportsToPositionId) {
+      // No manager specified — auto-default to the bank's Director-level
+      // position, if one exists, rather than leaving this as an orphan
+      // root (see DIRECTOR_LEVEL_CODE's doc comment).
+      reportsToPositionId = await this.findDirectorPositionId()
+    }
+
+    if (reportsToPositionId) {
+      await this.assertPositionExists(reportsToPositionId)
+      await this.assertReportsToLevelSufficient(dto.levelId, reportsToPositionId)
     }
 
     await this.assertTitleAvailable(dto.departmentId, dto.unitId ?? null, dto.title)
 
-    return this.prisma.position.create({ data: dto })
+    const created = await this.prisma.position.create({ data: { ...dto, reportsToPositionId } })
+
+    if (isDirector) {
+      await this.promoteToBankHead(created.id, created.departmentId)
+    }
+
+    return created
   }
 
   async update(id: string, dto: UpdatePositionDto) {
@@ -133,32 +173,52 @@ export class PositionsService {
 
     await this.assertUnitBelongsToDepartment(unitId ?? undefined, departmentId)
 
-    if (dto.levelId) {
-      await this.assertLevelExists(dto.levelId)
+    const levelId = dto.levelId ?? current.levelId
+    const level = dto.levelId ? await this.assertLevelExists(dto.levelId) : current.level
+    const isDirector = level?.code === DIRECTOR_LEVEL_CODE
+    const wasDirector = current.level?.code === DIRECTOR_LEVEL_CODE
+
+    if (isDirector && !wasDirector) {
+      await this.assertSingleDirector(id)
     }
 
-    if (dto.reportsToPositionId !== undefined) {
-      if (dto.reportsToPositionId) {
-        await this.assertPositionExists(dto.reportsToPositionId)
-        await this.assertNoCycle(id, dto.reportsToPositionId)
-        await this.assertReportsToLevelSufficient(
-          dto.levelId ?? current.levelId,
-          dto.reportsToPositionId
+    let reportsToPositionId = Object.prototype.hasOwnProperty.call(dto, "reportsToPositionId")
+      ? dto.reportsToPositionId ?? null
+      : current.reportsToPositionId
+
+    if (isDirector) {
+      if (reportsToPositionId) {
+        throw new BadRequestException(
+          `"${dto.title ?? current.title}" is at the Director level — the head of the whole bank — and cannot report to another position.`
         )
       }
-    } else if (dto.levelId) {
-      // Level is changing but reportsTo isn't being touched in this call —
-      // re-check the existing manager still outranks (or matches) the new level.
-      if (current.reportsToPositionId) {
-        await this.assertReportsToLevelSufficient(dto.levelId, current.reportsToPositionId)
-      }
+    } else if (!reportsToPositionId) {
+      // No manager specified/left — auto-default to the bank's
+      // Director-level position, if one exists (excluding this position
+      // itself, in case it's the one being demoted off that level right now).
+      reportsToPositionId = await this.findDirectorPositionId(id)
+    }
+
+    if (reportsToPositionId) {
+      await this.assertPositionExists(reportsToPositionId)
+      await this.assertNoCycle(id, reportsToPositionId)
+      await this.assertReportsToLevelSufficient(levelId, reportsToPositionId)
     }
 
     if (dto.title || dto.departmentId || Object.prototype.hasOwnProperty.call(dto, "unitId")) {
       await this.assertTitleAvailable(departmentId, unitId, dto.title ?? current.title, id)
     }
 
-    return this.prisma.position.update({ where: { id }, data: dto })
+    const updated = await this.prisma.position.update({
+      where: { id },
+      data: { ...dto, reportsToPositionId },
+    })
+
+    if (isDirector && !wasDirector) {
+      await this.promoteToBankHead(updated.id, updated.departmentId)
+    }
+
+    return updated
   }
 
   async remove(id: string) {
@@ -191,6 +251,70 @@ export class PositionsService {
     const level = await this.prisma.positionLevel.findUnique({ where: { id: levelId } })
     if (!level) {
       throw new NotFoundException(`Position level ${levelId} not found`)
+    }
+    return level
+  }
+
+  /** Throws if another active position already sits at the Director level
+   *  (`excludeId` lets an update check against every position except the
+   *  one being saved). */
+  private async assertSingleDirector(excludeId?: string) {
+    const existing = await this.prisma.position.findFirst({
+      where: {
+        isActive: true,
+        level: { code: DIRECTOR_LEVEL_CODE },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+    })
+    if (existing) {
+      throw new ConflictException(
+        `"${existing.title}" is already the bank's Director-level position — only one is allowed at a time. Change or deactivate it first.`
+      )
+    }
+  }
+
+  /** The current bank-head position, if one exists — used to auto-default
+   *  any other position's reportsToPositionId when left blank. */
+  private async findDirectorPositionId(excludeId?: string): Promise<string | null> {
+    const director = await this.prisma.position.findFirst({
+      where: {
+        isActive: true,
+        level: { code: DIRECTOR_LEVEL_CODE },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    })
+    return director?.id ?? null
+  }
+
+  /**
+   * Runs once, right after a position becomes the bank's single
+   * Director-level position: every other active position that doesn't
+   * already have a manager of its own (reportsToPositionId === null) is
+   * re-pointed to report to it, instead of sitting as its own separate
+   * root — this is what makes it "head of the whole bank" rather than
+   * just head of its own department. Also sets it as its own department's
+   * head (Department.headOfDepartmentId), if an employee currently holds it.
+   */
+  private async promoteToBankHead(directorPositionId: string, departmentId: string) {
+    await this.prisma.position.updateMany({
+      where: {
+        isActive: true,
+        reportsToPositionId: null,
+        NOT: { id: directorPositionId },
+      },
+      data: { reportsToPositionId: directorPositionId },
+    })
+
+    const holder = await this.prisma.employee.findFirst({
+      where: { positionId: directorPositionId, isActive: true },
+      select: { employeeNumber: true },
+    })
+    if (holder) {
+      await this.prisma.department.update({
+        where: { id: departmentId },
+        data: { headOfDepartmentId: holder.employeeNumber },
+      })
     }
   }
 

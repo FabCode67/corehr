@@ -18,7 +18,10 @@ export class CreatePositionDto {
   @IsUUID()
   levelId!: string
 
-  /** Omit only for the single root of the org tree (e.g. Managing Director). */
+  /** Optional — if omitted, PositionsService auto-defaults this to the
+   *  bank's single Director-level position (the org's head), if one
+   *  exists. Leave it omitted on the Director-level position itself; it's
+   *  the one position that never reports to anyone. */
   @ApiPropertyOptional()
   @IsUUID()
   @IsOptional()

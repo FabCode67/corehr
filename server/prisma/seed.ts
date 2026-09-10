@@ -157,7 +157,14 @@ async function main() {
   const levelAGM = await upsertLevel("Assistant General Manager", 7)
   const levelGM = await upsertLevel("General Manager", 8)
   const levelDeputyDirector = await upsertLevel("Deputy Director", 9, "EXECUTIVE")
-  const levelDirector = await upsertLevel("Director", 10, "EXECUTIVE")
+  // "E1" is the codebase-wide convention for "this is the single bank-head
+  // level" — see MANAGING_DIRECTOR_LEVEL_CODE in
+  // server/src/common/admin-eligibility.util.ts, the same check in
+  // leave-balances.service.ts, and the business rule enforced in
+  // PositionsService (only one active Director-level position allowed; it
+  // never reports to anyone; every other headless position auto-reports to
+  // it) — server/src/modules/organization/positions/positions.service.ts.
+  const levelDirector = await upsertLevel("Director", 10, "EXECUTIVE", "E1")
   void levelSupportStaff
   void levelOperationsAssistant
   void levelOfficer
