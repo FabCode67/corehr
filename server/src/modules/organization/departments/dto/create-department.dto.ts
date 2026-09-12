@@ -29,4 +29,9 @@ export class CreateDepartmentDto {
   @IsUUID()
   @IsOptional()
   parentDepartmentId?: string
+
+  @ApiPropertyOptional({ description: "Employee.employeeNumber of this department's designated Head of Department — see Department.headOfDepartmentId's schema doc comment." })
+  @IsString()
+  @IsOptional()
+  headOfDepartmentId?: string
 }

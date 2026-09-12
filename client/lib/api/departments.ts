@@ -29,8 +29,14 @@ export interface Department {
    *  import + storage + this admin page only; org chart/dashboards/filters
    *  elsewhere in the app stay Function-based. */
   parentDepartmentId: string | null
+  /** Employee.employeeNumber of this department's designated Head of
+   *  Department — see the schema's Department.headOfDepartmentId doc
+   *  comment. Was previously settable only via Bulk Import; now also
+   *  editable from this Details form. */
+  headOfDepartmentId: string | null
   function?: OrgFunction
   parentDepartment?: { id: string; name: string } | null
+  headOfDepartment?: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string } | null
   units?: DepartmentUnit[]
 }
 

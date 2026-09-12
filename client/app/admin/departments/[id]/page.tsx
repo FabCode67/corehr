@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchDepartment, fetchDepartments, fetchFunctions } from "@/lib/api/departments"
+import { fetchEmployees } from "@/lib/api/employees"
 
 import { createUnit, deactivateUnit, updateDepartment } from "../actions"
 import { DepartmentForm } from "../department-form"
@@ -16,10 +17,11 @@ export default async function EditDepartmentPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [departmentResult, functionsResult, departmentsResult] = await Promise.all([
+  const [departmentResult, functionsResult, departmentsResult, employeesResult] = await Promise.all([
     fetchDepartment(id),
     fetchFunctions(),
     fetchDepartments(),
+    fetchEmployees(),
   ])
 
   if (!departmentResult.ok) {
@@ -61,6 +63,7 @@ export default async function EditDepartmentPage({
             <DepartmentForm
               functions={functionsResult.data}
               departments={departmentsResult.ok ? departmentsResult.data.filter((candidate) => candidate.id !== department.id) : []}
+              employees={employeesResult.ok ? employeesResult.data : []}
               department={department}
               action={updateDepartment.bind(null, department.id)}
               submitLabel="Save changes"

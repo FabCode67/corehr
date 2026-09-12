@@ -8,8 +8,16 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Department, OrgFunction } from "@/lib/api/departments"
+import { fullName } from "@/lib/format-name"
 
 import type { ActionState } from "./actions"
+
+interface EmployeeOption {
+  employeeNumber: string
+  firstName: string
+  middleName: string | null
+  lastName: string
+}
 
 interface DepartmentFormProps {
   functions: OrgFunction[]
@@ -17,6 +25,11 @@ interface DepartmentFormProps {
    *  callers should exclude `department` itself (obvious self-reference;
    *  the server also rejects it and any cycle regardless). */
   departments?: Department[]
+  /** For the optional Head of Department picker — see
+   *  Department.headOfDepartmentId's schema doc comment. Doesn't need to be
+   *  filtered to this department's own employees; HR may designate someone
+   *  ahead of a transfer. */
+  employees?: EmployeeOption[]
   department?: Department
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
   submitLabel: string
@@ -25,6 +38,7 @@ interface DepartmentFormProps {
 export function DepartmentForm({
   functions,
   departments = [],
+  employees = [],
   department,
   action,
   submitLabel,
@@ -72,6 +86,21 @@ export function DepartmentForm({
         </Select>
         <p className="text-xs text-muted-foreground">
           A genuine Department-to-Department hierarchy, separate from Function above. Org chart and dashboards still key off Function only.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="headOfDepartmentId">Head of Department (optional)</Label>
+        <Select id="headOfDepartmentId" name="headOfDepartmentId" defaultValue={department?.headOfDepartmentId ?? ""}>
+          <option value="">None</option>
+          {employees.map((employee) => (
+            <option key={employee.employeeNumber} value={employee.employeeNumber}>
+              {fullName(employee)} ({employee.employeeNumber})
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Grants this person access to the Department Dashboard in their Staff Portal, with reports scoped to this department.
         </p>
       </div>
 

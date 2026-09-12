@@ -3,12 +3,13 @@ import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchDepartments, fetchFunctions } from "@/lib/api/departments"
+import { fetchEmployees } from "@/lib/api/employees"
 
 import { createDepartment } from "../actions"
 import { DepartmentForm } from "../department-form"
 
 export default async function NewDepartmentPage() {
-  const [result, departmentsResult] = await Promise.all([fetchFunctions(), fetchDepartments()])
+  const [result, departmentsResult, employeesResult] = await Promise.all([fetchFunctions(), fetchDepartments(), fetchEmployees()])
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -36,6 +37,7 @@ export default async function NewDepartmentPage() {
             <DepartmentForm
               functions={result.data}
               departments={departmentsResult.ok ? departmentsResult.data : []}
+              employees={employeesResult.ok ? employeesResult.data : []}
               action={createDepartment}
               submitLabel="Create department"
             />

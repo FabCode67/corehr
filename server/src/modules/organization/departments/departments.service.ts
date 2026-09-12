@@ -11,6 +11,7 @@ const DEPARTMENT_LIST_INCLUDE = {
   function: true,
   units: { where: { isActive: true } },
   parentDepartment: { select: { id: true, name: true } },
+  headOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
 } as const
 
 @Injectable()
@@ -76,6 +77,7 @@ export class DepartmentsService {
         units: { where: { isActive: true } },
         positions: { where: { isActive: true, unitId: null } },
         parentDepartment: { select: { id: true, name: true } },
+        headOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
       },
     })
 
@@ -90,6 +92,7 @@ export class DepartmentsService {
     await this.assertFunctionExists(dto.functionId)
     await this.assertNameAvailable(dto.functionId, dto.name)
     await this.assertParentDepartmentValid(dto.parentDepartmentId)
+    await this.assertHeadOfDepartmentValid(dto.headOfDepartmentId)
 
     return this.prisma.department.create({ data: dto })
   }
@@ -108,6 +111,10 @@ export class DepartmentsService {
 
     if (dto.parentDepartmentId !== undefined) {
       await this.assertParentDepartmentValid(dto.parentDepartmentId, id)
+    }
+
+    if (dto.headOfDepartmentId !== undefined) {
+      await this.assertHeadOfDepartmentValid(dto.headOfDepartmentId)
     }
 
     return this.prisma.department.update({ where: { id }, data: dto })
@@ -159,6 +166,23 @@ export class DepartmentsService {
         const ancestor = await this.prisma.department.findUnique({ where: { id: cursor }, select: { parentDepartmentId: true } })
         cursor = ancestor?.parentDepartmentId ?? null
       }
+    }
+  }
+
+  /** Head of Department (Bulk Import framework's "Head of Department"
+   *  column — see Department.headOfDepartmentId's schema doc comment) was
+   *  never settable from this admin form before; this is the first UI path
+   *  besides bulk import that writes it, so it needs the same existence
+   *  check the other optional relation pickers on this form get. Doesn't
+   *  require the employee to already work in this department — HR may be
+   *  designating someone ahead of a transfer, or simply hasn't moved them
+   *  yet. */
+  private async assertHeadOfDepartmentValid(headOfDepartmentId: string | undefined) {
+    if (!headOfDepartmentId) return
+
+    const employee = await this.prisma.employee.findUnique({ where: { employeeNumber: headOfDepartmentId } })
+    if (!employee) {
+      throw new NotFoundException(`Employee ${headOfDepartmentId} not found`)
     }
   }
 
