@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from "@nestjs/common"
 
 import { DisciplinaryCasesService } from "../cases/disciplinary-cases.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -24,7 +25,8 @@ export class SanctionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly casesService: DisciplinaryCasesService,
-    private readonly accessService: EmployeeRelationsAccessService
+    private readonly accessService: EmployeeRelationsAccessService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async create(caseId: string, dto: CreateSanctionDto) {
@@ -73,8 +75,12 @@ export class SanctionsService {
   }
 
   private async notify(recipientEmployeeId: string, type: "ERC_DECISION_ISSUED", title: string, message: string, caseId: string) {
-    await this.prisma.notification.create({
-      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/employee-relations/cases/${caseId}` },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: `/staff/employee-relations/cases/${caseId}`,
     })
   }
 

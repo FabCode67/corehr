@@ -5,6 +5,7 @@ import { ContractType, Gender, NotificationType, PerformanceReviewStatus, Perfor
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmployeesService } from "../../employees/employees.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { PerformanceAccessService } from "../access/performance-access.service"
 import { ReviewPeriodsService } from "../review-periods/review-periods.service"
 
@@ -17,8 +18,8 @@ import { UpdateReviewDto } from "./dto/update-review.dto"
 
 const REVIEW_INCLUDE = {
   period: true,
-  employee: { select: { employeeNumber: true, firstName: true, lastName: true, profilePictureUrl: true } },
-  reviewer: { select: { employeeNumber: true, firstName: true, lastName: true } },
+  employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, profilePictureUrl: true } },
+  reviewer: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
   department: true,
   unit: true,
   position: { select: { id: true, title: true } },
@@ -60,7 +61,8 @@ export class ReviewsService {
     private readonly prisma: PrismaService,
     private readonly accessService: PerformanceAccessService,
     private readonly reviewPeriodsService: ReviewPeriodsService,
-    private readonly employeesService: EmployeesService
+    private readonly employeesService: EmployeesService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async findAllPaginated(filters: ReviewFilters, actingEmployeeId: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {
@@ -461,14 +463,12 @@ export class ReviewsService {
     message: string,
     reviewId: string
   ) {
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId,
-        type,
-        title,
-        message,
-        actionUrl: `/staff/performance/reviews/${reviewId}`,
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: `/staff/performance/reviews/${reviewId}`,
     })
   }
 }

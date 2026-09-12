@@ -135,6 +135,7 @@ interface TitledRef {
 interface EmployeeRef {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
 }
 

@@ -23,10 +23,10 @@ export const REQUISITION_INCLUDE = {
   band: { select: { id: true, name: true } },
   branch: { select: { id: true, name: true } },
   jobDescription: { select: { id: true, jobTitle: true } },
-  requestedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  hiringManager: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  recruiter: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  approvedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+  requestedBy: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  hiringManager: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  recruiter: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  approvedBy: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
 } as const
 
 /** The PositionLevel.code this codebase treats as "the single head of the

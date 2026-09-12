@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchEmployeeByNumber } from "@/lib/api/employees"
 import { fetchJobPostings, fetchRequisition, fetchRequisitionStages } from "@/lib/api/recruitment"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 /** Same convention as the backend's DIRECTOR_LEVEL_CODE (positions.service.ts,
@@ -95,9 +96,9 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
             label="Target start date"
             value={requisition.targetStartDate ? new Date(requisition.targetStartDate).toLocaleDateString() : "—"}
           />
-          <Field label="Requested by" value={`${requisition.requestedBy.firstName} ${requisition.requestedBy.lastName}`} />
-          <Field label="Hiring manager" value={`${requisition.hiringManager.firstName} ${requisition.hiringManager.lastName}`} />
-          <Field label="Recruiter" value={`${requisition.recruiter.firstName} ${requisition.recruiter.lastName}`} />
+          <Field label="Requested by" value={fullName(requisition.requestedBy)} />
+          <Field label="Hiring manager" value={fullName(requisition.hiringManager)} />
+          <Field label="Recruiter" value={fullName(requisition.recruiter)} />
           {requisition.jobDescription ? <Field label="Job description" value={requisition.jobDescription.jobTitle} /> : null}
           {requisition.rejectionComment ? <Field label="Rejection reason" value={requisition.rejectionComment} /> : null}
         </CardContent>

@@ -5,6 +5,7 @@ import { MandatoryTrainingBanner } from "@/components/portal/mandatory-training-
 import { fetchDirectReports } from "@/lib/api/employees"
 import { fetchLeaveBalances, fetchLeaveRequests } from "@/lib/api/leave"
 import { fetchReviewPeriods, type ReviewPeriod } from "@/lib/api/performance"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 /** Picks the review period/cycle worth surfacing on the dashboard: an
@@ -130,7 +131,7 @@ export default async function StaffDashboardPage() {
             {directReports.map((report) => (
               <div key={report.employeeNumber} className="rounded-lg border border-border p-3">
                 <p className="font-medium text-foreground">
-                  {report.firstName} {report.lastName}
+                  {fullName(report)}
                 </p>
                 <p className="text-xs text-muted-foreground">{report.position?.title ?? "—"}</p>
                 <p className="text-xs text-muted-foreground">{report.branch?.name ?? "—"}</p>

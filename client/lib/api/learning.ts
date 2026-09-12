@@ -192,6 +192,7 @@ export function fetchEligibleEmployees(courseId: string) {
 interface AssignmentEmployeeSummary {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   profilePictureUrl: string | null
 }

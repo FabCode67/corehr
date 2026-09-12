@@ -157,6 +157,7 @@ export interface LeaveBalance {
 export interface LeaveRequestEmployee {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   gender: Gender
   branch: Branch | null

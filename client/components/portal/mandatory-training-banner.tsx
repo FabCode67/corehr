@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchMyOverdueMandatory, fetchTeamOverdueMandatory } from "@/lib/api/learning"
+import { fullName } from "@/lib/format-name"
 
 /**
  * Renders the spec's mandatory-training warning banners: a prominent
@@ -75,7 +76,7 @@ export async function MandatoryTrainingBanner({
               {team.slice(0, 6).map((a) => (
                 <li key={a.id} className="flex items-center justify-between">
                   <span className="text-foreground">
-                    {a.employee.firstName} {a.employee.lastName} — {a.course.name}
+                    {fullName(a.employee)} — {a.course.name}
                   </span>
                   <span className="text-xs text-destructive">
                     Due {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "—"}

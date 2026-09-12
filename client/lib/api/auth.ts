@@ -7,6 +7,7 @@ export interface AuthEmployee {
   /** The Staff ID (e.g. "EMP-0001") — Employee's primary key everywhere. */
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   email: string
   isAdmin: boolean

@@ -77,12 +77,12 @@ const FAMILY_TREE_SELECT = {
 type FamilyTreeEmployee = Prisma.EmployeeGetPayload<{ select: typeof FAMILY_TREE_SELECT }>
 
 export interface ReportingManagerResult {
-  manager: { id: string; firstName: string; lastName: string; positionId: string } | null
+  manager: { id: string; firstName: string; middleName: string | null; lastName: string; positionId: string } | null
   source: "OVERRIDE" | "POSITION_HIERARCHY" | "NONE"
   /** Populated only when POSITION_HIERARCHY resolves to more than one
    *  employee holding the parent position — Position is a role/template,
    *  so this is possible and left for the caller/UI to disambiguate. */
-  candidates?: { id: string; firstName: string; lastName: string }[]
+  candidates?: { id: string; firstName: string; middleName: string | null; lastName: string }[]
 }
 
 @Injectable()
@@ -710,14 +710,12 @@ export class EmployeesService {
       // EmailService.enqueue() already logs internally.
     }
 
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId: updated.employeeNumber,
-        type: NotificationType.EMPLOYEE_REHIRED,
-        title: "Welcome back!",
-        message: `Your employee record has been reactivated effective ${employmentStartDate.toISOString().slice(0, 10)}.`,
-        actionUrl: `/admin/employees/${updated.employeeNumber}`,
-      },
+    await this.notifications.create({
+      recipientEmployeeId: updated.employeeNumber,
+      type: NotificationType.EMPLOYEE_REHIRED,
+      title: "Welcome back!",
+      message: `Your employee record has been reactivated effective ${employmentStartDate.toISOString().slice(0, 10)}.`,
+      actionUrl: `/admin/employees/${updated.employeeNumber}`,
     })
 
     return updated
@@ -1028,6 +1026,7 @@ export class EmployeesService {
         manager: {
           id: override.employeeNumber,
           firstName: override.firstName,
+          middleName: override.middleName,
           lastName: override.lastName,
           positionId: override.positionId,
         },
@@ -1042,7 +1041,7 @@ export class EmployeesService {
 
     const candidates = await this.prisma.employee.findMany({
       where: { positionId: employee.position.reportsToPositionId, isActive: true },
-      select: { employeeNumber: true, firstName: true, lastName: true, positionId: true },
+      select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, positionId: true },
     })
 
     const resolvable = candidates
@@ -1053,6 +1052,7 @@ export class EmployeesService {
       .map((candidate) => ({
         id: candidate.employeeNumber,
         firstName: candidate.firstName,
+        middleName: candidate.middleName,
         lastName: candidate.lastName,
         positionId: candidate.positionId,
       }))
@@ -1075,12 +1075,13 @@ export class EmployeesService {
    *  replicate the single-employee version's "override may point at an
    *  inactive employee" edge case, since this list only ever needs to
    *  surface managers who are themselves active. */
-  async getLineManagersBatch(): Promise<Record<string, { id: string; firstName: string; lastName: string } | null>> {
+  async getLineManagersBatch(): Promise<Record<string, { id: string; firstName: string; middleName: string | null; lastName: string } | null>> {
     const employees = await this.prisma.employee.findMany({
       where: { isActive: true },
       select: {
         employeeNumber: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         positionId: true,
         reportingManagerOverrideId: true,
@@ -1097,12 +1098,12 @@ export class EmployeesService {
     }
     const byEmployeeNumber = new Map(employees.map((employee) => [employee.employeeNumber, employee]))
 
-    const result: Record<string, { id: string; firstName: string; lastName: string } | null> = {}
+    const result: Record<string, { id: string; firstName: string; middleName: string | null; lastName: string } | null> = {}
     for (const employee of employees) {
       if (employee.reportingManagerOverrideId) {
         const override = byEmployeeNumber.get(employee.reportingManagerOverrideId)
         result[employee.employeeNumber] = override
-          ? { id: override.employeeNumber, firstName: override.firstName, lastName: override.lastName }
+          ? { id: override.employeeNumber, firstName: override.firstName, middleName: override.middleName, lastName: override.lastName }
           : null
         continue
       }
@@ -1115,7 +1116,7 @@ export class EmployeesService {
 
       const candidates = byPositionId.get(reportsToPositionId) ?? []
       result[employee.employeeNumber] = candidates[0]
-        ? { id: candidates[0].employeeNumber, firstName: candidates[0].firstName, lastName: candidates[0].lastName }
+        ? { id: candidates[0].employeeNumber, firstName: candidates[0].firstName, middleName: candidates[0].middleName, lastName: candidates[0].lastName }
         : null
     }
 
@@ -1156,6 +1157,7 @@ export class EmployeesService {
       select: {
         employeeNumber: true,
         firstName: true,
+        middleName: true,
         lastName: true,
         email: true,
         position: { select: { title: true } },

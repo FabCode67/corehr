@@ -9,6 +9,7 @@ import type { Band } from "@/lib/api/bands"
 import type { Branch } from "@/lib/api/branches"
 import type { Department } from "@/lib/api/departments"
 import type { Employee, PositionHistoryEntry, ReportingManagerResult } from "@/lib/api/employees"
+import { fullName } from "@/lib/format-name"
 import type { Position } from "@/lib/api/positions"
 
 import type { ActionState } from "../actions"
@@ -31,7 +32,7 @@ interface RegistrationWizardProps {
   positions: Position[]
   bands: Band[]
   branches: Branch[]
-  employeesForPreview: Pick<Employee, "employeeNumber" | "firstName" | "lastName" | "positionId" | "isActive">[]
+  employeesForPreview: Pick<Employee, "employeeNumber" | "firstName" | "middleName" | "lastName" | "positionId" | "isActive">[]
   history: PositionHistoryEntry[]
   reportingManager: ReportingManagerResult | null
   actions: {
@@ -169,7 +170,7 @@ export function RegistrationWizard({
                   <p className="mt-1 text-xs text-muted-foreground">
                     Reports to{" "}
                     <span className="text-foreground">
-                      {reportingManager.manager.firstName} {reportingManager.manager.lastName}
+                      {fullName(reportingManager.manager)}
                     </span>
                   </p>
                 ) : reportingManager ? (

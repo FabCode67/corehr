@@ -8,6 +8,7 @@
 export interface OrgChartEmployee {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   /** Band lives on Employee, not Position — see the server's identical
    *  doc comment on OrgChartNode. */

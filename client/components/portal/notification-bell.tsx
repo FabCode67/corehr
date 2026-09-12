@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Bell, GraduationCap } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { fullName } from "@/lib/format-name"
 import { cn } from "@/lib/utils"
 import { resolveNotificationHref } from "@/lib/notification-links"
 import type { Role } from "@/lib/session"
@@ -155,9 +156,7 @@ export function NotificationBell({ employeeId, role }: { employeeId: string; rol
                     >
                       <GraduationCap className="mt-0.5 size-4 shrink-0 text-destructive" />
                       <span className="text-sm text-foreground">
-                        <span className="font-medium">
-                          {a.employee?.firstName} {a.employee?.lastName}
-                        </span>{" "}
+                        <span className="font-medium">{a.employee ? fullName(a.employee) : ""}</span>{" "}
                         is overdue for {a.courseName}
                         {a.dueDate ? (
                           <span className="block text-xs text-muted-foreground">

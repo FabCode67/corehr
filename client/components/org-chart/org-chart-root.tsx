@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, Users } from "lucide-react"
 
+import { fullName } from "@/lib/format-name"
 import { cn } from "@/lib/utils"
 import type { OrgChartNode as OrgChartNodeData } from "@/lib/org-chart"
 
@@ -60,7 +61,7 @@ export function OrgChartRoot({ root }: OrgChartRootProps) {
 
           {rootLead ? (
             <p className="mt-1.5 truncate text-[11px] text-blue-100">
-              Led by {rootLead.firstName} {rootLead.lastName}
+              Led by {fullName(rootLead)}
             </p>
           ) : null}
 

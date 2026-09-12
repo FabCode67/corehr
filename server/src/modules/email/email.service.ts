@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common"
-import type { Prisma, PrismaClient } from "@prisma/client"
+import type { EmailTemplate, Prisma, PrismaClient } from "@prisma/client"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
@@ -78,22 +78,74 @@ export class EmailService {
       return null
     }
 
-    if (!template.isMandatory && params.recipientEmployeeId) {
-      const allowed = await this.isAllowed(client, params.recipientEmployeeId, template.category)
-      if (!allowed) return null
-    }
-
     // Caller-supplied variables win over the global defaults on a name
     // collision — see buildGlobalVariables()'s doc comment.
     const variables = { ...buildGlobalVariables(), ...params.variables }
     const subject = this.render(template.subject, variables)
     const bodyHtml = this.render(template.bodyHtml, variables)
 
+    const primary = await this.enqueueForRecipient(
+      client,
+      template,
+      params,
+      params.recipientEmail,
+      params.recipientEmployeeId,
+      subject,
+      bodyHtml,
+      variables
+    )
+
+    // HR runs the admin portal, and every HR Administrator is expected to
+    // stay on top of everything happening bank-wide — so every email this
+    // method sends also gets copied to every active HR Administrator
+    // (Employee.isAdmin), not just the emails a module already addressed to
+    // HR directly. Mirrors NotificationsService.create()'s identical
+    // fan-out for in-app notifications — see that method's doc comment.
+    // Each admin's own NotificationPreference still gates their copy
+    // independently (via enqueueForRecipient's isAllowed check below), so
+    // an admin who has muted a category (e.g. learningEmails) doesn't get
+    // flooded by it just because this fan-out exists. Skips the primary
+    // recipient if they're themselves an admin, so they don't get the same
+    // email twice.
+    const admins = await client.employee.findMany({
+      where: {
+        isAdmin: true,
+        isActive: true,
+        ...(params.recipientEmployeeId ? { employeeNumber: { not: params.recipientEmployeeId } } : {}),
+      },
+      select: { employeeNumber: true, email: true },
+    })
+    for (const admin of admins) {
+      await this.enqueueForRecipient(client, template, params, admin.email, admin.employeeNumber, subject, bodyHtml, variables)
+    }
+
+    return primary
+  }
+
+  /** Renders + writes one PENDING EmailLog row for one recipient — shared by
+   *  enqueue()'s primary recipient and its HR-admin fan-out above, so both
+   *  paths apply the exact same mandatory/preference gating instead of the
+   *  admin copies silently bypassing it. */
+  private async enqueueForRecipient(
+    client: PrismaClient | Prisma.TransactionClient,
+    template: EmailTemplate,
+    params: EnqueueEmailParams,
+    recipientEmail: string,
+    recipientEmployeeId: string | undefined,
+    subject: string,
+    bodyHtml: string,
+    variables: EnqueueEmailParams["variables"]
+  ) {
+    if (!template.isMandatory && recipientEmployeeId) {
+      const allowed = await this.isAllowed(client, recipientEmployeeId, template.category)
+      if (!allowed) return null
+    }
+
     return client.emailLog.create({
       data: {
         templateKey: params.templateKey,
-        recipientEmail: params.recipientEmail,
-        recipientEmployeeId: params.recipientEmployeeId,
+        recipientEmail,
+        recipientEmployeeId,
         subject,
         bodyHtml,
         variables: variables as Prisma.InputJsonValue,

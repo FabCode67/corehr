@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 
 import { DisciplinaryCasesService } from "../cases/disciplinary-cases.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -24,7 +25,8 @@ export class AppealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly casesService: DisciplinaryCasesService,
-    private readonly accessService: EmployeeRelationsAccessService
+    private readonly accessService: EmployeeRelationsAccessService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async findForCase(caseId: string, actingEmployeeId: string) {
@@ -101,14 +103,12 @@ export class AppealsService {
     caseId: string,
     forAdmin = false
   ) {
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId,
-        type,
-        title,
-        message,
-        actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
     })
   }
 

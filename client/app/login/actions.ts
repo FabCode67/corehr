@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 
 import { loginRequest } from "@/lib/api/auth"
 import { ApiError } from "@/lib/api/client"
+import { fullName } from "@/lib/format-name"
 import { encodeSession, SESSION_COOKIE, type SessionUser } from "@/lib/session"
 
 export interface LoginState {
@@ -39,7 +40,7 @@ export async function login(
   const sessionUser: SessionUser = {
     id: employee.employeeNumber,
     employeeId: employee.employeeNumber,
-    name: `${employee.firstName} ${employee.lastName}`,
+    name: fullName(employee),
     email: employee.email,
     role: employee.isAdmin ? "admin" : "staff",
     jobTitle: employee.position?.title ?? "Not yet assigned",

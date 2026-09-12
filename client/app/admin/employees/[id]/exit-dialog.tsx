@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { Employee } from "@/lib/api/employees"
+import { fullName as formatFullName } from "@/lib/format-name"
 
 import type { ActionState } from "../actions"
 
@@ -60,7 +61,7 @@ export function ExitDialog({ employee, action, disabledReason }: ExitDialogProps
   }, [state])
 
   const initials = `${employee.firstName[0] ?? ""}${employee.lastName[0] ?? ""}`.toUpperCase()
-  const fullName = `${employee.firstName} ${employee.lastName}`
+  const fullName = formatFullName(employee)
 
   if (disabledReason) {
     return (

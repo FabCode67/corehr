@@ -18,7 +18,7 @@ import { PrismaService } from "../../../prisma/prisma.service"
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(
+  async create(
     params: {
       recipientEmployeeId: string
       type: NotificationType
@@ -41,7 +41,27 @@ export class NotificationsService {
     tx?: Prisma.TransactionClient
   ) {
     const client = tx ?? this.prisma
-    return client.notification.create({ data: params })
+    const created = await client.notification.create({ data: params })
+
+    // HR runs the admin portal, and every HR Administrator is expected to
+    // stay on top of everything happening bank-wide — so every single
+    // notification anyone receives also gets copied to every active HR
+    // Administrator (Employee.isAdmin), not just the ones that already had a
+    // bespoke createForAllAdmins() call. Skips the primary recipient if
+    // they're themselves an admin, so they don't get the same notification
+    // twice. Mirrors the equivalent fan-out in EmailService.enqueue() for
+    // the email side of this same rule — see that method's doc comment.
+    const admins = await client.employee.findMany({
+      where: { isAdmin: true, isActive: true, employeeNumber: { not: params.recipientEmployeeId } },
+      select: { employeeNumber: true },
+    })
+    if (admins.length > 0) {
+      await client.notification.createMany({
+        data: admins.map((admin) => ({ ...params, recipientEmployeeId: admin.employeeNumber })),
+      })
+    }
+
+    return created
   }
 
   /** Broadcasts one notification to every HR Administrator (Employee.isAdmin)

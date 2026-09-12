@@ -2,13 +2,14 @@ import { Module } from "@nestjs/common"
 
 import { EmployeesModule } from "../../employees/employees.module"
 import { EmailModule } from "../../email/email.module"
+import { NotificationsModule } from "../../leave/notifications/notifications.module"
 import { EmployeeRelationsAccessModule } from "../access/employee-relations-access.module"
 
 import { DisciplinaryCasesController } from "./disciplinary-cases.controller"
 import { DisciplinaryCasesService } from "./disciplinary-cases.service"
 
 @Module({
-  imports: [EmployeeRelationsAccessModule, EmployeesModule, EmailModule],
+  imports: [EmployeeRelationsAccessModule, EmployeesModule, EmailModule, NotificationsModule],
   controllers: [DisciplinaryCasesController],
   providers: [DisciplinaryCasesService],
   exports: [DisciplinaryCasesService],

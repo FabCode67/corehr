@@ -20,7 +20,7 @@ import { VerifyCertificateDto } from "./dto/verify-certificate.dto"
 
 export const ASSIGNMENT_INCLUDE = {
   course: { include: { category: true, institution: true } },
-  employee: { select: { employeeNumber: true, firstName: true, lastName: true, profilePictureUrl: true } },
+  employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, profilePictureUrl: true } },
   assignedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
   verifiedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
   department: { select: { id: true, name: true } },

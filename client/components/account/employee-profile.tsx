@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchEmployee, fetchEmployeeHistory, formatEnumLabel } from "@/lib/api/employees"
+import { fullName } from "@/lib/format-name"
 
 import { ChangePasswordForm } from "./change-password-form"
 
@@ -43,7 +44,7 @@ export async function EmployeeProfile({ employeeId }: { employeeId: string }) {
           <CardDescription>{employee.employeeNumber}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Full name" value={`${employee.firstName} ${employee.lastName}`} />
+          <Field label="Full name" value={fullName(employee)} />
           <Field label="Email" value={employee.email} />
           <Field label="Phone" value={employee.phone} />
           <Field label="Position" value={employee.position?.title ?? "Not yet assigned"} />

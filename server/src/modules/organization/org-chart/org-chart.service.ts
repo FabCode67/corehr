@@ -11,6 +11,7 @@ export interface OrgChartNode {
   employees: {
     employeeNumber: string
     firstName: string
+    middleName: string | null
     lastName: string
     /** Band lives on Employee, not Position (a position is a reusable
      *  role/template multiple employees can hold — see Position's schema
@@ -42,7 +43,7 @@ export class OrgChartService {
         level: { select: { id: true, name: true, code: true, rank: true, track: true } },
         employees: {
           where: { isActive: true },
-          select: { employeeNumber: true, firstName: true, lastName: true, band: { select: { id: true, name: true } } },
+          select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, band: { select: { id: true, name: true } } },
         },
       },
       orderBy: { title: "asc" },

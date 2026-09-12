@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, Circle, User } from "lucide-react"
 
+import { fullName } from "@/lib/format-name"
 import { cn } from "@/lib/utils"
 import type { OrgChartNode as OrgChartNodeData } from "@/lib/org-chart"
 
@@ -118,7 +119,7 @@ export function NodeCard({ node, compact = false }: { node: OrgChartNodeData; co
         <div className={cn("flex items-center gap-1.5", compact ? "mt-1" : "mt-1.5")}>
           <User className={cn("shrink-0 text-[#B8860B]", compact ? "size-3" : "size-3.5")} />
           <span className={cn("truncate text-blue-100", compact ? "text-[10px]" : "text-[11px]")}>
-            {primaryEmployee.firstName} {primaryEmployee.lastName}
+            {fullName(primaryEmployee)}
             {extraCount > 0 ? ` +${extraCount} more` : ""}
           </span>
         </div>

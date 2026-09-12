@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatEnumLabel } from "@/lib/api/employees"
 import { fetchPendingForManager } from "@/lib/api/leave"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 import { DecideRequestForm } from "../../../admin/leave/approvals/decide-request-form"
@@ -68,7 +69,7 @@ export default async function StaffLeaveApprovalsPage() {
                     <tr key={request.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3">
                         <p className="font-medium text-foreground">
-                          {request.employee.firstName} {request.employee.lastName}
+                          {fullName(request.employee)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {request.employee.position?.department.name ?? "—"}

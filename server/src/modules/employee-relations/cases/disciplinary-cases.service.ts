@@ -4,6 +4,7 @@ import { DisciplinaryCaseCategory, DisciplinaryCaseStatus, Prisma } from "@prism
 
 import { EmployeesService } from "../../employees/employees.service"
 import { EmailService } from "../../email/email.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -62,7 +63,8 @@ export class DisciplinaryCasesService {
     private readonly prisma: PrismaService,
     private readonly accessService: EmployeeRelationsAccessService,
     private readonly employeesService: EmployeesService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   /** Same pattern as InterviewsService — enqueue() already logs internally
@@ -266,14 +268,12 @@ export class DisciplinaryCasesService {
     caseId: string,
     forAdmin = false
   ) {
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId,
-        type,
-        title,
-        message,
-        actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: forAdmin ? `/admin/employee-relations/cases/${caseId}` : `/staff/employee-relations/cases/${caseId}`,
     })
   }
 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchWorkforcePlan, fetchRequisitions } from "@/lib/api/recruitment"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 import { PlanActions } from "./plan-actions"
@@ -77,9 +78,9 @@ export default async function WorkforcePlanDetailPage({ params }: { params: Prom
           <Field label="Priority" value={plan.priority} />
           <Field label="Expected hiring date" value={plan.expectedHiringDate ? new Date(plan.expectedHiringDate).toLocaleDateString() : "—"} />
           <Field label="Budget" value={plan.budget != null ? `RWF ${plan.budget.toLocaleString()}` : "—"} />
-          <Field label="Hiring manager" value={`${plan.hiringManager.firstName} ${plan.hiringManager.lastName}`} />
-          <Field label="Recruiter" value={`${plan.recruiter.firstName} ${plan.recruiter.lastName}`} />
-          {plan.approvedBy ? <Field label="Approved by" value={`${plan.approvedBy.firstName} ${plan.approvedBy.lastName}`} /> : null}
+          <Field label="Hiring manager" value={fullName(plan.hiringManager)} />
+          <Field label="Recruiter" value={fullName(plan.recruiter)} />
+          {plan.approvedBy ? <Field label="Approved by" value={fullName(plan.approvedBy)} /> : null}
           {plan.rejectionComment ? <Field label="Rejection reason" value={plan.rejectionComment} /> : null}
           <div className="sm:col-span-2">
             <Field label="Business justification" value={plan.businessJustification} />

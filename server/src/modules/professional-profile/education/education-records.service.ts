@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { CreateEducationRecordDto } from "./dto/create-education-record.dto"
 import { ReviewEducationRecordDto } from "./dto/review-education-record.dto"
 import { UpdateEducationRecordDto } from "./dto/update-education-record.dto"
@@ -17,7 +18,8 @@ const EDUCATION_INCLUDE = {
 export class EducationRecordsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   listForEmployee(employeeId: string) {
@@ -170,15 +172,12 @@ export class EducationRecordsService {
     if (!employee) return
 
     await Promise.all([
-      this.prisma.notification.createMany({
-        data: admins.map((admin) => ({
-          recipientEmployeeId: admin.employeeNumber,
-          type: "PROFILE_RECORD_PENDING_REVIEW" as const,
-          title: "Profile record awaiting review",
-          message: `${employee.firstName} ${employee.lastName} submitted a new ${recordType} record ("${title}") for review.`,
-          relatedEmployeeId: employeeId,
-          actionUrl: `/admin/professional-profile/${employeeId}`,
-        })),
+      this.notificationsService.createForAllAdmins({
+        type: "PROFILE_RECORD_PENDING_REVIEW",
+        title: "Profile record awaiting review",
+        message: `${employee.firstName} ${employee.lastName} submitted a new ${recordType} record ("${title}") for review.`,
+        relatedEmployeeId: employeeId,
+        actionUrl: `/admin/professional-profile/${employeeId}`,
       }),
       ...admins.map((admin) =>
         this.emailService
@@ -206,17 +205,15 @@ export class EducationRecordsService {
     comment: string | undefined,
     entityId: string
   ) {
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId: employee.employeeNumber,
-        type: decision === "VERIFIED" ? "EDUCATION_VERIFIED" : "EDUCATION_REJECTED",
-        title: decision === "VERIFIED" ? "Education record verified" : "Education record rejected",
-        message:
-          decision === "VERIFIED"
-            ? `"${title}" has been verified by HR.`
-            : `"${title}" was rejected by HR.${comment ? ` Reason: ${comment}` : ""}`,
-        actionUrl: "/staff/professional-profile",
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId: employee.employeeNumber,
+      type: decision === "VERIFIED" ? "EDUCATION_VERIFIED" : "EDUCATION_REJECTED",
+      title: decision === "VERIFIED" ? "Education record verified" : "Education record rejected",
+      message:
+        decision === "VERIFIED"
+          ? `"${title}" has been verified by HR.`
+          : `"${title}" was rejected by HR.${comment ? ` Reason: ${comment}` : ""}`,
+      actionUrl: "/staff/professional-profile",
     })
 
     try {

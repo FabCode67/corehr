@@ -22,6 +22,7 @@ import {
   formatTenure,
 } from "@/lib/api/employees"
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 import { ImportManager } from "../imports/import-manager"
@@ -230,7 +231,7 @@ export default async function AdminEmployeesPage({
                     <td className="px-4 py-3 font-medium text-foreground">{employee.employeeNumber}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">
-                        {employee.firstName} {employee.lastName}
+                        {fullName(employee)}
                       </p>
                       <p className="text-xs text-muted-foreground">{employee.email}</p>
                     </td>
@@ -249,7 +250,7 @@ export default async function AdminEmployeesPage({
                     <td className="px-4 py-3 text-muted-foreground">
                       {lineManagers[employee.employeeNumber] ? (
                         <Link href={`/admin/employees/${lineManagers[employee.employeeNumber]!.id}`} className="hover:text-foreground hover:underline">
-                          {lineManagers[employee.employeeNumber]!.firstName} {lineManagers[employee.employeeNumber]!.lastName}
+                          {fullName(lineManagers[employee.employeeNumber]!)}
                         </Link>
                       ) : (
                         "—"

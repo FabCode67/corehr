@@ -4,6 +4,7 @@ import type { EmployeeCertification } from "@prisma/client"
 import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { CreateCertificationDto } from "./dto/create-certification.dto"
 import { ReviewCertificationDto } from "./dto/review-certification.dto"
 import { UpdateCertificationDto } from "./dto/update-certification.dto"
@@ -24,7 +25,8 @@ function withStatus<T extends EmployeeCertification>(cert: T) {
 export class CertificationsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async listForEmployee(employeeId: string) {
@@ -128,17 +130,15 @@ export class CertificationsService {
       include: { ...CERTIFICATION_INCLUDE, employee: { select: { employeeNumber: true, firstName: true, lastName: true, email: true } } },
     })
 
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId: updated.employee.employeeNumber,
-        type: dto.decision === "VERIFIED" ? "CERTIFICATION_VERIFIED" : "CERTIFICATION_REJECTED",
-        title: dto.decision === "VERIFIED" ? "Certification verified" : "Certification rejected",
-        message:
-          dto.decision === "VERIFIED"
-            ? `"${updated.name}" has been verified by HR.`
-            : `"${updated.name}" was rejected by HR.${dto.comment ? ` Reason: ${dto.comment}` : ""}`,
-        actionUrl: "/staff/professional-profile",
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId: updated.employee.employeeNumber,
+      type: dto.decision === "VERIFIED" ? "CERTIFICATION_VERIFIED" : "CERTIFICATION_REJECTED",
+      title: dto.decision === "VERIFIED" ? "Certification verified" : "Certification rejected",
+      message:
+        dto.decision === "VERIFIED"
+          ? `"${updated.name}" has been verified by HR.`
+          : `"${updated.name}" was rejected by HR.${dto.comment ? ` Reason: ${dto.comment}` : ""}`,
+      actionUrl: "/staff/professional-profile",
     })
 
     try {
@@ -172,15 +172,12 @@ export class CertificationsService {
     if (!employee) return
 
     await Promise.all([
-      this.prisma.notification.createMany({
-        data: admins.map((admin) => ({
-          recipientEmployeeId: admin.employeeNumber,
-          type: "PROFILE_RECORD_PENDING_REVIEW" as const,
-          title: "Profile record awaiting review",
-          message: `${employee.firstName} ${employee.lastName} submitted a new certification ("${certName}") for review.`,
-          relatedEmployeeId: employeeId,
-          actionUrl: `/admin/professional-profile/${employeeId}`,
-        })),
+      this.notificationsService.createForAllAdmins({
+        type: "PROFILE_RECORD_PENDING_REVIEW",
+        title: "Profile record awaiting review",
+        message: `${employee.firstName} ${employee.lastName} submitted a new certification ("${certName}") for review.`,
+        relatedEmployeeId: employeeId,
+        actionUrl: `/admin/professional-profile/${employeeId}`,
       }),
       ...admins.map((admin) =>
         this.emailService

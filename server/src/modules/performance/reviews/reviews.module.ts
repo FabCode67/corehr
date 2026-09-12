@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common"
 
 import { EmployeesModule } from "../../employees/employees.module"
+import { NotificationsModule } from "../../leave/notifications/notifications.module"
 import { PerformanceAccessModule } from "../access/performance-access.module"
 import { ReviewPeriodsModule } from "../review-periods/review-periods.module"
 
@@ -8,7 +9,7 @@ import { ReviewsController } from "./reviews.controller"
 import { ReviewsService } from "./reviews.service"
 
 @Module({
-  imports: [PerformanceAccessModule, ReviewPeriodsModule, EmployeesModule],
+  imports: [PerformanceAccessModule, ReviewPeriodsModule, EmployeesModule, NotificationsModule],
   controllers: [ReviewsController],
   providers: [ReviewsService],
   exports: [ReviewsService],

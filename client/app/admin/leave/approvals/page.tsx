@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select"
 import { formatEnumLabel } from "@/lib/api/employees"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
+import { fullName } from "@/lib/format-name"
 import {
   fetchLeaveRequestsPaginated,
   fetchLeaveTypes,
@@ -199,7 +200,7 @@ export default async function AdminLeaveApprovalsPage({
                     <tr key={request.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3">
                         <p className="font-medium text-foreground">
-                          {request.employee.firstName} {request.employee.lastName}
+                          {fullName(request.employee)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {request.employee.position?.department.name ?? "—"}

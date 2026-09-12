@@ -16,6 +16,7 @@ const REQUEST_INCLUDE = {
     select: {
       employeeNumber: true,
       firstName: true,
+      middleName: true,
       lastName: true,
       email: true,
       gender: true,

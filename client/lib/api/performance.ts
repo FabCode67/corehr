@@ -64,6 +64,7 @@ export function fetchReviewPeriod(id: string) {
 interface ReviewEmployeeSummary {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   profilePictureUrl: string | null
 }
@@ -71,6 +72,7 @@ interface ReviewEmployeeSummary {
 interface ReviewPersonSummary {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
 }
 

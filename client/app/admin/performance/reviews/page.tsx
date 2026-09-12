@@ -7,6 +7,7 @@ import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
+import { fullName } from "@/lib/format-name"
 import {
   fetchReviewPeriods,
   fetchReviewsPaginated,
@@ -196,14 +197,14 @@ export default async function AdminPerformanceReviewsPage({
                   <tr key={review.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">
-                        {review.employee.firstName} {review.employee.lastName}
+                        {fullName(review.employee)}
                       </p>
                       <p className="text-xs text-muted-foreground">{review.department?.name ?? "—"}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{review.period.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{REVIEW_TYPE_LABELS[review.reviewType]}</td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {review.reviewer ? `${review.reviewer.firstName} ${review.reviewer.lastName}` : "Unassigned"}
+                      {review.reviewer ? fullName(review.reviewer) : "Unassigned"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {review.overallRating ? `${review.overallRating}/5` : "—"}

@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { FormInstanceStatus, Prisma, SignerRole } from "@prisma/client"
 
 import { EmployeesService } from "../../employees/employees.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { FormsAccessService } from "../access/forms-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -40,7 +41,8 @@ export class FormInstancesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accessService: FormsAccessService,
-    private readonly employeesService: EmployeesService
+    private readonly employeesService: EmployeesService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async findAll(filters: FormInstanceFilters, actingEmployeeId: string) {
@@ -311,8 +313,12 @@ export class FormInstancesService {
     message: string,
     formInstanceId: string
   ) {
-    await this.prisma.notification.create({
-      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/forms/${formInstanceId}` },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: `/staff/forms/${formInstanceId}`,
     })
   }
 

@@ -23,6 +23,7 @@ import {
   formatTenure,
 } from "@/lib/api/employees"
 import { fetchPositions } from "@/lib/api/positions"
+import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
 import { EmployeeRelationsHistory } from "./employee-relations-history"
@@ -137,6 +138,13 @@ export default async function EmployeeDetailPage({
       ? `${exitProgress.remaining} of ${exitProgress.total} exit document(s) still outstanding — complete them below before confirming the exit.`
       : undefined
 
+  // preferredName is a deliberate nickname override for the first-name slot
+  // (e.g. "Preferred: Ben" for "Benjamin") — keep it in front when set, but
+  // still show the registered middle name after it, same as everywhere else.
+  const headerName = employee.preferredName
+    ? [employee.preferredName, employee.middleName, employee.lastName].filter(Boolean).join(" ")
+    : fullName(employee)
+
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
@@ -148,9 +156,7 @@ export default async function EmployeeDetailPage({
           Back to employees
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-foreground">
-            {employee.preferredName || employee.firstName} {employee.lastName}
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground">{headerName}</h1>
           <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "outline"}>
             {employee.employmentStatus === "ACTIVE" ? "Active" : "Exit"}
           </Badge>
@@ -185,7 +191,7 @@ export default async function EmployeeDetailPage({
           <p className="font-medium text-foreground">
             {managerResult.ok && managerResult.data.manager ? (
               <Link href={`/admin/employees/${managerResult.data.manager.id}`} className="hover:underline">
-                {managerResult.data.manager.firstName} {managerResult.data.manager.lastName}
+                {fullName(managerResult.data.manager)}
               </Link>
             ) : (
               "—"
@@ -234,6 +240,7 @@ export default async function EmployeeDetailPage({
         employeesForPreview={employeesResult.data.map((candidate) => ({
           employeeNumber: candidate.employeeNumber,
           firstName: candidate.firstName,
+          middleName: candidate.middleName,
           lastName: candidate.lastName,
           positionId: candidate.positionId,
           isActive: candidate.isActive,

@@ -124,6 +124,11 @@ export class ExitProcessService {
 
     const manager = await this.employeesService.getReportingManager(employeeId)
     if (manager.manager) {
+      // Deliberately NOT routed through NotificationsService.create() here —
+      // that method's HR-admin fan-out (see its doc comment) would duplicate
+      // the dedicated, properly-worded admin broadcast this method already
+      // sends unconditionally a few lines below, giving every admin two
+      // differently-worded notifications for the same exit instead of one.
       await this.prisma.notification.create({
         data: {
           recipientEmployeeId: manager.manager.id,

@@ -64,7 +64,7 @@ export interface EmployeeFamilyMember {
  *  (EmployeeFamilyMember rows — bulk-imported, or a relationship the
  *  wizard has no field for at all). */
 export interface EmployeeFamilyTree {
-  employee: { id: string; firstName: string; lastName: string; profilePictureUrl: string | null }
+  employee: { id: string; firstName: string; middleName: string | null; lastName: string; profilePictureUrl: string | null }
   parents: EmployeeFamilyMember[]
   siblings: EmployeeFamilyMember[]
   other: EmployeeFamilyMember[]
@@ -187,9 +187,9 @@ export interface PositionHistoryEntry {
 }
 
 export interface ReportingManagerResult {
-  manager: { id: string; firstName: string; lastName: string; positionId: string } | null
+  manager: { id: string; firstName: string; middleName: string | null; lastName: string; positionId: string } | null
   source: "OVERRIDE" | "POSITION_HIERARCHY" | "NONE"
-  candidates?: { id: string; firstName: string; lastName: string }[]
+  candidates?: { id: string; firstName: string; middleName: string | null; lastName: string }[]
 }
 
 export function fetchEmployees(includeInactive = false) {
@@ -242,6 +242,7 @@ export function fetchReportingManager(id: string) {
 export interface DirectReport {
   employeeNumber: string
   firstName: string
+  middleName: string | null
   lastName: string
   email: string
   position: { title: string } | null
@@ -312,6 +313,7 @@ export function employeeExportUrl(columnKeys: string[], format: "xlsx" | "csv") 
 export interface LineManagerSummary {
   id: string
   firstName: string
+  middleName: string | null
   lastName: string
 }
 

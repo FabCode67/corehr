@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { Employee } from "@/lib/api/employees"
+import { fullName as formatFullName } from "@/lib/format-name"
 
 import type { ActionState } from "../actions"
 
@@ -41,7 +42,7 @@ export function RehireDialog({ employee, action }: RehireDialogProps) {
     }
   }, [state])
 
-  const fullName = `${employee.firstName} ${employee.lastName}`
+  const fullName = formatFullName(employee)
   const today = new Date().toISOString().slice(0, 10)
 
   return (

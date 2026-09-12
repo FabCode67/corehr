@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 
 import { GrievanceStatus, NotificationType, Prisma } from "@prisma/client"
 
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 import { EmployeeRelationsAccessService } from "../access/employee-relations-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
@@ -27,7 +28,8 @@ export interface GrievanceFilters {
 export class GrievancesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly accessService: EmployeeRelationsAccessService
+    private readonly accessService: EmployeeRelationsAccessService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async findAll(filters: GrievanceFilters, actingEmployeeId: string) {
@@ -142,14 +144,12 @@ export class GrievancesService {
     grievanceId: string,
     forAdmin = false
   ) {
-    await this.prisma.notification.create({
-      data: {
-        recipientEmployeeId,
-        type,
-        title,
-        message,
-        actionUrl: forAdmin ? `/admin/employee-relations/grievances/${grievanceId}` : `/staff/employee-relations/grievances/${grievanceId}`,
-      },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: forAdmin ? `/admin/employee-relations/grievances/${grievanceId}` : `/staff/employee-relations/grievances/${grievanceId}`,
     })
   }
 
@@ -157,16 +157,11 @@ export class GrievancesService {
    *  doc comment), so this is the one place in Employee Relations that
    *  actually broadcasts to every admin — disciplinary cases never do. */
   private async notifyAllAdmins(type: Extract<NotificationType, "GRIEVANCE_SUBMITTED">, title: string, message: string, grievanceId: string) {
-    const admins = await this.prisma.employee.findMany({ where: { isAdmin: true, isActive: true }, select: { employeeNumber: true } })
-    if (admins.length === 0) return
-    await this.prisma.notification.createMany({
-      data: admins.map((admin) => ({
-        recipientEmployeeId: admin.employeeNumber,
-        type,
-        title,
-        message,
-        actionUrl: `/admin/employee-relations/grievances/${grievanceId}`,
-      })),
+    await this.notificationsService.createForAllAdmins({
+      type,
+      title,
+      message,
+      actionUrl: `/admin/employee-relations/grievances/${grievanceId}`,
     })
   }
 }

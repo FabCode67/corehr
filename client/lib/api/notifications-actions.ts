@@ -40,7 +40,7 @@ export interface OverdueTrainingAlert {
   courseName: string
   dueDate: string | null
   /** Set only for the "team" bucket — whose overdue course this is. */
-  employee: { firstName: string; lastName: string } | null
+  employee: { firstName: string; middleName: string | null; lastName: string } | null
 }
 
 // Server Actions called imperatively (not via <form action>) from the
@@ -91,7 +91,7 @@ export async function getOverdueTrainingAlerts(
     id: a.id,
     courseName: a.course.name,
     dueDate: a.dueDate,
-    employee: withEmployee ? { firstName: a.employee.firstName, lastName: a.employee.lastName } : null,
+    employee: withEmployee ? { firstName: a.employee.firstName, middleName: a.employee.middleName, lastName: a.employee.lastName } : null,
   })
 
   const mine = mineResult.ok ? mineResult.data.map((a) => toAlert(a, false)) : []

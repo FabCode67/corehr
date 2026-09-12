@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select"
 import type { Band } from "@/lib/api/bands"
 import type { Department } from "@/lib/api/departments"
 import type { Employee } from "@/lib/api/employees"
+import { fullName } from "@/lib/format-name"
 import type { Position } from "@/lib/api/positions"
 
 import type { ActionState } from "../actions"
@@ -17,7 +18,7 @@ interface PositionAssignmentFormProps {
   departments: Department[]
   positions: Position[]
   bands: Band[]
-  employees: Pick<Employee, "employeeNumber" | "firstName" | "lastName" | "positionId" | "isActive">[]
+  employees: Pick<Employee, "employeeNumber" | "firstName" | "middleName" | "lastName" | "positionId" | "isActive">[]
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
 }
 
@@ -60,7 +61,7 @@ export function PositionAssignmentForm({
     )
     if (holders.length === 0) return "Vacant position — no one currently holds it"
 
-    return holders.map((holder) => `${holder.firstName} ${holder.lastName}`).join(", ")
+    return holders.map((holder) => fullName(holder)).join(", ")
   }, [positionId, positions, employees])
 
   return (

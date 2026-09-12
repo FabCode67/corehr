@@ -15,9 +15,9 @@ export const WORKFORCE_PLAN_INCLUDE = {
   department: { select: { id: true, name: true } },
   unit: { select: { id: true, name: true } },
   branch: { select: { id: true, name: true } },
-  hiringManager: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  recruiter: { select: { employeeNumber: true, firstName: true, lastName: true } },
-  approvedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+  hiringManager: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  recruiter: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  approvedBy: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
 } as const
 
 export interface WorkforcePlanFilters {

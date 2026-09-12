@@ -71,8 +71,13 @@ export class LeaveBalancesService {
 
       let entitledDays: number
       if (leaveType.category === "ANNUAL") {
-        if (!category) continue // contract type not set yet — nothing to allocate
-        const rule = leaveType.entitlementRules.find((r) => r.employeeCategory === category)
+        // Contract type isn't set yet (Employment Details is an optional
+        // wizard step) — still create the balance row so Annual Leave
+        // keeps showing up on the Leave page like every other type, just
+        // with 0 entitled days until HR fills in the contract type. It
+        // self-corrects the moment contractType is set, since this method
+        // re-runs on every getSummary() call.
+        const rule = category ? leaveType.entitlementRules.find((r) => r.employeeCategory === category) : undefined
         entitledDays = rule?.days ?? 0
       } else {
         entitledDays = leaveType.maxDaysPerYear ?? 0

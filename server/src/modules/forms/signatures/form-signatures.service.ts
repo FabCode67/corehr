@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client"
 import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
+import { NotificationsService } from "../../leave/notifications/notifications.service"
 
 import { RejectFormDto } from "./dto/reject-form.dto"
 import { SignFormDto } from "./dto/sign-form.dto"
@@ -24,7 +25,8 @@ const SIGNATURE_INCLUDE = {
 export class FormSignaturesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   private async findSignatureOrThrow(signatureId: string) {
@@ -206,8 +208,12 @@ export class FormSignaturesService {
     message: string,
     formInstanceId: string
   ) {
-    await this.prisma.notification.create({
-      data: { recipientEmployeeId, type, title, message, actionUrl: `/staff/forms/${formInstanceId}` },
+    await this.notificationsService.create({
+      recipientEmployeeId,
+      type,
+      title,
+      message,
+      actionUrl: `/staff/forms/${formInstanceId}`,
     })
   }
 
