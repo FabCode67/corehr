@@ -1,4 +1,16 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma/seed.ts", "prisma/seed-test-data.ts", "hello-prisma"]
+  // "prisma" is excluded as a whole directory, not just prisma/seed.ts —
+  // any standalone script living under prisma/ (seed.ts, seed-test-data.ts,
+  // scripts/backfill-*.ts, etc.) is run directly via ts-node and is never
+  // imported by src/, but if even one such file is left out of this
+  // exclude list, tsc pulls it into the program as a root file sitting
+  // outside src/, which shifts its inferred rootDir up from src/ to the
+  // project root — and THAT silently changes the build output layout from
+  // dist/main.js to dist/src/main.js, which is exactly the "Cannot find
+  // module dist/main" error seen on Render. Same reasoning as the
+  // hello-prisma exclude below (see tsconfig.json's comment on it) — keep
+  // excluding the whole prisma/ directory rather than naming scripts one
+  // by one as they're added.
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma", "hello-prisma"]
 }
