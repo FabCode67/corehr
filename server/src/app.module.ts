@@ -72,6 +72,7 @@ import { CertificationsModule } from "./modules/professional-profile/certificati
 import { ProfileModule } from "./modules/professional-profile/profile/profile.module"
 import { ProfileAnalyticsModule } from "./modules/professional-profile/analytics/profile-analytics.module"
 import { HrAnalyticsModule } from "./modules/hr-analytics/hr-analytics.module"
+import { DepartmentDashboardModule } from "./modules/department-dashboard/department-dashboard.module"
 import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
 
 @Module({
@@ -148,6 +149,7 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     ProfileModule,
     ProfileAnalyticsModule,
     HrAnalyticsModule,
+    DepartmentDashboardModule,
     AiAssistantModule,
   ],
 })

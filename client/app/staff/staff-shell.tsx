@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Building2,
   CalendarDays,
   CalendarCheck,
   ClipboardCheck,
@@ -33,6 +34,11 @@ const STAFF_NAV: PortalNavItem[] = [
   // link. The page itself renders a clean empty state when there's nothing
   // pending, so no harm in always showing the entry.
   { label: "Team Approvals", href: "/staff/leave/approvals", icon: CalendarCheck },
+  // Same "always show, page handles the empty state" reasoning as Team
+  // Approvals above — relevant only to Heads of Department
+  // (Department.headOfDepartmentId), and the session doesn't carry that
+  // flag either.
+  { label: "Department Dashboard", href: "/staff/department-dashboard", icon: Building2 },
   { label: "Performance", href: "/staff/performance", icon: Target },
   { label: "Learning", href: "/staff/learning", icon: GraduationCap },
   { label: "Family & Dependents", href: "/staff/family", icon: Users },
