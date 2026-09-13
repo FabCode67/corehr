@@ -93,3 +93,35 @@ export async function createDepartmentRequisition(
   revalidatePath("/staff/department-dashboard/requisitions")
   redirect(`/staff/department-dashboard/requisitions?dept=${departmentId}&created=${requisitionId}`)
 }
+
+/** Balance adjustment — the one leave write that doesn't reuse a generic
+ *  /leave/requests endpoint (see lib/api/department-dashboard.ts's doc
+ *  comment on the leave section), since LeaveBalancesService.adjust() has
+ *  no actingEmployeeId/authorization concept of its own — access is gated
+ *  entirely by DepartmentDashboardService.adjustLeaveBalance(). */
+export async function adjustDepartmentLeaveBalance(
+  departmentId: string,
+  actingEmployeeId: string,
+  employeeId: string,
+  leaveTypeId: string,
+  year: number,
+  _prevState: DepartmentActionState | undefined,
+  formData: FormData
+): Promise<DepartmentActionState> {
+  const adjustmentDays = Number(formData.get("adjustmentDays"))
+  if (Number.isNaN(adjustmentDays)) {
+    return { error: "Adjustment must be a number." }
+  }
+
+  try {
+    await apiFetch(
+      `/department-dashboard/${departmentId}/leave/balances/${employeeId}/${leaveTypeId}?actingEmployeeId=${actingEmployeeId}&year=${year}`,
+      { method: "PATCH", body: JSON.stringify({ adjustmentDays }) }
+    )
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to adjust balance." }
+  }
+
+  revalidatePath("/staff/department-dashboard/leave")
+  return {}
+}

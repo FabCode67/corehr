@@ -5,13 +5,14 @@ import { LeavePolicyModule } from "../leave-policy/leave-policy.module"
 import { NotificationsModule } from "../notifications/notifications.module"
 import { EmailModule } from "../../email/email.module"
 
+import { LeaveReminderScheduler } from "./leave-reminder.scheduler"
 import { LeaveRequestsController } from "./leave-requests.controller"
 import { LeaveRequestsService } from "./leave-requests.service"
 
 @Module({
   imports: [LeaveBalancesModule, LeavePolicyModule, NotificationsModule, EmailModule],
   controllers: [LeaveRequestsController],
-  providers: [LeaveRequestsService],
+  providers: [LeaveRequestsService, LeaveReminderScheduler],
   exports: [LeaveRequestsService],
 })
 export class LeaveRequestsModule {}

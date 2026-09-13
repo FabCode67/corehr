@@ -32,6 +32,7 @@ function triStateOverride(value: FormDataEntryValue | null, forUpdate: boolean):
 function revalidateLeavePaths() {
   revalidatePath("/staff/leave")
   revalidatePath("/staff/leave/approvals")
+  revalidatePath("/staff/department-dashboard/leave")
   revalidatePath("/admin/leave")
   revalidatePath("/admin/leave/approvals")
   revalidatePath("/admin/leave/calendar")

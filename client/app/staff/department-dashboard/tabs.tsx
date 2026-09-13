@@ -9,6 +9,8 @@ const TABS = [
   { key: "learning", label: "Learning Hours", href: "/staff/department-dashboard/learning" },
   { key: "org-chart", label: "Org Chart", href: "/staff/department-dashboard/org-chart" },
   { key: "requisitions", label: "Requisitions", href: "/staff/department-dashboard/requisitions" },
+  { key: "leave", label: "Leave", href: "/staff/department-dashboard/leave" },
+  { key: "performance", label: "Performance", href: "/staff/department-dashboard/performance" },
 ] as const
 
 export type DepartmentDashboardTabKey = (typeof TABS)[number]["key"]

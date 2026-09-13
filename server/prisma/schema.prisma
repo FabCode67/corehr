@@ -494,6 +494,16 @@ model Employee {
   /// a new deadline always gets its own reminder.
   probationReminderSentAt DateTime?
   contractReminderSentAt  DateTime?
+  /// Set by EmployeeMilestonesScheduler the first time BIRTHDAY_TOMORROW
+  /// fires for a given calendar year (year of the upcoming birthday, not
+  /// dateOfBirth's original year), so the daily scan doesn't re-notify
+  /// department heads every day between the reminder and the birthday
+  /// itself. Naturally resets each year since the stored year no longer
+  /// matches once the next birthday's year rolls around.
+  lastBirthdayNotifiedYear Int?
+  /// Same dedup convention as lastBirthdayNotifiedYear, for
+  /// WORK_ANNIVERSARY_TOMORROW against employmentStartDate's anniversary.
+  lastAnniversaryNotifiedYear Int?
   previousEmployee         Boolean       @default(false)
   previousEmployeeNumber   String?
   previousPositionHeld     String?
@@ -1139,6 +1149,19 @@ enum NotificationType {
   /// admin-facing pair, same convention as PROBATION_ENDING_SOON above.
   POSITION_CHANGED
   POSITION_CHANGED_ADMIN
+  /// Manager-facing counterpart to LEAVE_STARTING_SOON/RETURNING_TOMORROW,
+  /// fired by LeaveReminderScheduler only to the resolved department
+  /// head(s) of the employee going on/returning from leave (not broadcast
+  /// to all admins — see DepartmentDashboardService's headOfDepartmentId
+  /// scoping model).
+  LEAVE_STARTING_SOON_MANAGER
+  RETURNING_TOMORROW_MANAGER
+  /// Fired by EmployeeMilestonesScheduler ~1 day before Employee.dateOfBirth's
+  /// next anniversary, to the resolved department head(s) only.
+  BIRTHDAY_TOMORROW
+  /// Fired by EmployeeMilestonesScheduler ~1 day before Employee.employmentStartDate's
+  /// next anniversary, to the resolved department head(s) only.
+  WORK_ANNIVERSARY_TOMORROW
   /// Recruitment — ApplicationStagesService.advance()/InterviewsService's
   /// internal-facing notifications (recruiter/hiring manager/interviewer).
   /// INTERVIEW_SCHEDULED already existed but was never actually fired
@@ -1405,6 +1428,15 @@ model LeaveRequest {
   /// Set when HR knowingly approves a request that would otherwise dip the
   /// balance negative.
   hrOverride Boolean @default(false)
+
+  /// Set by LeaveReminderScheduler the first time LEAVE_STARTING_SOON /
+  /// LEAVE_STARTING_SOON_MANAGER fires for this request, so the daily scan
+  /// doesn't re-notify every day between now and startDate. Same
+  /// range+dedup convention as Employee.probationReminderSentAt.
+  startingSoonNotifiedAt DateTime?
+  /// Same dedup convention, for RETURNING_TOMORROW / RETURNING_TOMORROW_MANAGER
+  /// fired ~1 day before returnDate.
+  returningSoonNotifiedAt DateTime?
 
   /// Permanent audit trail for a cancellation — required (not optional)
   /// whenever status moves to CANCELLED, per the spec. Never cleared once

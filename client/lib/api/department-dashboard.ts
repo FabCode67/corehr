@@ -2,6 +2,7 @@ import type { OrgChartNode } from "@/lib/org-chart"
 
 import { apiFetchSafe } from "./client"
 import type { Employee } from "./employees"
+import type { LeaveBalance, LeaveCalendarData, LeaveRequest, LeaveRequestStatus } from "./leave"
 import type { PaginatedResult } from "./pagination"
 
 export interface HeadedDepartment {
@@ -149,4 +150,57 @@ export interface EligibleWorkforcePlan {
  *  why this can't reuse the admin Workforce Plans fetcher. */
 export function fetchEligibleWorkforcePlans(departmentId: string, actingEmployeeId: string) {
   return apiFetchSafe<EligibleWorkforcePlan[]>(`/department-dashboard/${departmentId}/workforce-plans?actingEmployeeId=${actingEmployeeId}`)
+}
+
+// ---------------------------------------------------------------------
+// Leave management — department-wide write access (approve/reject/cancel
+// go through the existing generic /leave/requests/:id/decide and /:id/cancel
+// endpoints directly, reusing DecideRequestForm/CancelRequestButton
+// unmodified — see LeaveRequestsService.assertCanDecideStep/assertCanCancel
+// for the department-head-aware authorization). Only the read views and the
+// balance-adjustment write are department-dashboard-specific routes.
+// ---------------------------------------------------------------------
+
+export function fetchDepartmentLeaveCalendar(departmentId: string, actingEmployeeId: string, year: number, month: number) {
+  const query = new URLSearchParams({ actingEmployeeId, year: String(year), month: String(month) })
+  return apiFetchSafe<LeaveCalendarData>(`/department-dashboard/${departmentId}/leave/calendar?${query.toString()}`)
+}
+
+export function fetchDepartmentLeaveRequests(
+  departmentId: string,
+  actingEmployeeId: string,
+  params: { status?: LeaveRequestStatus } = {}
+) {
+  const query = new URLSearchParams({ actingEmployeeId })
+  if (params.status) query.set("status", params.status)
+  return apiFetchSafe<LeaveRequest[]>(`/department-dashboard/${departmentId}/leave/requests?${query.toString()}`)
+}
+
+export interface DepartmentLeaveBalanceRow {
+  employee: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string }
+  balances: LeaveBalance[]
+}
+
+export function fetchDepartmentLeaveBalances(departmentId: string, actingEmployeeId: string, year?: number) {
+  const query = new URLSearchParams({ actingEmployeeId })
+  if (year) query.set("year", String(year))
+  return apiFetchSafe<DepartmentLeaveBalanceRow[]>(`/department-dashboard/${departmentId}/leave/balances?${query.toString()}`)
+}
+
+// ---------------------------------------------------------------------
+// Performance — read-only, per-employee latest-review view.
+// ---------------------------------------------------------------------
+
+export interface DepartmentPerformanceRow {
+  employee: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string }
+  reviewType: string
+  status: string
+  overallRating: number | null
+  period: { name: string; year: number }
+  submittedAt: string | null
+  finalizedAt: string | null
+}
+
+export function fetchDepartmentPerformance(departmentId: string, actingEmployeeId: string) {
+  return apiFetchSafe<DepartmentPerformanceRow[]>(`/department-dashboard/${departmentId}/performance?actingEmployeeId=${actingEmployeeId}`)
 }

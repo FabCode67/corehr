@@ -3,6 +3,7 @@ import { LeaveRequestStatus, NotificationType, Prisma } from "@prisma/client"
 
 import { buildPaginatedResult, normalizePagination, type PaginatedResult } from "../../../common/pagination"
 import { buildClientUrl } from "../../../common/client-url.util"
+import { resolveDepartmentFilterIds } from "../../../common/department-hierarchy.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { LeaveBalancesService } from "../leave-balances/leave-balances.service"
@@ -78,9 +79,13 @@ export class LeaveRequestsService {
     return employee?.email ?? null
   }
 
+  /** departmentId accepts either a single id (exact match — the original
+   *  behavior, still used by the admin-wide filter bars) or an array (an
+   *  `in` match — for department-head-scoped callers passing the full
+   *  resolveDepartmentFilterIds cascade, e.g. DepartmentDashboardService). */
   private buildFindAllWhere(filters: {
     employeeId?: string
-    departmentId?: string
+    departmentId?: string | string[]
     branchId?: string
     status?: LeaveRequestStatus
     leaveTypeId?: string
@@ -91,7 +96,15 @@ export class LeaveRequestsService {
       ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
-      ...(filters.departmentId ? { employee: { position: { departmentId: filters.departmentId } } } : {}),
+      ...(filters.departmentId
+        ? {
+            employee: {
+              position: Array.isArray(filters.departmentId)
+                ? { departmentId: { in: filters.departmentId } }
+                : { departmentId: filters.departmentId },
+            },
+          }
+        : {}),
       ...(filters.branchId ? { employee: { branchId: filters.branchId } } : {}),
       ...(filters.from ? { endDate: { gte: filters.from } } : {}),
       ...(filters.to ? { startDate: { lte: filters.to } } : {}),
@@ -102,7 +115,7 @@ export class LeaveRequestsService {
    *  throughout the app. See findAllPaginated() for table views. */
   async findAll(filters: {
     employeeId?: string
-    departmentId?: string
+    departmentId?: string | string[]
     branchId?: string
     status?: LeaveRequestStatus
     leaveTypeId?: string
@@ -120,7 +133,7 @@ export class LeaveRequestsService {
   async findAllPaginated(
     filters: {
       employeeId?: string
-      departmentId?: string
+      departmentId?: string | string[]
       branchId?: string
       status?: LeaveRequestStatus
       leaveTypeId?: string
@@ -530,6 +543,8 @@ export class LeaveRequestsService {
   async cancel(id: string, dto: CancelLeaveRequestDto) {
     const request = await this.findOne(id)
 
+    await this.assertCanCancel(request.employeeId, dto.actingEmployeeId)
+
     if (!OPEN_STATUSES.includes(request.status)) {
       throw new BadRequestException("This request can no longer be cancelled.")
     }
@@ -660,7 +675,7 @@ export class LeaveRequestsService {
   async getCalendarData(
     year: number,
     month: number,
-    filters: { departmentId?: string; branchId?: string }
+    filters: { departmentId?: string | string[]; branchId?: string }
   ) {
     const rangeStart = new Date(Date.UTC(year, month - 1, 1))
     const rangeEnd = new Date(Date.UTC(year, month, 0))
@@ -671,7 +686,15 @@ export class LeaveRequestsService {
           status: { in: ["PENDING_APPROVAL", "APPROVED"] },
           startDate: { lte: rangeEnd },
           endDate: { gte: rangeStart },
-          ...(filters.departmentId ? { employee: { position: { departmentId: filters.departmentId } } } : {}),
+          ...(filters.departmentId
+            ? {
+                employee: {
+                  position: Array.isArray(filters.departmentId)
+                    ? { departmentId: { in: filters.departmentId } }
+                    : { departmentId: filters.departmentId },
+                },
+              }
+            : {}),
           ...(filters.branchId ? { employee: { branchId: filters.branchId } } : {}),
         },
         include: REQUEST_INCLUDE,
@@ -714,9 +737,12 @@ export class LeaveRequestsService {
    * the approvals page (client/middleware.ts gated the whole /admin tree),
    * but no longer safe now that line managers get their own staff-portal
    * approvals queue (see findPendingForManager()). A LINE_MANAGER step can
-   * only be decided by the requester's actually-resolved line manager; an
-   * HR step can only be decided by an admin (this app has no separate
-   * HR-role concept — see schema.prisma's ApprovalRole doc comment).
+   * be decided by the requester's actually-resolved line manager, or —
+   * since Head of Department was granted department-wide leave approval —
+   * by the Head of Department of the requester's department (see
+   * isDepartmentHeadOfEmployee()). An HR step can only be decided by an
+   * admin (this app has no separate HR-role concept — see schema.prisma's
+   * ApprovalRole doc comment); department heads do NOT get HR-step access.
    */
   private async assertCanDecideStep(
     role: "LINE_MANAGER" | "HR",
@@ -729,10 +755,11 @@ export class LeaveRequestsService {
 
     if (role === "LINE_MANAGER") {
       const resolvedManagerId = await this.resolveLineManagerId(requesterEmployeeId)
-      if (!resolvedManagerId || resolvedManagerId !== actingEmployeeId) {
-        throw new ForbiddenException("Only this employee's resolved line manager can decide this approval step.")
-      }
-      return
+      if (resolvedManagerId === actingEmployeeId) return
+      if (await this.isDepartmentHeadOfEmployee(actingEmployeeId, requesterEmployeeId)) return
+      throw new ForbiddenException(
+        "Only this employee's resolved line manager, or their department's Head of Department, can decide this approval step."
+      )
     }
 
     const actor = await this.prisma.employee.findUnique({
@@ -742,5 +769,61 @@ export class LeaveRequestsService {
     if (!actor?.isAdmin) {
       throw new ForbiddenException("Only an admin can decide an HR approval step.")
     }
+  }
+
+  /**
+   * True if actingEmployeeId is the designated Head of Department
+   * (Department.headOfDepartmentId — see DepartmentDashboardService's doc
+   * comment on why this is a different, authoritative concept from the
+   * org-chart-derived "auto head" other modules use) of a department whose
+   * resolveDepartmentFilterIds cascade includes the requester's own
+   * department. Backs both the department-head approve/reject fallback in
+   * assertCanDecideStep() and the cancel-on-behalf check in
+   * assertCanCancel() below.
+   */
+  private async isDepartmentHeadOfEmployee(actingEmployeeId: string, requesterEmployeeId: string): Promise<boolean> {
+    const requester = await this.prisma.employee.findUnique({
+      where: { employeeNumber: requesterEmployeeId },
+      select: { position: { select: { departmentId: true } } },
+    })
+    const requesterDepartmentId = requester?.position?.departmentId
+    if (!requesterDepartmentId) return false
+
+    const headedDepartments = await this.prisma.department.findMany({
+      where: { headOfDepartmentId: actingEmployeeId, isActive: true },
+      select: { id: true },
+    })
+    if (headedDepartments.length === 0) return false
+
+    for (const department of headedDepartments) {
+      const cascade = await resolveDepartmentFilterIds(this.prisma, department.id)
+      if (cascade.includes(requesterDepartmentId)) return true
+    }
+    return false
+  }
+
+  /**
+   * cancel() previously had no authorization check at all — anyone who knew
+   * a request id could cancel it by supplying any actingEmployeeId. Allows:
+   * the request's own employee, their resolved line manager, their
+   * department's Head of Department, or an admin.
+   */
+  private async assertCanCancel(requesterEmployeeId: string, actingEmployeeId: string) {
+    if (actingEmployeeId === requesterEmployeeId) return
+
+    const actor = await this.prisma.employee.findUnique({
+      where: { employeeNumber: actingEmployeeId },
+      select: { isAdmin: true },
+    })
+    if (actor?.isAdmin) return
+
+    const resolvedManagerId = await this.resolveLineManagerId(requesterEmployeeId)
+    if (resolvedManagerId === actingEmployeeId) return
+
+    if (await this.isDepartmentHeadOfEmployee(actingEmployeeId, requesterEmployeeId)) return
+
+    throw new ForbiddenException(
+      "Only this employee, their resolved line manager, their department's Head of Department, or an admin can cancel this request."
+    )
   }
 }

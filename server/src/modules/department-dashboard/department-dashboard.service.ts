@@ -1,10 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
-import { CourseAssignmentStatus, FormInstanceStatus } from "@prisma/client"
+import { CourseAssignmentStatus, FormInstanceStatus, LeaveRequestStatus } from "@prisma/client"
 
 import { resolveDepartmentFilterIds } from "../../common/department-hierarchy.util"
 import { PrismaService } from "../../prisma/prisma.service"
 import { EmployeesExportService } from "../employees/employees-export.service"
 import { EmployeesService } from "../employees/employees.service"
+import { AdjustBalanceDto } from "../leave/leave-balances/dto/adjust-balance.dto"
+import { LeaveBalancesService } from "../leave/leave-balances/leave-balances.service"
+import { LeaveRequestsService } from "../leave/leave-requests/leave-requests.service"
 import { OrgChartService } from "../organization/org-chart/org-chart.service"
 import { CreateRequisitionDto } from "../recruitment/requisitions/dto/create-requisition.dto"
 import { RequisitionsService } from "../recruitment/requisitions/requisitions.service"
@@ -35,7 +38,9 @@ export class DepartmentDashboardService {
     private readonly employeesService: EmployeesService,
     private readonly employeesExportService: EmployeesExportService,
     private readonly orgChartService: OrgChartService,
-    private readonly requisitionsService: RequisitionsService
+    private readonly requisitionsService: RequisitionsService,
+    private readonly leaveRequestsService: LeaveRequestsService,
+    private readonly leaveBalancesService: LeaveBalancesService
   ) {}
 
   /** Every active department this employee is the designated head of —
@@ -221,10 +226,13 @@ export class DepartmentDashboardService {
   // Head of Department portal — "control everything in his department"
   // follow-up request: view/export/recruit capabilities layered onto the
   // dashboard above. Deliberately NO write access to employee or position
-  // records (HR keeps sole ownership of those) — the one permitted write
-  // action is job requisition creation, and even that is routed through
-  // the existing recruitment approval workflow unmodified. Every method
-  // below starts with the same assertAccess() gate as getSummary().
+  // records themselves (HR keeps sole ownership of those) — the two
+  // permitted write actions are (1) job requisition creation, routed
+  // through the existing recruitment approval workflow unmodified, and (2)
+  // department-wide leave management (approve/reject, cancel-on-behalf,
+  // balance adjustment — see the "Leave management" section further below),
+  // both explicitly requested and confirmed in a later follow-up. Every
+  // method below starts with the same assertAccess() gate as getSummary().
   // ---------------------------------------------------------------------
 
   /** Filterable/searchable employee list, scoped to the department (+
@@ -429,5 +437,138 @@ export class DepartmentDashboardService {
 
     const scopedDto: CreateRequisitionDto = { ...dto, requestedById: actingEmployeeId, hiringManagerId: actingEmployeeId }
     return this.requisitionsService.create(scopedDto, actingEmployeeId)
+  }
+
+  // ---------------------------------------------------------------------
+  // Leave management — department-wide write access, confirmed via a
+  // follow-up clarifying question (the department head gets approve/reject,
+  // cancel-on-behalf, and balance adjustment — not merely a view). The
+  // actual authorization for approve/reject/cancel lives in
+  // LeaveRequestsService (assertCanDecideStep/assertCanCancel, both now
+  // department-head-aware), so this module reuses the SAME generic
+  // /leave/requests/:id/decide and /:id/cancel endpoints rather than
+  // duplicating them — these methods below only cover the read views
+  // (calendar, list, balances) and the one action LeaveRequestsService
+  // itself doesn't gate: balance adjustment.
+  // ---------------------------------------------------------------------
+
+  /** Department-scoped leave calendar for a given month — delegates to
+   *  LeaveRequestsService.getCalendarData() with the department's
+   *  resolveDepartmentFilterIds cascade passed as an array, now that that
+   *  method accepts one (see its doc comment). */
+  async getLeaveCalendar(departmentId: string, actingEmployeeId: string, year: number, month: number) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    return this.leaveRequestsService.getCalendarData(year, month, { departmentId: departmentIds })
+  }
+
+  /** Department-scoped leave request list — powers both a "pending
+   *  approvals" queue (pass status=PENDING_APPROVAL) and a general
+   *  department leave history view, reusing the same cascade-aware
+   *  findAll()/findAllPaginated() LeaveRequestsService now supports. */
+  async getLeaveRequests(
+    departmentId: string,
+    actingEmployeeId: string,
+    filters: { status?: LeaveRequestStatus; page?: number; pageSize?: number } = {}
+  ) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    const { status, page, pageSize } = filters
+    if (page) {
+      return this.leaveRequestsService.findAllPaginated({ departmentId: departmentIds, status }, page, pageSize)
+    }
+    return this.leaveRequestsService.findAll({ departmentId: departmentIds, status })
+  }
+
+  /** Per-employee leave balances for every active employee in the
+   *  department — loops LeaveBalancesService.getSummary() per employee
+   *  (that service has no bulk/department-scoped variant, and looping it
+   *  reuses its existing carry-forward/low-balance notification side
+   *  effects for free rather than duplicating that logic here). */
+  async getLeaveBalances(departmentId: string, actingEmployeeId: string, year?: number) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+
+    const employees = await this.prisma.employee.findMany({
+      where: { isActive: true, position: { departmentId: { in: departmentIds } } },
+      select: { employeeNumber: true, firstName: true, middleName: true, lastName: true },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    })
+
+    const balances = await Promise.all(
+      employees.map(async (employee) => ({
+        employee,
+        balances: await this.leaveBalancesService.getSummary(employee.employeeNumber, year),
+      }))
+    )
+    return balances
+  }
+
+  /** Balance adjustment — the one LeaveBalancesService write LeaveRequestsService's
+   *  own authorization doesn't cover (that service has no actingEmployeeId
+   *  concept at all — see its doc comment), so access is gated entirely
+   *  here: assertAccess() plus confirming the target employee is actually
+   *  in this department's scope, mirroring getEmployee()'s same check. */
+  async adjustLeaveBalance(
+    departmentId: string,
+    actingEmployeeId: string,
+    employeeId: string,
+    leaveTypeId: string,
+    year: number,
+    dto: AdjustBalanceDto
+  ) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    const employee = await this.prisma.employee.findUnique({
+      where: { employeeNumber: employeeId },
+      select: { position: { select: { departmentId: true } } },
+    })
+    if (!employee?.position || !departmentIds.includes(employee.position.departmentId)) {
+      throw new ForbiddenException("This employee is not part of your department.")
+    }
+    return this.leaveBalancesService.adjust(employeeId, leaveTypeId, year, dto)
+  }
+
+  // ---------------------------------------------------------------------
+  // Performance — read-only, per-employee view of how the department is
+  // performing (the bank-wide equivalent, ReviewsService, uses
+  // PerformanceAccessService's own org-chart-derived scope, a different
+  // definition than Department.headOfDepartmentId — see this module's doc
+  // comment — so this queries PerformanceReview directly via its own
+  // departmentId snapshot field rather than going through ReviewsService).
+  // ---------------------------------------------------------------------
+
+  /** Latest review per employee in the department (by period year, then
+   *  createdAt) — a department head wants "how is each of my people doing
+   *  right now", not a full history per employee. */
+  async getEmployeePerformance(departmentId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+
+    const reviews = await this.prisma.performanceReview.findMany({
+      where: { departmentId: { in: departmentIds } },
+      include: {
+        employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+        period: { select: { name: true, year: true } },
+      },
+      orderBy: [{ period: { year: "desc" } }, { createdAt: "desc" }],
+    })
+
+    const latestByEmployee = new Map<string, (typeof reviews)[number]>()
+    for (const review of reviews) {
+      if (!latestByEmployee.has(review.employeeId)) {
+        latestByEmployee.set(review.employeeId, review)
+      }
+    }
+
+    return Array.from(latestByEmployee.values()).map((review) => ({
+      employee: review.employee,
+      reviewType: review.reviewType,
+      status: review.status,
+      overallRating: review.overallRating,
+      period: review.period,
+      submittedAt: review.submittedAt,
+      finalizedAt: review.finalizedAt,
+    }))
   }
 }
