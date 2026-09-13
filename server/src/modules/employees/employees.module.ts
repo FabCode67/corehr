@@ -16,6 +16,6 @@ import { ProbationReminderScheduler } from "./probation-reminder.scheduler"
   imports: [LeaveBalancesModule, AssignmentsModule, EmailModule, NotificationsModule],
   controllers: [EmployeesController],
   providers: [EmployeesService, EmployeesExportService, FamilyTreePdfService, ProbationReminderScheduler, ContractReminderScheduler],
-  exports: [EmployeesService],
+  exports: [EmployeesService, EmployeesExportService],
 })
 export class EmployeesModule {}

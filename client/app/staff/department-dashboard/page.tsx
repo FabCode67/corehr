@@ -1,17 +1,12 @@
-import Link from "next/link"
 import { CalendarDays, FileText, Target, Users, type LucideIcon } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  fetchDepartmentDashboardSummary,
-  fetchMyHeadedDepartments,
-  type DepartmentDashboardSummary,
-} from "@/lib/api/department-dashboard"
+import { fetchDepartmentDashboardSummary, type DepartmentDashboardSummary } from "@/lib/api/department-dashboard"
 import { fullName } from "@/lib/format-name"
-import { getSession } from "@/lib/get-session"
-import { cn } from "@/lib/utils"
 
 import { BreakdownBars, BreakdownDonut } from "./charts"
+import { DepartmentApiError, DepartmentEmptyState, DepartmentSwitcher, resolveDepartmentContext } from "./shared"
+import { DepartmentDashboardTabs } from "./tabs"
 
 const GENDER_LABEL: Record<string, string> = { MALE: "Male", FEMALE: "Female" }
 const CONTRACT_TYPE_LABEL: Record<string, string> = {
@@ -58,82 +53,44 @@ export default async function DepartmentDashboardPage({
   searchParams: Promise<{ dept?: string }>
 }) {
   const { dept } = await searchParams
-  const session = await getSession()
-  const actingEmployeeId = session?.employeeId ?? ""
-
-  const departmentsResult = await fetchMyHeadedDepartments(actingEmployeeId)
-
-  if (!departmentsResult.ok) {
-    return (
-      <Card className="max-w-2xl border-dashed border-destructive/40">
-        <CardHeader>
-          <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
-          <CardDescription>{departmentsResult.error}</CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-
-  const departments = departmentsResult.data
-
-  if (departments.length === 0) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Department Dashboard</h1>
-          <p className="text-sm text-muted-foreground">A summary report for the department(s) you head.</p>
-        </div>
-        <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            You are not currently set as the Head of a Department, so there&apos;s nothing to show here yet. If this looks
-            wrong, ask HR to check the Head of Department field on your department.
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  const selectedDepartmentId = dept && departments.some((d) => d.id === dept) ? dept : departments[0].id
-  const summaryResult = await fetchDepartmentDashboardSummary(selectedDepartmentId, actingEmployeeId)
+  const context = await resolveDepartmentContext(dept)
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Department Dashboard</h1>
-        <p className="text-sm text-muted-foreground">A summary report for the department(s) you head.</p>
+        <p className="text-sm text-muted-foreground">
+          A summary report, plus employees/positions/learning/org chart views and job requisitions, for the
+          department(s) you head.
+        </p>
       </div>
 
-      {departments.length > 1 ? (
-        <div className="flex flex-wrap gap-2">
-          {departments.map((department) => (
-            <Link
-              key={department.id}
-              href={`/staff/department-dashboard?dept=${department.id}`}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                department.id === selectedDepartmentId
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {department.name}
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      {context.status === "error" ? <DepartmentApiError message={context.message} /> : null}
+      {context.status === "empty" ? <DepartmentEmptyState /> : null}
 
-      {!summaryResult.ok ? (
-        <Card className="max-w-2xl border-dashed border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
-            <CardDescription>{summaryResult.error}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : (
-        <DepartmentSummary summary={summaryResult.data} />
-      )}
+      {context.status === "ok" ? (
+        <>
+          <DepartmentDashboardTabs active="overview" dept={context.selectedDepartmentId} />
+          <DepartmentSwitcher
+            departments={context.departments}
+            selectedDepartmentId={context.selectedDepartmentId}
+            basePath="/staff/department-dashboard"
+          />
+          <DepartmentOverview departmentId={context.selectedDepartmentId} actingEmployeeId={context.actingEmployeeId} />
+        </>
+      ) : null}
     </div>
   )
+}
+
+async function DepartmentOverview({ departmentId, actingEmployeeId }: { departmentId: string; actingEmployeeId: string }) {
+  const summaryResult = await fetchDepartmentDashboardSummary(departmentId, actingEmployeeId)
+
+  if (!summaryResult.ok) {
+    return <DepartmentApiError message={summaryResult.error} />
+  }
+
+  return <DepartmentSummary summary={summaryResult.data} />
 }
 
 function DepartmentSummary({ summary }: { summary: DepartmentDashboardSummary }) {

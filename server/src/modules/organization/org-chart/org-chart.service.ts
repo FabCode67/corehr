@@ -103,4 +103,35 @@ export class OrgChartService {
 
     return [requestedRoot]
   }
+
+  /**
+   * Department-scoped view of the chart, for the Head of Department portal.
+   * Builds the full org tree via getTree() (cheap — see its doc comment)
+   * then prunes it down to only positions whose department is in
+   * `departmentIds` (the caller's resolveDepartmentFilterIds()-derived
+   * scope). A position outside the scope is dropped, but if any of its
+   * descendants ARE in scope (e.g. this department's top position reports
+   * up to another department's manager, which is normal), those
+   * descendants are promoted to roots of the returned forest rather than
+   * silently disappearing along with their out-of-scope ancestor.
+   */
+  async getDepartmentTree(departmentIds: string[]): Promise<OrgChartNode[]> {
+    const fullTree = await this.getTree()
+    return this.pruneToDepartments(fullTree, new Set(departmentIds))
+  }
+
+  private pruneToDepartments(nodes: OrgChartNode[], departmentIds: Set<string>): OrgChartNode[] {
+    const result: OrgChartNode[] = []
+    for (const node of nodes) {
+      const prunedChildren = this.pruneToDepartments(node.directReports, departmentIds)
+      if (departmentIds.has(node.department.id)) {
+        result.push({ ...node, directReports: prunedChildren })
+      } else {
+        // Out of scope itself — promote any in-scope descendants as roots
+        // instead of dropping the whole branch.
+        result.push(...prunedChildren)
+      }
+    }
+    return result
+  }
 }
