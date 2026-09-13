@@ -34,9 +34,16 @@ export interface Department {
    *  comment. Was previously settable only via Bulk Import; now also
    *  editable from this Details form. */
   headOfDepartmentId: string | null
+  /** Employee.employeeNumber of this department's temporary Acting Head of
+   *  Department — a stand-in with identical access while the real head is
+   *  out or the position is vacant. See the schema's
+   *  Department.actingHeadOfDepartmentId doc comment. Manually set/cleared
+   *  by HR Admin from this Details form; no auto-expiry. */
+  actingHeadOfDepartmentId: string | null
   function?: OrgFunction
   parentDepartment?: { id: string; name: string } | null
   headOfDepartment?: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string } | null
+  actingHeadOfDepartment?: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string } | null
   units?: DepartmentUnit[]
 }
 

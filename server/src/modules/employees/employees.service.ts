@@ -531,25 +531,28 @@ export class EmployeesService {
    * needed). Band is left untouched as a historical record of the
    * employee's final grade. The employee row itself is never deleted.
    *
-   * Hard gate: if this employee has any ExitDocumentAssignment rows (i.e.
-   * ExitProcessService.initiateExit() bulk-assigned the exit checklist),
-   * every one of them must be complete before the exit can be finalized —
-   * the one place in Exit Management with a real database-level block
-   * (contrast with the Exit Clearance Form, which is tracked but not
-   * enforced). If no exit documents were ever assigned, exit proceeds as
-   * before — this keeps direct/legacy use of this dialog working.
+   * Hard gate: if this employee has any ExitClearanceFormAssignment rows
+   * (i.e. ExitProcessService.initiateExit() bulk-assigned the configurable
+   * Exit Clearance Workflow — see schema.prisma's module note), every
+   * MANDATORY one of them must be COMPLETED before the exit can be
+   * finalized — the one place in Exit Management with a real
+   * database-level block (contrast with the Forms Management Exit
+   * Clearance Form, which is tracked but not enforced). Optional forms are
+   * tracked but never block. If no clearance forms were ever assigned,
+   * exit proceeds as before — this keeps direct/legacy use of this dialog
+   * working.
    */
   async processExit(id: string, dto: ProcessExitDto) {
     const employee = await this.findOne(id)
 
-    const exitDocuments = await this.prisma.exitDocumentAssignment.findMany({
-      where: { employeeId: id },
-      include: { documentType: true },
+    const clearanceForms = await this.prisma.exitClearanceFormAssignment.findMany({
+      where: { employeeId: id, template: { isMandatory: true } },
+      include: { template: true },
     })
-    const incomplete = exitDocuments.filter((assignment) => !assignment.isCompleted)
+    const incomplete = clearanceForms.filter((assignment) => assignment.status !== "COMPLETED")
     if (incomplete.length > 0) {
       throw new BadRequestException(
-        `All exit documents must be completed before the exit can be confirmed. Outstanding: ${incomplete.map((a) => a.documentType.name).join(", ")}.`
+        `All mandatory exit clearance forms must be completed before the exit can be confirmed. Outstanding: ${incomplete.map((a) => a.template.name).join(", ")}.`
       )
     }
 

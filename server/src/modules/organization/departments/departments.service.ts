@@ -12,6 +12,7 @@ const DEPARTMENT_LIST_INCLUDE = {
   units: { where: { isActive: true } },
   parentDepartment: { select: { id: true, name: true } },
   headOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+  actingHeadOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
 } as const
 
 @Injectable()
@@ -78,6 +79,7 @@ export class DepartmentsService {
         positions: { where: { isActive: true, unitId: null } },
         parentDepartment: { select: { id: true, name: true } },
         headOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+        actingHeadOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
       },
     })
 
@@ -93,6 +95,7 @@ export class DepartmentsService {
     await this.assertNameAvailable(dto.functionId, dto.name)
     await this.assertParentDepartmentValid(dto.parentDepartmentId)
     await this.assertHeadOfDepartmentValid(dto.headOfDepartmentId)
+    await this.assertHeadOfDepartmentValid(dto.actingHeadOfDepartmentId)
 
     return this.prisma.department.create({ data: dto })
   }
@@ -115,6 +118,10 @@ export class DepartmentsService {
 
     if (dto.headOfDepartmentId !== undefined) {
       await this.assertHeadOfDepartmentValid(dto.headOfDepartmentId)
+    }
+
+    if (dto.actingHeadOfDepartmentId !== undefined) {
+      await this.assertHeadOfDepartmentValid(dto.actingHeadOfDepartmentId)
     }
 
     return this.prisma.department.update({ where: { id }, data: dto })

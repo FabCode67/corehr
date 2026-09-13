@@ -58,8 +58,8 @@ import { EmployeeRelationsAnalyticsModule } from "./modules/employee-relations/a
 import { CasePdfModule } from "./modules/employee-relations/pdf/case-pdf.module"
 import { DocumentTypesModule } from "./modules/onboarding-documents/document-types/document-types.module"
 import { AssignmentsModule as OnboardingDocumentAssignmentsModule } from "./modules/onboarding-documents/assignments/assignments.module"
-import { ExitDocumentTypesModule } from "./modules/exit-documents/document-types/document-types.module"
-import { ExitDocumentAssignmentsModule } from "./modules/exit-documents/assignments/assignments.module"
+import { ClearanceFormTemplatesModule } from "./modules/exit-clearance/templates/templates.module"
+import { ExitClearanceModule } from "./modules/exit-clearance/assignments/exit-clearance.module"
 import { ExitProcessModule } from "./modules/employees/exit-process/exit-process.module"
 import { ExecutiveDashboardModule } from "./modules/executive-dashboard/executive-dashboard.module"
 import { ImportsModule } from "./modules/imports/imports.module"
@@ -135,8 +135,8 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     CasePdfModule,
     DocumentTypesModule,
     OnboardingDocumentAssignmentsModule,
-    ExitDocumentTypesModule,
-    ExitDocumentAssignmentsModule,
+    ClearanceFormTemplatesModule,
+    ExitClearanceModule,
     ExitProcessModule,
     ExecutiveDashboardModule,
     ImportsModule,

@@ -35,8 +35,6 @@
  *      - PerformanceRatingScale (the 1-5 scale) — the Performance module
  *        assumes these rows exist; the client only edits existing rows, it
  *        never creates new ones.
- *      - ExitDocumentType (the standard exit-clearance checklist) — same
- *        story, no "create new" control in the client.
  *      - EmailTemplate — every automated email the app ever sends
  *        (welcome, leave, performance, learning, recruitment, exit,
  *        employee-relations, approvals, probation/contract reminders)
@@ -46,7 +44,10 @@
  * Deliberately NOT seeded — every one of these either has a genuine
  * "create new" page somewhere in the client (Branches/Locations, Units,
  * AcademicInstitution, Skill, SanctionType, the recruitment stage
- * catalog/workflows, course/training/form categories), or is
+ * catalog/workflows, course/training/form categories, Exit Clearance Form
+ * Templates — unlike the old fixed exit-document checklist this replaced,
+ * these route to a real Department + Position, so they can only be
+ * meaningfully created once HR's own org structure exists), or is
  * instance/transactional data the request explicitly asked to keep off a
  * fresh database (leave requests/balances, notifications, performance
  * review periods/reviews, course assignments, job requisitions/
@@ -277,13 +278,29 @@ async function main() {
     })
   }
 
+  // Department.headOfDepartmentId is the authoritative "who runs this
+  // department" field the whole Head of Department portal
+  // (department-dashboard.service.ts) is scoped by — distinct from just
+  // holding the "Head of Human Resource Department" position title above.
+  // Without this, Fabrice would be isAdmin (full bank-wide access via
+  // /admin) but NOT recognized as a department head at all, so
+  // /staff/department-dashboard (Leave calendar/approvals/cancel/balances,
+  // Performance, org chart, etc. — the same portal every other department
+  // head gets) would show "You are not currently set as the Head of a
+  // Department" for the very person whose title says otherwise. Set here
+  // rather than in upsertDepartment() because it needs fabrice's
+  // employeeNumber, which doesn't exist until this employee upsert above.
+  await prisma.department.update({
+    where: { id: humanResources.id },
+    data: { headOfDepartmentId: fabrice.employeeNumber },
+  })
+
   // eslint-disable-next-line no-console
   console.log(
     `Seeded 1 employee: ${fabrice.firstName} ${fabrice.lastName} (${fabrice.employeeNumber}), isAdmin=${fabrice.isAdmin}, mustChangePassword=${fabrice.mustChangePassword}.`
   )
 
   await seedPerformanceRatingScale()
-  await seedExitDocumentTypes()
   await seedEmailTemplates(fabrice.employeeNumber)
 }
 
@@ -313,34 +330,6 @@ async function seedPerformanceRatingScale() {
 
   // eslint-disable-next-line no-console
   console.log(`Seeded Performance Rating Scale: ${scaleDefs.length} ranks.`)
-}
-
-/**
- * The standard exit-clearance checklist — no "create new" control exists
- * for this catalog in the client either.
- */
-async function seedExitDocumentTypes() {
-  const documentTypes: { name: string; description: string; isMandatory: boolean; sortOrder: number }[] = [
-    { name: "Company ID Card Returned", description: "Physical staff ID card handed back to HR/Security.", isMandatory: true, sortOrder: 1 },
-    { name: "Laptop / IT Equipment Returned", description: "Laptop, monitor, phone, and any other issued hardware returned to IT.", isMandatory: true, sortOrder: 2 },
-    { name: "System Access Revoked", description: "Email, core banking, and other system accounts disabled by IT.", isMandatory: true, sortOrder: 3 },
-    { name: "Handover Report Submitted", description: "Outstanding work and pending items handed over to the line manager/team.", isMandatory: true, sortOrder: 4 },
-    { name: "Exit Interview Conducted", description: "HR has conducted the exit interview and logged feedback.", isMandatory: false, sortOrder: 5 },
-    { name: "Final Payslip & Settlement Processed", description: "Final salary, leave encashment, and any other dues processed by Payroll.", isMandatory: true, sortOrder: 6 },
-    { name: "Loan / Advance Clearance", description: "Any outstanding staff loans or salary advances settled or a repayment plan agreed.", isMandatory: false, sortOrder: 7 },
-    { name: "Clearance Certificate Signed", description: "Final sign-off from all relevant departments (Finance, IT, Facilities, HR).", isMandatory: true, sortOrder: 8 },
-  ]
-
-  for (const documentType of documentTypes) {
-    await prisma.exitDocumentType.upsert({
-      where: { name: documentType.name },
-      update: {},
-      create: documentType,
-    })
-  }
-
-  // eslint-disable-next-line no-console
-  console.log(`Seeded Exit Document Types: ${documentTypes.length} default checklist items.`)
 }
 
 /**
@@ -741,6 +730,42 @@ async function seedEmailTemplates(adminEmployeeNumber: string) {
         `<p>Hi {{employee_name}}, please complete the clearance checklist items below before your last working day ({{last_working_day}}).</p>`
       ),
       variables: ["employee_name", "last_working_day"],
+    },
+    {
+      key: "exit_clearance_form_approved",
+      name: "Exit Clearance Form Approved",
+      category: "exit",
+      subject: "Exit clearance form approved",
+      bodyHtml: emailShell(
+        "Form approved",
+        `<p>Hi {{employee_name}}, one of your exit clearance forms has been approved.</p>
+        <p><a href="{{clearance_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View your clearance progress</a></p>`
+      ),
+      variables: ["employee_name", "clearance_url"],
+    },
+    {
+      key: "exit_clearance_form_returned",
+      name: "Exit Clearance Form Returned",
+      category: "exit",
+      subject: "Action needed: exit clearance form returned",
+      bodyHtml: emailShell(
+        "Form returned",
+        `<p>Hi {{employee_name}}, one of your exit clearance forms was returned with the following note: "{{comment}}"</p>
+        <p><a href="{{clearance_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">View your clearance progress</a></p>`
+      ),
+      variables: ["employee_name", "comment", "clearance_url"],
+    },
+    {
+      key: "exit_clearance_overdue_reminder",
+      name: "Exit Clearance Overdue Reminder",
+      category: "exit",
+      subject: "Overdue: {{item_name}}",
+      bodyHtml: emailShell(
+        "Exit clearance overdue",
+        `<p>Hi {{recipient_name}}, "{{item_name}}" is now overdue in the Exit Clearance Workflow.</p>
+        <p><a href="{{clearance_url}}" style="background:#0f4c81; color:#fff; padding:10px 18px; text-decoration:none; border-radius:4px;">Open Exit Clearance</a></p>`
+      ),
+      variables: ["recipient_name", "item_name", "clearance_url"],
     },
     {
       key: "exit_interview_invitation",

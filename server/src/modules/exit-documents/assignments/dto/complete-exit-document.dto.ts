@@ -1,15 +1,4 @@
-import { ApiPropertyOptional } from "@nestjs/swagger"
-import { IsBoolean, IsOptional, IsString } from "class-validator"
-
-export class CompleteExitDocumentDto {
-  @IsString()
-  actingEmployeeId!: string
-
-  @IsBoolean()
-  isCompleted!: boolean
-
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  notes?: string
-}
+// Superseded by CompleteClearanceFormDto/ReviewClearanceFormDto — see
+// server/src/modules/exit-clearance/assignments/dto. Left as an intentional
+// no-op rather than deleted (see assignments.module.ts's comment).
+export {}

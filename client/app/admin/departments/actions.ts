@@ -35,6 +35,7 @@ export async function createDepartment(
         description: trimmedOrUndefined(formData.get("description")),
         parentDepartmentId: trimmedOrUndefined(formData.get("parentDepartmentId")),
         headOfDepartmentId: trimmedOrUndefined(formData.get("headOfDepartmentId")),
+        actingHeadOfDepartmentId: trimmedOrUndefined(formData.get("actingHeadOfDepartmentId")),
       }),
     })
   } catch (error) {
@@ -66,7 +67,14 @@ export async function updateDepartment(
         code: trimmedOrUndefined(formData.get("code")),
         description: trimmedOrUndefined(formData.get("description")),
         parentDepartmentId: trimmedOrUndefined(formData.get("parentDepartmentId")),
-        headOfDepartmentId: trimmedOrUndefined(formData.get("headOfDepartmentId")),
+        // `?? null` (not just trimmedOrUndefined) on these two: an update PATCH
+        // with an omitted key leaves the existing value untouched (see
+        // DepartmentsService.update()'s `!== undefined` guards), so clearing
+        // "None" back to empty in the Select has to send an explicit null,
+        // not just drop the key. Matters most for Acting Head — "admin clears
+        // it when the head is back" only works if this round-trips.
+        headOfDepartmentId: trimmedOrUndefined(formData.get("headOfDepartmentId")) ?? null,
+        actingHeadOfDepartmentId: trimmedOrUndefined(formData.get("actingHeadOfDepartmentId")) ?? null,
       }),
     })
   } catch (error) {

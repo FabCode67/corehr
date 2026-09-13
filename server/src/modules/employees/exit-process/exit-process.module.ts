@@ -3,12 +3,13 @@ import { Module } from "@nestjs/common"
 import { EmployeesModule } from "../employees.module"
 import { FormInstancesModule } from "../../forms/instances/form-instances.module"
 import { EmailModule } from "../../email/email.module"
+import { ExitClearanceModule } from "../../exit-clearance/assignments/exit-clearance.module"
 
 import { ExitProcessController } from "./exit-process.controller"
 import { ExitProcessService } from "./exit-process.service"
 
 @Module({
-  imports: [EmployeesModule, FormInstancesModule, EmailModule],
+  imports: [EmployeesModule, FormInstancesModule, EmailModule, ExitClearanceModule],
   controllers: [ExitProcessController],
   providers: [ExitProcessService],
   exports: [ExitProcessService],

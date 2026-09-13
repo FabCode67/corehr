@@ -64,6 +64,50 @@ export class NotificationsService {
     return created
   }
 
+  /**
+   * Like create(), but for the "notify a small fixed set of people about
+   * the same event" case — e.g. a department's real Head AND its Acting
+   * Head should both hear about an employee's leave/milestone. Calling
+   * create() once per recipient would work individually, but each call's
+   * own admin fan-out doesn't know about the OTHER call's recipient, so
+   * every HR Administrator would end up with one duplicate copy per extra
+   * recipient. This does the fan-out ONCE, excluding every given recipient
+   * (not just one), so admins always get exactly one copy regardless of
+   * how many primary recipients there are.
+   */
+  async createMany(
+    recipientEmployeeIds: string[],
+    params: {
+      type: NotificationType
+      title: string
+      message: string
+      relatedLeaveRequestId?: string
+      relatedEmployeeId?: string
+      actionUrl?: string
+    },
+    tx?: Prisma.TransactionClient
+  ) {
+    const client = tx ?? this.prisma
+    const uniqueRecipients = Array.from(new Set(recipientEmployeeIds))
+    if (uniqueRecipients.length === 0) return []
+
+    const created = await client.notification.createMany({
+      data: uniqueRecipients.map((recipientEmployeeId) => ({ ...params, recipientEmployeeId })),
+    })
+
+    const admins = await client.employee.findMany({
+      where: { isAdmin: true, isActive: true, employeeNumber: { notIn: uniqueRecipients } },
+      select: { employeeNumber: true },
+    })
+    if (admins.length > 0) {
+      await client.notification.createMany({
+        data: admins.map((admin) => ({ ...params, recipientEmployeeId: admin.employeeNumber })),
+      })
+    }
+
+    return created
+  }
+
   /** Broadcasts one notification to every HR Administrator (Employee.isAdmin)
    *  — used wherever the spec says "HR should be notified" without naming a
    *  specific individual (e.g. leave cancellation, onboarding document

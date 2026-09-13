@@ -7,6 +7,8 @@ import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { NotificationsService } from "../notifications/notifications.service"
 
+const MANAGER_SELECT = { employeeNumber: true, firstName: true, lastName: true, email: true } as const
+
 const EMPLOYEE_SELECT = {
   employeeNumber: true,
   firstName: true,
@@ -16,25 +18,40 @@ const EMPLOYEE_SELECT = {
     select: {
       department: {
         select: {
-          headOfDepartment: {
-            select: { employeeNumber: true, firstName: true, lastName: true, email: true },
-          },
+          headOfDepartment: { select: MANAGER_SELECT },
+          actingHeadOfDepartment: { select: MANAGER_SELECT },
         },
       },
     },
   },
 } as const
 
+type Manager = { employeeNumber: string; firstName: string; lastName: string; email: string }
+
+/** Both the real Head of Department and its Acting Head (if one is
+ *  currently assigned) get notified — an acting head is a full stand-in,
+ *  not a lesser role, and the real head should stay in the loop even while
+ *  away (see Department.actingHeadOfDepartmentId's schema doc comment).
+ *  Deduped defensively in case HR ever assigns the same person to both
+ *  fields on one department. */
+function getManagerRecipients(department: { headOfDepartment: Manager | null; actingHeadOfDepartment: Manager | null }): Manager[] {
+  const candidates = [department.headOfDepartment, department.actingHeadOfDepartment].filter((m): m is Manager => m !== null)
+  const seen = new Set<string>()
+  return candidates.filter((manager) => (seen.has(manager.employeeNumber) ? false : (seen.add(manager.employeeNumber), true)))
+}
+
 /**
  * Fires the employee-facing LEAVE_STARTING_SOON / RETURNING_TOMORROW
  * reminders (both NotificationType values existed in the schema already but
  * were never actually fired by anything — this scheduler finally wires them
  * up), plus a manager-facing counterpart (LEAVE_STARTING_SOON_MANAGER /
- * RETURNING_TOMORROW_MANAGER) sent only to the resolved Head of Department
+ * RETURNING_TOMORROW_MANAGER) sent to the resolved Head of Department AND
+ * Acting Head of Department (if one is assigned — see getManagerRecipients())
  * of the employee going on/returning from leave — not broadcast to every
- * admin, per DepartmentDashboardService's headOfDepartmentId scoping model
- * (NotificationsService.create() still fans a copy out to every HR admin
- * automatically, same as every other notification in this app).
+ * admin directly, per DepartmentDashboardService's headOfDepartmentId
+ * scoping model (NotificationsService.createMany() still fans a single
+ * deduplicated copy out to every HR admin automatically, same fan-out
+ * every other notification in this app gets).
  *
  * Modeled directly on ProbationReminderScheduler's range+catch-up+dedup
  * pattern — see that scheduler's doc comment for why a single exact-day
@@ -112,36 +129,40 @@ export class LeaveReminderScheduler {
           })
           .catch(() => undefined)
 
-        const head = request.employee.position?.department.headOfDepartment
-        if (head) {
+        const managers = request.employee.position ? getManagerRecipients(request.employee.position.department) : []
+        if (managers.length > 0) {
           const managerUrl = "/staff/department-dashboard/leave"
           await this.notifications
-            .create({
-              recipientEmployeeId: head.employeeNumber,
-              type: NotificationType.LEAVE_STARTING_SOON_MANAGER,
-              title: "Team member going on leave soon",
-              message: `${employeeName}'s ${request.leaveType.name} starts on ${startDateStr}.`,
-              relatedLeaveRequestId: request.id,
-              actionUrl: managerUrl,
-            })
+            .createMany(
+              managers.map((manager) => manager.employeeNumber),
+              {
+                type: NotificationType.LEAVE_STARTING_SOON_MANAGER,
+                title: "Team member going on leave soon",
+                message: `${employeeName}'s ${request.leaveType.name} starts on ${startDateStr}.`,
+                relatedLeaveRequestId: request.id,
+                actionUrl: managerUrl,
+              }
+            )
             .catch(() => undefined)
 
-          await this.emailService
-            .enqueue({
-              templateKey: "leave_starting_soon_manager",
-              recipientEmail: head.email,
-              recipientEmployeeId: head.employeeNumber,
-              relatedModule: "leave",
-              relatedEntityId: request.id,
-              variables: {
-                manager_name: `${head.firstName} ${head.lastName}`,
-                employee_name: employeeName,
-                leave_type: request.leaveType.name,
-                start_date: startDateStr,
-                leave_url: buildClientUrl(managerUrl),
-              },
-            })
-            .catch(() => undefined)
+          for (const manager of managers) {
+            await this.emailService
+              .enqueue({
+                templateKey: "leave_starting_soon_manager",
+                recipientEmail: manager.email,
+                recipientEmployeeId: manager.employeeNumber,
+                relatedModule: "leave",
+                relatedEntityId: request.id,
+                variables: {
+                  manager_name: `${manager.firstName} ${manager.lastName}`,
+                  employee_name: employeeName,
+                  leave_type: request.leaveType.name,
+                  start_date: startDateStr,
+                  leave_url: buildClientUrl(managerUrl),
+                },
+              })
+              .catch(() => undefined)
+          }
         }
 
         await this.prisma.leaveRequest
@@ -202,36 +223,40 @@ export class LeaveReminderScheduler {
           })
           .catch(() => undefined)
 
-        const head = request.employee.position?.department.headOfDepartment
-        if (head) {
+        const managers = request.employee.position ? getManagerRecipients(request.employee.position.department) : []
+        if (managers.length > 0) {
           const managerUrl = "/staff/department-dashboard/leave"
           await this.notifications
-            .create({
-              recipientEmployeeId: head.employeeNumber,
-              type: NotificationType.RETURNING_TOMORROW_MANAGER,
-              title: "Team member returning from leave soon",
-              message: `${employeeName} is due back from ${request.leaveType.name} on ${returnDateStr}.`,
-              relatedLeaveRequestId: request.id,
-              actionUrl: managerUrl,
-            })
+            .createMany(
+              managers.map((manager) => manager.employeeNumber),
+              {
+                type: NotificationType.RETURNING_TOMORROW_MANAGER,
+                title: "Team member returning from leave soon",
+                message: `${employeeName} is due back from ${request.leaveType.name} on ${returnDateStr}.`,
+                relatedLeaveRequestId: request.id,
+                actionUrl: managerUrl,
+              }
+            )
             .catch(() => undefined)
 
-          await this.emailService
-            .enqueue({
-              templateKey: "leave_returning_tomorrow_manager",
-              recipientEmail: head.email,
-              recipientEmployeeId: head.employeeNumber,
-              relatedModule: "leave",
-              relatedEntityId: request.id,
-              variables: {
-                manager_name: `${head.firstName} ${head.lastName}`,
-                employee_name: employeeName,
-                leave_type: request.leaveType.name,
-                return_date: returnDateStr,
-                leave_url: buildClientUrl(managerUrl),
-              },
-            })
-            .catch(() => undefined)
+          for (const manager of managers) {
+            await this.emailService
+              .enqueue({
+                templateKey: "leave_returning_tomorrow_manager",
+                recipientEmail: manager.email,
+                recipientEmployeeId: manager.employeeNumber,
+                relatedModule: "leave",
+                relatedEntityId: request.id,
+                variables: {
+                  manager_name: `${manager.firstName} ${manager.lastName}`,
+                  employee_name: employeeName,
+                  leave_type: request.leaveType.name,
+                  return_date: returnDateStr,
+                  leave_url: buildClientUrl(managerUrl),
+                },
+              })
+              .catch(() => undefined)
+          }
         }
 
         await this.prisma.leaveRequest

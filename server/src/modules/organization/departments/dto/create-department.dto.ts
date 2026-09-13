@@ -34,4 +34,9 @@ export class CreateDepartmentDto {
   @IsString()
   @IsOptional()
   headOfDepartmentId?: string
+
+  @ApiPropertyOptional({ description: "Employee.employeeNumber of this department's temporary Acting Head of Department (covering while the real head is out, or the position is vacant) — grants identical access. See Department.actingHeadOfDepartmentId's schema doc comment." })
+  @IsString()
+  @IsOptional()
+  actingHeadOfDepartmentId?: string
 }

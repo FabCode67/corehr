@@ -772,14 +772,16 @@ export class LeaveRequestsService {
   }
 
   /**
-   * True if actingEmployeeId is the designated Head of Department
-   * (Department.headOfDepartmentId — see DepartmentDashboardService's doc
+   * True if actingEmployeeId is the designated Head of Department OR
+   * Acting Head of Department (Department.headOfDepartmentId /
+   * .actingHeadOfDepartmentId — see DepartmentDashboardService's doc
    * comment on why this is a different, authoritative concept from the
-   * org-chart-derived "auto head" other modules use) of a department whose
-   * resolveDepartmentFilterIds cascade includes the requester's own
-   * department. Backs both the department-head approve/reject fallback in
-   * assertCanDecideStep() and the cancel-on-behalf check in
-   * assertCanCancel() below.
+   * org-chart-derived "auto head" other modules use; an acting head grants
+   * identical access to a real head, per that field's own doc comment) of
+   * a department whose resolveDepartmentFilterIds cascade includes the
+   * requester's own department. Backs both the department-head
+   * approve/reject fallback in assertCanDecideStep() and the
+   * cancel-on-behalf check in assertCanCancel() below.
    */
   private async isDepartmentHeadOfEmployee(actingEmployeeId: string, requesterEmployeeId: string): Promise<boolean> {
     const requester = await this.prisma.employee.findUnique({
@@ -790,7 +792,10 @@ export class LeaveRequestsService {
     if (!requesterDepartmentId) return false
 
     const headedDepartments = await this.prisma.department.findMany({
-      where: { headOfDepartmentId: actingEmployeeId, isActive: true },
+      where: {
+        isActive: true,
+        OR: [{ headOfDepartmentId: actingEmployeeId }, { actingHeadOfDepartmentId: actingEmployeeId }],
+      },
       select: { id: true },
     })
     if (headedDepartments.length === 0) return false

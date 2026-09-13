@@ -105,6 +105,25 @@ export function DepartmentForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="actingHeadOfDepartmentId">Acting Head of Department (optional)</Label>
+        <Select
+          id="actingHeadOfDepartmentId"
+          name="actingHeadOfDepartmentId"
+          defaultValue={department?.actingHeadOfDepartmentId ?? ""}
+        >
+          <option value="">None</option>
+          {employees.map((employee) => (
+            <option key={employee.employeeNumber} value={employee.employeeNumber}>
+              {fullName(employee)} ({employee.employeeNumber})
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Temporary stand-in with the exact same access as Head of Department above — for when the real head is on leave or the role is vacant. Set and cleared manually; clear it once the head is back.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="description">Description (optional)</Label>
         <Textarea id="description" name="description" defaultValue={department?.description ?? ""} />
       </div>

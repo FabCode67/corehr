@@ -22,6 +22,7 @@ export interface DepartmentDashboardSummary {
     code: string | null
     functionName: string
     headOfDepartment: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string } | null
+    actingHeadOfDepartment: { employeeNumber: string; firstName: string; middleName: string | null; lastName: string } | null
   }
   headcount: {
     total: number

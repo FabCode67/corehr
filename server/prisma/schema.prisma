@@ -194,6 +194,18 @@ model Department {
   /// Added for the Bulk Import framework's Department module ("Head of
   /// Department" column) — no such field existed before this.
   headOfDepartmentId String?
+  /// Temporary stand-in for headOfDepartmentId — e.g. the real head is on
+  /// leave, or the position is vacant between hires. HR Admin sets/clears
+  /// this manually (no auto-expiry field by design; simpler to reason about
+  /// than a start/end date window). Wherever headOfDepartmentId grants
+  /// Head of Department access (DepartmentDashboardService.assertAccess,
+  /// LeaveRequestsService's department-head leave authorization), this
+  /// field grants the exact same access, for as long as it's set — an
+  /// acting head is not a lesser role, just a substitute for one person.
+  /// When both are set, notification schedulers (LeaveReminderScheduler,
+  /// EmployeeMilestonesScheduler) notify both, so the real head stays in
+  /// the loop even while away.
+  actingHeadOfDepartmentId String?
   /// Genuine Department-to-Department hierarchy (e.g. a regional department
   /// nested under a national one) — distinct from Function, which every
   /// department still requires above. Scope, as decided when this was
@@ -205,6 +217,7 @@ model Department {
 
   function        Function   @relation(fields: [functionId], references: [id])
   headOfDepartment Employee? @relation("DepartmentHead", fields: [headOfDepartmentId], references: [employeeNumber])
+  actingHeadOfDepartment Employee? @relation("DepartmentActingHead", fields: [actingHeadOfDepartmentId], references: [employeeNumber])
   parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
   subDepartments   Department[] @relation("DepartmentHierarchy")
   units     Unit[]
@@ -216,6 +229,7 @@ model Department {
   jobRequisitions    JobRequisition[]
   offers             Offer[]
   formTemplates      FormTemplate[]
+  exitClearanceFormTemplates ExitClearanceFormTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -341,6 +355,7 @@ model Position {
   requisitionsReportingTo JobRequisition[] @relation("RequisitionReportsTo")
   jobDescriptionsReportingTo JobDescription[] @relation("JobDescriptionReportingManager")
   offers                 Offer[]
+  exitClearanceFormTemplates ExitClearanceFormTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -602,6 +617,7 @@ model Employee {
   salaryRecords   EmployeeSalaryRecord[]
   importJobs      ImportJob[]            @relation("ImportJobUploader")
   headOfDepartments Department[]         @relation("DepartmentHead")
+  actingHeadOfDepartments Department[]   @relation("DepartmentActingHead")
   emailLogs             EmailLog[]
   notificationPreference NotificationPreference?
   createdEmailTemplates EmailTemplate[]  @relation("EmailTemplateCreator")
@@ -623,10 +639,13 @@ model Employee {
   onboardingDocumentsAssigned OnboardingDocumentAssignment[] @relation("OnboardingDocumentAssigner")
   onboardingDocumentsReviewed OnboardingDocumentAssignment[] @relation("OnboardingDocumentReviewer")
 
-  // --- Exit Document Management (see module note near ExitDocumentType) ----
-  exitDocuments         ExitDocumentAssignment[] @relation("ExitDocumentEmployee")
-  exitDocumentsAssigned ExitDocumentAssignment[] @relation("ExitDocumentAssigner")
-  exitDocumentsCompleted ExitDocumentAssignment[] @relation("ExitDocumentCompleter")
+  // --- Exit Clearance Workflow (see module note near ExitClearanceFormTemplate) ---
+  exitClearanceAssignments         ExitClearanceFormAssignment[] @relation("ExitClearanceEmployee")
+  exitClearanceAssignmentsAssigned ExitClearanceFormAssignment[] @relation("ExitClearanceAssigner")
+  exitClearanceEmployeeCompletions ExitClearanceFormAssignment[] @relation("ExitClearanceEmployeeCompleter")
+  exitClearanceConfirmations       ExitClearanceFormAssignment[] @relation("ExitClearanceConfirmer")
+  exitClearanceSignatures          ExitClearanceFormAssignment[] @relation("ExitClearanceSigner")
+  exitClearanceAuditActions        ExitClearanceAuditLog[]       @relation("ExitClearanceAuditActor")
 
   // --- Performance Management ----------------------------------------------
   performanceReviewsAsSubject  PerformanceReview[]     @relation("PerformanceSubject")
@@ -1182,6 +1201,22 @@ enum NotificationType {
   /// notified, and used EXIT_PROCESS_STARTED by copy-paste mistake).
   EXIT_DOCUMENTS_ASSIGNED
   EXIT_DOCUMENT_COMPLETED
+  /// Exit Clearance Workflow — see ExitClearanceFormTemplate's module note.
+  /// Fired to the employee when their clearance forms are first assigned.
+  EXIT_CLEARANCE_ASSIGNED
+  /// Fired to the current holder(s) of a form's responsible position when a
+  /// form needs their review (right after assignment for forms that don't
+  /// require employee completion first, or once the employee submits their
+  /// part for forms that do).
+  EXIT_CLEARANCE_REVIEW_NEEDED
+  /// Fired to the employee when a reviewer approves/confirms/signs their form.
+  EXIT_CLEARANCE_APPROVED
+  /// Fired to the employee when a reviewer returns their form with a comment.
+  EXIT_CLEARANCE_RETURNED
+  /// Fired by ExitClearanceReminderScheduler to whoever's action is
+  /// outstanding (employee or reviewer position holder) once a PENDING
+  /// assignment passes its dueDate.
+  EXIT_CLEARANCE_OVERDUE
 }
 
 /// A configurable leave type (Annual, Maternity, Paternity, Sick,
@@ -3870,76 +3905,162 @@ model OnboardingDocumentAssignment {
 }
 
 // =============================================================================
-// EXIT DOCUMENT MANAGEMENT
+// EXIT CLEARANCE WORKFLOW
 //
-// The offboarding mirror of Onboarding Document Management above, but
-// deliberately simpler: exit items (ID card returned, laptop returned, IT
-// access revoked, final settlement processed, exit interview conducted,
-// clearance certificate signed, ...) are an HR-ticked checklist rather than
-// an employee-uploaded/HR-reviewed workflow, so ExitDocumentAssignment has
-// a single isCompleted boolean (+ completedBy/completedAt/notes) instead of
-// Onboarding's fuller NOT_STARTED/UPLOADED/UNDER_REVIEW/APPROVED status
-// machine. Design notes:
-// - ExitDocumentType is the configurable catalog (HR-extensible, same
-//   data-driven lookup pattern as OnboardingDocumentType/SanctionType/
-//   TrainingCategory), seeded with a sensible default set.
-// - ExitDocumentAssignment rows are created in bulk by
-//   ExitProcessService.initiateExit() (every active ExitDocumentType, at
-//   the moment HR starts the exit process) — see that method's doc
-//   comment. Unlike onboarding documents (assigned once, never repeated),
-//   these are upserted with isCompleted reset to false on each call, so a
-//   rehired-then-re-exited employee gets a fresh checklist rather than one
-//   that reads as already-complete from a prior stint.
-// - EmployeesService.processExit() enforces a hard gate (unlike the Exit
-//   Clearance Form in Forms Management, which is tracked but not
-//   enforced): if the employee has any ExitDocumentAssignment rows and any
-//   are incomplete, the exit cannot be finalized. This is the one place in
-//   Exit Management with a real database-level block, per the spec's
-//   explicit request that exit confirmation wait for every exit document.
+// Supersedes the old "Exit Document Management" checklist (HR-ticked
+// isCompleted boolean, no routing) with a configurable departmental
+// clearance workflow, per an explicit follow-up request. Design notes:
+// - ExitClearanceFormTemplate is the HR-configurable catalog — unlike the
+//   old ExitDocumentType, this one has a real admin CRUD page (see
+//   ClearanceFormTemplatesController), so it's deliberately NOT seeded
+//   (see prisma/seed.ts's top doc comment) — HR builds their own catalog
+//   against their real department/position structure once the app is live.
+// - responsibleDepartmentId/responsiblePositionId point at the ORG
+//   STRUCTURE, never a specific employee — e.g. Access Card -> Security ->
+//   Security Manager. Whoever currently holds that position
+//   (Employee.positionId, resolved live — see ExitClearanceService's
+//   resolvePositionHolders()) can act on every assignment routed to it, so
+//   turnover in that seat never orphans in-flight clearance forms the way
+//   naming a specific employee would.
+// - requiresEmployeeCompletion/requiresConfirmation/requiresSignature are
+//   independent flags (a form can need any combination, but never none —
+//   enforced in ClearanceFormTemplatesService). Confirmation and signature
+//   are both actions taken by the SAME reviewer (whoever holds
+//   responsiblePosition) in one review() call — they're separate flags
+//   only so the UI/audit trail can say precisely which of "confirmed" and
+//   "signed" a given form actually required, not because they're ever
+//   performed at different times by different people.
+// - ExitClearanceFormAssignment.status is a rollup: PENDING until every
+//   flag the template requires has its corresponding timestamp set, then
+//   COMPLETED. A reviewer can instead return the form (status REJECTED,
+//   comment required, employeeCompletedAt cleared) — the employee redoes
+//   their part and it re-enters the PENDING/review cycle. "Overdue" is
+//   computed on read (status = PENDING and dueDate has passed), not stored,
+//   same convention as every other "outstanding" calculation in this app.
+// - EmployeesService.processExit() enforces a hard gate on MANDATORY
+//   templates only (the old gate didn't distinguish mandatory from
+//   optional — fixed here, per the explicit "all mandatory forms" wording):
+//   every mandatory assignment must be COMPLETED before the exit can be
+//   finalized. Optional forms are tracked but never block.
+// - ExitClearanceAuditLog is this module's own append-only history (one row
+//   per assignment/action/actor/comment) — kept separate from Forms
+//   Management's FormAuditLog rather than shared, matching this codebase's
+//   convention of one bespoke audit table per module (see e.g.
+//   DisciplinaryCase's own history) instead of a cross-module dependency.
 // =============================================================================
 
-model ExitDocumentType {
+enum ExitClearanceStatus {
+  PENDING
+  COMPLETED
+  REJECTED
+}
+
+enum ExitClearanceAuditAction {
+  ASSIGNED
+  EMPLOYEE_COMPLETED
+  APPROVED
+  RETURNED
+  REMINDER_SENT
+}
+
+model ExitClearanceFormTemplate {
   id          String  @id @default(uuid()) @db.Uuid
   name        String  @unique
   description String?
   isMandatory Boolean @default(true)
-  sortOrder   Int     @default(0)
-  isActive    Boolean @default(true)
 
-  assignments ExitDocumentAssignment[]
+  /// Org-structure routing — see module doc comment above. Both required:
+  /// a template with no one responsible for it can't be reviewed by anyone.
+  responsibleDepartmentId String @db.Uuid
+  responsiblePositionId   String @db.Uuid
+
+  requiresEmployeeCompletion Boolean @default(true)
+  requiresConfirmation       Boolean @default(true)
+  requiresSignature          Boolean @default(false)
+
+  /// Assignment.dueDate = assignedAt + this many days — drives the
+  /// overdue computation and reminder scheduler.
+  daysToComplete Int @default(7)
+  sortOrder      Int @default(0)
+  isActive       Boolean @default(true)
+
+  responsibleDepartment Department @relation(fields: [responsibleDepartmentId], references: [id])
+  responsiblePosition   Position   @relation(fields: [responsiblePositionId], references: [id])
+  assignments           ExitClearanceFormAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("exit_document_types")
+  @@map("exit_clearance_form_templates")
 }
 
-/// Permanent per-employee record of one exit checklist item — never
-/// deleted, same "complete history" precedent as onboarding documents.
-model ExitDocumentAssignment {
-  id             String  @id @default(uuid()) @db.Uuid
-  employeeId     String
-  documentTypeId String  @db.Uuid
-  isCompleted    Boolean @default(false)
-  notes          String?
+/// Permanent per-employee record of one clearance form — never deleted,
+/// same "complete history" precedent as onboarding/exit documents before it.
+model ExitClearanceFormAssignment {
+  id         String              @id @default(uuid()) @db.Uuid
+  employeeId String
+  templateId String              @db.Uuid
+  status     ExitClearanceStatus @default(PENDING)
+  dueDate    DateTime
+
+  /// The employee's own step (only meaningful when the template requires
+  /// it) — e.g. "I have returned my laptop".
+  employeeCompletedAt   DateTime?
+  employeeCompletedById String?
+
+  /// The reviewer's step(s) — both set together by the same review() call
+  /// when APPROVE is chosen, but only for whichever the template actually
+  /// requires (see module doc comment).
+  confirmedAt   DateTime?
+  confirmedById String?
+  signedAt      DateTime?
+  signedById    String?
+
+  /// Free-text context from the most recent action — a comment is required
+  /// when a reviewer returns a form, optional otherwise. Full history lives
+  /// in ExitClearanceAuditLog; this is just for at-a-glance display.
+  lastActionComment String?
+  /// Dedup flag for ExitClearanceReminderScheduler — same pattern as
+  /// ProbationReminderScheduler's *ReminderSentAt fields, so a daily cron
+  /// doesn't re-notify on every run once an assignment is overdue.
+  lastReminderSentAt DateTime?
 
   assignedById String
   assignedAt   DateTime @default(now())
 
-  completedById String?
-  completedAt   DateTime?
-
-  employee     Employee         @relation("ExitDocumentEmployee", fields: [employeeId], references: [employeeNumber])
-  documentType ExitDocumentType @relation(fields: [documentTypeId], references: [id])
-  assignedBy   Employee         @relation("ExitDocumentAssigner", fields: [assignedById], references: [employeeNumber])
-  completedBy  Employee?        @relation("ExitDocumentCompleter", fields: [completedById], references: [employeeNumber])
+  employee            Employee                  @relation("ExitClearanceEmployee", fields: [employeeId], references: [employeeNumber])
+  template            ExitClearanceFormTemplate @relation(fields: [templateId], references: [id])
+  assignedBy           Employee                 @relation("ExitClearanceAssigner", fields: [assignedById], references: [employeeNumber])
+  employeeCompletedBy  Employee?                @relation("ExitClearanceEmployeeCompleter", fields: [employeeCompletedById], references: [employeeNumber])
+  confirmedBy          Employee?                @relation("ExitClearanceConfirmer", fields: [confirmedById], references: [employeeNumber])
+  signedBy             Employee?                @relation("ExitClearanceSigner", fields: [signedById], references: [employeeNumber])
+  auditLogs            ExitClearanceAuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([employeeId, documentTypeId])
-  @@index([employeeId, isCompleted])
-  @@map("exit_document_assignments")
+  @@unique([employeeId, templateId])
+  @@index([employeeId, status])
+  @@index([status, dueDate])
+  @@map("exit_clearance_form_assignments")
+}
+
+/// Append-only audit trail — one row per state transition. See module doc
+/// comment for why this isn't shared with Forms Management's FormAuditLog.
+model ExitClearanceAuditLog {
+  id           String                   @id @default(uuid()) @db.Uuid
+  assignmentId String                   @db.Uuid
+  action       ExitClearanceAuditAction
+  actorId      String?
+  comment      String?
+
+  assignment ExitClearanceFormAssignment @relation(fields: [assignmentId], references: [id])
+  actor      Employee?                   @relation("ExitClearanceAuditActor", fields: [actorId], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+
+  @@index([assignmentId, createdAt])
+  @@map("exit_clearance_audit_logs")
 }
 
 // =============================================================================

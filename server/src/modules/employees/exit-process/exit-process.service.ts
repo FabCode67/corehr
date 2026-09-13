@@ -7,6 +7,7 @@ import { FormInstancesService } from "../../forms/instances/form-instances.servi
 import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
+import { ExitClearanceService } from "../../exit-clearance/assignments/exit-clearance.service"
 
 /** Must match the formCode seeded in prisma/seed.ts's "Template 4: Exit
  *  Clearance Form" — see that seed block's comment. */
@@ -30,7 +31,8 @@ export class ExitProcessService {
     private readonly prisma: PrismaService,
     private readonly employeesService: EmployeesService,
     private readonly formInstancesService: FormInstancesService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly exitClearanceService: ExitClearanceService
   ) {}
 
   private async safeSendEmail(params: Parameters<EmailService["enqueue"]>[0]) {
@@ -46,48 +48,22 @@ export class ExitProcessService {
    * (non-terminal — processExit() is still the separate finalize step),
    * auto-assign the Exit Clearance Form (reusing Forms Management's
    * existing assignment pipeline, which already notifies the employee),
-   * bulk-assign the Exit Document checklist (every active ExitDocumentType
-   * — see schema.prisma's Exit Document Management module note), and
-   * notify the line manager and HR. If the Exit Form template hasn't been
-   * seeded yet, the exit is still marked as started — a missing form
-   * template shouldn't block HR from beginning the process, it just means
-   * there's nothing to track yet (logged as a warning). Unlike the Exit
-   * Form (tracked but not enforced), the exit document checklist created
-   * here IS enforced — EmployeesService.processExit() blocks finalization
-   * until every assignment created below is marked complete.
+   * bulk-assign the configurable Exit Clearance Workflow forms (every
+   * active ExitClearanceFormTemplate, routed to its responsible
+   * department/position — see schema.prisma's "EXIT CLEARANCE WORKFLOW"
+   * module note and ExitClearanceService.bulkAssignForExit()), and notify
+   * the line manager and HR. If the Exit Form template hasn't been seeded
+   * yet, the exit is still marked as started — a missing form template
+   * shouldn't block HR from beginning the process, it just means there's
+   * nothing to track yet (logged as a warning). Unlike the Exit Form
+   * (tracked but not enforced), the clearance forms bulk-assigned here ARE
+   * enforced — EmployeesService.processExit() blocks finalization until
+   * every MANDATORY assignment is COMPLETED.
    */
   async initiateExit(employeeId: string, actingEmployeeId: string) {
     const employee = await this.employeesService.markExitInitiated(employeeId, actingEmployeeId)
 
-    const activeDocumentTypes = await this.prisma.exitDocumentType.findMany({ where: { isActive: true } })
-    if (activeDocumentTypes.length > 0) {
-      // Upsert with a reset-on-reassign update (not `update: {}`) — a
-      // rehired-then-re-exited employee re-running this gets a fresh
-      // checklist rather than one that reads as already-done from a prior
-      // stint (see ExitDocumentAssignmentsService.bulkAssign's doc comment).
-      await Promise.all(
-        activeDocumentTypes.map((documentType) =>
-          this.prisma.exitDocumentAssignment.upsert({
-            where: { employeeId_documentTypeId: { employeeId, documentTypeId: documentType.id } },
-            update: { isCompleted: false, completedAt: null, completedById: null, assignedById: actingEmployeeId, assignedAt: new Date() },
-            create: { employeeId, documentTypeId: documentType.id, assignedById: actingEmployeeId },
-          })
-        )
-      )
-      await this.safeSendEmail({
-        templateKey: "exit_clearance_checklist",
-        recipientEmail: employee.email,
-        recipientEmployeeId: employee.employeeNumber,
-        relatedModule: "exit",
-        relatedEntityId: employee.employeeNumber,
-        variables: {
-          employee_name: `${employee.firstName} ${employee.lastName}`,
-          last_working_day: "To be confirmed by HR",
-        },
-      })
-    } else {
-      this.logger.warn(`Exit initiated for ${employeeId}, but no active exit document types exist — nothing assigned. Run the seed script or add some from Exit Document Types.`)
-    }
+    await this.exitClearanceService.bulkAssignForExit(employeeId, actingEmployeeId)
 
     const template = await this.prisma.formTemplate.findUnique({ where: { formCode: EXIT_FORM_CODE } })
 
@@ -101,9 +77,10 @@ export class ExitProcessService {
         instructions: "Please complete this Exit Clearance Form as part of your exit process.",
       })
 
-      // The Exit Clearance Form *is* the clearance checklist in this
-      // codebase (no separate checklist model) — one email covers both
-      // exit_form_assigned and what the spec calls the clearance checklist.
+      // This Forms Management "Exit Clearance Form" is a separate,
+      // free-text form (tracked but not enforced) from the configurable
+      // Exit Clearance Workflow forms bulk-assigned above — two different
+      // things that happen to share a name; see EXIT_FORM_CODE's comment.
       await this.safeSendEmail({
         templateKey: "exit_form_assigned",
         recipientEmail: employee.email,

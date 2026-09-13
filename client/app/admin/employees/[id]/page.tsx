@@ -9,7 +9,7 @@ import { FamilyTree } from "@/components/family-tree/family-tree"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
-import { fetchExitDocumentProgress } from "@/lib/api/exit-documents"
+import { fetchExitClearanceProgress } from "@/lib/api/exit-clearance"
 import {
   computeTenure,
   computeTotalBankingExperienceYears,
@@ -127,15 +127,16 @@ export default async function EmployeeDetailPage({
     )
   }
 
-  // Only fetched when relevant — the exit-documents completion gate only
+  // Only fetched when relevant — the exit-clearance completion gate only
   // matters once the exit process has actually been started (see
-  // EmployeesService.processExit()'s doc comment).
+  // EmployeesService.processExit()'s doc comment). Only MANDATORY forms
+  // block finalization — optional ones don't factor into this message.
   const exitProgressResult =
-    employee.employmentStatus === "ACTIVE" && employee.exitInitiatedAt ? await fetchExitDocumentProgress(employee.employeeNumber) : null
+    employee.employmentStatus === "ACTIVE" && employee.exitInitiatedAt ? await fetchExitClearanceProgress(employee.employeeNumber) : null
   const exitProgress = exitProgressResult?.ok ? exitProgressResult.data : null
   const exitDialogDisabledReason =
-    exitProgress && exitProgress.total > 0 && !exitProgress.allCompleted
-      ? `${exitProgress.remaining} of ${exitProgress.total} exit document(s) still outstanding — complete them below before confirming the exit.`
+    exitProgress && exitProgress.mandatoryOutstanding.length > 0
+      ? `${exitProgress.mandatoryOutstanding.length} mandatory exit clearance form(s) still outstanding — complete them below before confirming the exit.`
       : undefined
 
   // preferredName is a deliberate nickname override for the first-name slot

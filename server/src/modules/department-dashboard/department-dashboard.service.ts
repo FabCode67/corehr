@@ -43,13 +43,17 @@ export class DepartmentDashboardService {
     private readonly leaveBalancesService: LeaveBalancesService
   ) {}
 
-  /** Every active department this employee is the designated head of —
-   *  almost always zero or one, but Department.headOfDepartment is a
-   *  one-to-many relation (nothing stops HR assigning the same person head
-   *  of two departments), so this returns a list rather than assuming one. */
+  /** Every active department this employee is the designated head OR
+   *  acting head of — almost always zero or one, but both
+   *  Department.headOfDepartment and .actingHeadOfDepartment are
+   *  one-to-many relations (nothing stops HR assigning the same person to
+   *  two departments), so this returns a list rather than assuming one.
+   *  Acting head grants identical access to head — see the field's schema
+   *  doc comment — so both are queried with the same OR, not surfaced as
+   *  separate categories. */
   async getMyDepartments(employeeId: string) {
     return this.prisma.department.findMany({
-      where: { headOfDepartmentId: employeeId, isActive: true },
+      where: { isActive: true, OR: [{ headOfDepartmentId: employeeId }, { actingHeadOfDepartmentId: employeeId }] },
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     })
@@ -57,8 +61,8 @@ export class DepartmentDashboardService {
 
   /** Public — reused by every Head of Department capability below (not just
    *  getSummary), so each one enforces the exact same "this department's
-   *  designated head, or an HR Administrator" rule rather than each
-   *  re-deriving it slightly differently. */
+   *  designated head (or acting head), or an HR Administrator" rule rather
+   *  than each re-deriving it slightly differently. */
   async assertAccess(departmentId: string, actingEmployeeId: string) {
     const [department, actor] = await Promise.all([
       this.prisma.department.findUnique({
@@ -66,6 +70,7 @@ export class DepartmentDashboardService {
         include: {
           function: { select: { name: true } },
           headOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
+          actingHeadOfDepartment: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
         },
       }),
       this.prisma.employee.findUnique({ where: { employeeNumber: actingEmployeeId }, select: { isAdmin: true } }),
@@ -74,8 +79,11 @@ export class DepartmentDashboardService {
     if (!department) {
       throw new NotFoundException(`Department ${departmentId} not found`)
     }
-    if (!actor?.isAdmin && department.headOfDepartmentId !== actingEmployeeId) {
-      throw new ForbiddenException("Only this department's Head of Department or an HR Administrator can view this dashboard.")
+    const isHead = department.headOfDepartmentId === actingEmployeeId || department.actingHeadOfDepartmentId === actingEmployeeId
+    if (!actor?.isAdmin && !isHead) {
+      throw new ForbiddenException(
+        "Only this department's Head of Department, its Acting Head of Department, or an HR Administrator can view this dashboard."
+      )
     }
 
     return department
@@ -104,6 +112,7 @@ export class DepartmentDashboardService {
         code: department.code,
         functionName: department.function.name,
         headOfDepartment: department.headOfDepartment,
+        actingHeadOfDepartment: department.actingHeadOfDepartment,
       },
       headcount,
       performance,

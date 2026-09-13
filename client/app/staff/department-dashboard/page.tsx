@@ -105,6 +105,7 @@ function DepartmentSummary({ summary }: { summary: DepartmentDashboardSummary })
             {department.functionName}
             {department.code ? ` · ${department.code}` : ""}
             {department.headOfDepartment ? ` · Head of Department: ${fullName(department.headOfDepartment)}` : ""}
+            {department.actingHeadOfDepartment ? ` · Acting Head: ${fullName(department.actingHeadOfDepartment)}` : ""}
           </CardDescription>
         </CardHeader>
       </Card>

@@ -8,6 +8,7 @@ import {
   FileText,
   GraduationCap,
   LayoutDashboard,
+  LogOut,
   Scale,
   Target,
   User,
@@ -43,6 +44,11 @@ const STAFF_NAV: PortalNavItem[] = [
   { label: "Learning", href: "/staff/learning", icon: GraduationCap },
   { label: "Family & Dependents", href: "/staff/family", icon: Users },
   { label: "Forms & Requests", href: "/staff/forms", icon: FileText },
+  // Same "always show, page handles the empty state" reasoning as Team
+  // Approvals/Department Dashboard above — relevant only once HR starts
+  // your exit process, or if you currently hold a position named as a
+  // clearance form's responsible reviewer.
+  { label: "Exit Clearance", href: "/staff/exit-clearance", icon: LogOut },
   { label: "Employee Relations", href: "/staff/employee-relations", icon: Scale },
 ]
 

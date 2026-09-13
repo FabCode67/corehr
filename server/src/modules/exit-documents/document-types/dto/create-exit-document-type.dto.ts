@@ -1,23 +1,4 @@
-import { ApiPropertyOptional } from "@nestjs/swagger"
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from "class-validator"
-
-export class CreateExitDocumentTypeDto {
-  @MaxLength(150)
-  @IsString()
-  name!: string
-
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  description?: string
-
-  @ApiPropertyOptional()
-  @IsBoolean()
-  @IsOptional()
-  isMandatory?: boolean
-
-  @ApiPropertyOptional()
-  @IsInt()
-  @IsOptional()
-  sortOrder?: number
-}
+// Superseded by CreateClearanceFormTemplateDto — see
+// server/src/modules/exit-clearance/templates/dto. Left as an intentional
+// no-op rather than deleted (see document-types.module.ts's comment).
+export {}

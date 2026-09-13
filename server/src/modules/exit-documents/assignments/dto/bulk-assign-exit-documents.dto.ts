@@ -1,14 +1,6 @@
-import { ArrayMinSize, IsArray, IsString } from "class-validator"
-
-export class BulkAssignExitDocumentsDto {
-  @IsString()
-  employeeId!: string
-
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
-  documentTypeIds!: string[]
-
-  @IsString()
-  assignedById!: string
-}
+// Superseded — the Exit Clearance Workflow assigns every active template
+// automatically (ExitClearanceService.bulkAssignForExit()), so there's no
+// equivalent "bulk assign selected types" DTO on the new module. Left as an
+// intentional no-op rather than deleted (see assignments.module.ts's
+// comment).
+export {}

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchExitFormStatus, type Employee, type FormInstanceStatus } from "@/lib/api/employees"
 
 import { initiateExitForm } from "../actions"
-import { ExitDocumentsSection } from "./exit-documents-section"
+import { ExitClearanceSection } from "./exit-clearance-section"
 
 const STATUS_LABELS: Record<FormInstanceStatus, string> = {
   DRAFT: "Draft",
@@ -86,7 +86,7 @@ export async function ExitProcessSection({ employee, actingEmployeeId }: { emplo
         </CardContent>
       </Card>
 
-      <ExitDocumentsSection employeeId={employee.employeeNumber} actingEmployeeId={actingEmployeeId} />
+      <ExitClearanceSection employeeId={employee.employeeNumber} actingEmployeeId={actingEmployeeId} />
     </div>
   )
 }
