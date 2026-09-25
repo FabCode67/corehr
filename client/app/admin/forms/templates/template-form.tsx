@@ -5,6 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { FormsActionState } from "@/lib/api/forms-actions"
@@ -72,14 +73,13 @@ export function TemplateForm({ template, categories, departments, createdById, a
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="applicableDepartmentId">Applicable department (optional)</Label>
-          <Select id="applicableDepartmentId" name="applicableDepartmentId" defaultValue={template?.applicableDepartmentId ?? ""}>
-            <option value="">All departments</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={departments.map((department) => ({ value: department.id, label: department.name }))}
+            name="applicableDepartmentId"
+            defaultValue={template?.applicableDepartmentId ?? ""}
+            placeholder="All departments"
+            searchPlaceholder="Search departments…"
+          />
         </div>
       </div>
 

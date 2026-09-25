@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { reassignReviewer } from "@/lib/api/performance-actions"
 import type { Employee } from "@/lib/api/employees"
 
@@ -42,16 +42,18 @@ export function ReassignForm({
 
   return (
     <div className="flex flex-wrap items-end gap-3">
-      <Select value={reviewerId} onChange={(event) => setReviewerId(event.target.value)} className="w-64">
-        <option value="" disabled>
-          Select…
-        </option>
-        {employees.map((employee) => (
-          <option key={employee.employeeNumber} value={employee.employeeNumber}>
-            {employee.firstName} {employee.lastName}
-          </option>
-        ))}
-      </Select>
+      <SearchableSelect
+        options={employees.map((employee) => ({
+          value: employee.employeeNumber,
+          label: `${employee.firstName} ${employee.lastName}`,
+        }))}
+        value={reviewerId}
+        onValueChange={setReviewerId}
+        placeholder="Select…"
+        searchPlaceholder="Search employees…"
+        className="w-64"
+        clearable={false}
+      />
       <Button type="button" onClick={handleReassign} disabled={pending} size="sm">
         {pending ? "Reassigning…" : "Reassign"}
       </Button>

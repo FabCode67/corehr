@@ -5,6 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { assignForm, type FormsActionState } from "@/lib/api/forms-actions"
@@ -33,30 +34,31 @@ export function AssignForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="formTemplateId">Form template</Label>
-        <Select id="formTemplateId" name="formTemplateId" required defaultValue="">
-          <option value="" disabled>
-            Select a published template…
-          </option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.title} (v{template.version})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={templates.map((template) => ({ value: template.id, label: `${template.title} (v${template.version})` }))}
+          name="formTemplateId"
+          defaultValue=""
+          placeholder="Select a published template…"
+          searchPlaceholder="Search templates…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <Select id="employeeId" name="employeeId" required defaultValue="">
-          <option value="" disabled>
-            Select an employee…
-          </option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+          }))}
+          name="employeeId"
+          defaultValue=""
+          placeholder="Select an employee…"
+          searchPlaceholder="Search employees…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

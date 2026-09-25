@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { acceptOffer, createOffer, declineOffer, expireOffer, sendOffer, type RecruitmentActionState } from "@/lib/api/recruitment-actions"
 import type { Band } from "@/lib/api/bands"
@@ -68,17 +69,16 @@ function NewOfferForm({ applicationId, actingEmployeeId, bands }: { applicationI
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bandId">Band / salary grade</Label>
-          <Select id="bandId" name="bandId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {bands.map((band) => (
-              <option key={band.id} value={band.id}>
-                {band.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Band / salary grade</Label>
+          <SearchableSelect
+            options={bands.map((band) => ({ value: band.id, label: band.name }))}
+            name="bandId"
+            defaultValue=""
+            placeholder="Select…"
+            searchPlaceholder="Search bands…"
+            clearable={false}
+            required
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="contractType">Contract type</Label>

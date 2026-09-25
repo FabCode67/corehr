@@ -5,7 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Band } from "@/lib/api/bands"
 
@@ -27,13 +27,15 @@ export function BandForm({ bands, currentBandId, action }: BandFormProps) {
     <form action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="band-bandId">New band</Label>
-        <Select id="band-bandId" name="bandId" defaultValue={currentBandId} required>
-          {bands.map((band) => (
-            <option key={band.id} value={band.id}>
-              {band.name}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={bands.map((band) => ({ value: band.id, label: band.name }))}
+          name="bandId"
+          defaultValue={currentBandId}
+          placeholder="Select a band…"
+          searchPlaceholder="Search bands…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">

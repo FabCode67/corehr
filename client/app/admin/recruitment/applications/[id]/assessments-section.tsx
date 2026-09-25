@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { createAssessment, recordAssessmentResult } from "@/lib/api/recruitment-actions"
 import type { Assessment, AssessmentType } from "@/lib/api/recruitment"
@@ -97,14 +98,17 @@ function NewAssessmentForm({ applicationId, actingEmployeeId, employees }: { app
           ))}
         </Select>
         <Input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} className="w-40" />
-        <Select value={evaluatorId} onChange={(event) => setEvaluatorId(event.target.value)} className="w-48">
-          <option value="">Evaluator (optional)</option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName}`,
+          }))}
+          value={evaluatorId}
+          onValueChange={setEvaluatorId}
+          placeholder="Evaluator (optional)"
+          searchPlaceholder="Search employees…"
+          className="w-48"
+        />
         <Button type="button" size="sm" disabled={pending} onClick={submit}>
           {pending ? "Scheduling…" : "Schedule"}
         </Button>

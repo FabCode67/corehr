@@ -1,5 +1,6 @@
 import { AnnualLeavePlanTable } from "@/components/annual-leave-plan-table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { annualLeavePlanExportUrl, fetchAllAnnualLeavePlans, fetchAnnualLeavePlanAnalytics } from "@/lib/api/annual-leave-plan"
 import { fetchDepartments } from "@/lib/api/departments"
@@ -67,14 +68,14 @@ export default async function AdminAnnualLeavePlanPage({ searchParams }: { searc
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={filters.departmentId ?? ""} className="w-48">
-                <option value="">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="departmentId"
+                defaultValue={filters.departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-48"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Year</label>

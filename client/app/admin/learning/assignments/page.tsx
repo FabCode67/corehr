@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
@@ -110,14 +111,14 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Category</label>
-              <Select name="categoryId" defaultValue={filters.categoryId ?? ""} className="w-44">
-                <option value="">All categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={categories.map((category) => ({ value: category.id, label: category.name }))}
+                name="categoryId"
+                defaultValue={filters.categoryId ?? ""}
+                placeholder="All categories"
+                searchPlaceholder="Search categories…"
+                className="w-44"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Status</label>
@@ -140,58 +141,58 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={filters.departmentId ?? ""} className="w-40">
-                <option value="">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="departmentId"
+                defaultValue={filters.departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-40">
-                <option value="">All branches</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                name="branchId"
+                defaultValue={filters.branchId ?? ""}
+                placeholder="All branches"
+                searchPlaceholder="Search branches…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position</label>
-              <Select name="positionId" defaultValue={filters.positionId ?? ""} className="w-44">
-                <option value="">All positions</option>
-                {positions.map((position) => (
-                  <option key={position.id} value={position.id}>
-                    {position.title}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={positions.map((position) => ({ value: position.id, label: position.title }))}
+                name="positionId"
+                defaultValue={filters.positionId ?? ""}
+                placeholder="All positions"
+                searchPlaceholder="Search positions…"
+                className="w-44"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Level</label>
-              <Select name="levelId" defaultValue={filters.levelId ?? ""} className="w-40">
-                <option value="">All levels</option>
-                {levels.map((level) => (
-                  <option key={level.id} value={level.id}>
-                    {level.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={levels.map((level) => ({ value: level.id, label: level.name }))}
+                name="levelId"
+                defaultValue={filters.levelId ?? ""}
+                placeholder="All levels"
+                searchPlaceholder="Search levels…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Band</label>
-              <Select name="bandId" defaultValue={filters.bandId ?? ""} className="w-36">
-                <option value="">All bands</option>
-                {bands.map((band) => (
-                  <option key={band.id} value={band.id}>
-                    {band.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={bands.map((band) => ({ value: band.id, label: band.name }))}
+                name="bandId"
+                defaultValue={filters.bandId ?? ""}
+                placeholder="All bands"
+                searchPlaceholder="Search bands…"
+                className="w-36"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Priority</label>

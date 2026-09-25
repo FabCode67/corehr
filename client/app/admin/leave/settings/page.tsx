@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchEmployees } from "@/lib/api/employees"
 import {
   fetchLeaveBalances,
@@ -134,14 +135,17 @@ export default async function AdminLeaveSettingsPage({
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Employee</label>
-              <Select name="employeeId" defaultValue={filters.employeeId ?? ""} className="w-64">
-                <option value="">Select an employee…</option>
-                {employees.map((employee) => (
-                  <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                    {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={employees.map((employee) => ({
+                  value: employee.employeeNumber,
+                  label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+                }))}
+                name="employeeId"
+                defaultValue={filters.employeeId ?? ""}
+                placeholder="Select an employee…"
+                searchPlaceholder="Search employees…"
+                className="w-64"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Year</label>

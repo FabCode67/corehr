@@ -5,7 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { issueSanction, type ErActionState } from "@/lib/api/employee-relations-actions"
 import type { SanctionType } from "@/lib/api/employee-relations"
@@ -37,18 +37,17 @@ export function SanctionForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sanctionTypeId">Sanction type</Label>
-          <Select id="sanctionTypeId" name="sanctionTypeId" required defaultValue="">
-            <option value="" disabled>
-              Select a sanction type…
-            </option>
-            {sanctionTypes
+          <SearchableSelect
+            options={sanctionTypes
               .filter((type) => type.isActive)
-              .map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-          </Select>
+              .map((type) => ({ value: type.id, label: type.name }))}
+            name="sanctionTypeId"
+            defaultValue=""
+            placeholder="Select a sanction type…"
+            searchPlaceholder="Search sanction types…"
+            clearable={false}
+            required
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="effectiveDate">Effective date</Label>
@@ -64,24 +63,31 @@ export function SanctionForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="issuedById">Issued by</Label>
-          <Select id="issuedById" name="issuedById" required defaultValue={actingEmployeeId}>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={employees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName}`,
+            }))}
+            name="issuedById"
+            defaultValue={actingEmployeeId}
+            placeholder="Select an employee…"
+            searchPlaceholder="Search employees…"
+            clearable={false}
+            required
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="approvalAuthorityId">Approval authority (optional)</Label>
-          <Select id="approvalAuthorityId" name="approvalAuthorityId" defaultValue="">
-            <option value="">None recorded</option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={employees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName}`,
+            }))}
+            name="approvalAuthorityId"
+            defaultValue=""
+            placeholder="None recorded"
+            searchPlaceholder="Search employees…"
+          />
         </div>
       </div>
 

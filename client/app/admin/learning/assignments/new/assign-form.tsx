@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Employee } from "@/lib/api/employees"
@@ -51,30 +52,34 @@ export function AssignForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <Select id="employeeId" name="employeeId" defaultValue="" required>
-          <option value="" disabled>
-            Select…
-          </option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+          }))}
+          name="employeeId"
+          defaultValue=""
+          placeholder="Select…"
+          searchPlaceholder="Search employees…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="courseId">Course</Label>
-        <Select id="courseId" name="courseId" defaultValue="" required>
-          <option value="" disabled>
-            Select…
-          </option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.name} ({course.courseCode}){course.category.isMandatory ? " — Mandatory" : ""}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={courses.map((course) => ({
+            value: course.id,
+            label: `${course.name} (${course.courseCode})${course.category.isMandatory ? " — Mandatory" : ""}`,
+          }))}
+          name="courseId"
+          defaultValue=""
+          placeholder="Select…"
+          searchPlaceholder="Search courses…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

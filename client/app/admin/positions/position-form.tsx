@@ -5,6 +5,7 @@ import { useActionState, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import type { Department } from "@/lib/api/departments"
 import type { Position, PositionLevel } from "@/lib/api/positions"
@@ -73,43 +74,32 @@ export function PositionForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="departmentId">Department</Label>
-          <Select
-            id="departmentId"
+          <SearchableSelect
+            options={departments.map((department) => ({ value: department.id, label: department.name }))}
             name="departmentId"
             value={departmentId}
-            onChange={(event) => {
-              setDepartmentId(event.target.value)
+            onValueChange={(next) => {
+              setDepartmentId(next)
               setUnitId("")
             }}
+            placeholder="Select a department…"
+            searchPlaceholder="Search departments…"
+            clearable={false}
             required
-          >
-            <option value="" disabled>
-              Select a department…
-            </option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="unitId">Unit (optional)</Label>
-          <Select
-            id="unitId"
+          <SearchableSelect
+            options={unitsForDepartment.map((unit) => ({ value: unit.id, label: unit.name }))}
             name="unitId"
             value={unitId}
-            onChange={(event) => setUnitId(event.target.value)}
+            onValueChange={setUnitId}
             disabled={!departmentId}
-          >
-            <option value="">No unit — attaches directly to department</option>
-            {unitsForDepartment.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.name}
-              </option>
-            ))}
-          </Select>
+            placeholder="No unit — attaches directly to department"
+            searchPlaceholder="Search units…"
+          />
           <p className="text-xs text-muted-foreground">
             {departmentId ? "Only units in the selected department are shown." : "Select a department first."}
           </p>
@@ -142,24 +132,18 @@ export function PositionForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reportsToPositionId">Reports to (optional)</Label>
-          <Select
-            id="reportsToPositionId"
+          <SearchableSelect
+            options={reportsToOptions.map((candidate) => ({
+              value: candidate.id,
+              label: `${candidate.title}${candidate.department ? ` (${candidate.unit?.name ?? candidate.department.name})` : ""}${candidate.level?.code ? ` — ${candidate.level.code}` : ""}`,
+            }))}
             name="reportsToPositionId"
             value={reportsToPositionId}
-            onChange={(event) => setReportsToPositionId(event.target.value)}
+            onValueChange={setReportsToPositionId}
             disabled={!levelId}
-          >
-            <option value="">No one — top of the org tree</option>
-            {reportsToOptions.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.title}
-                {candidate.department
-                  ? ` (${candidate.unit?.name ?? candidate.department.name})`
-                  : ""}
-                {candidate.level?.code ? ` — ${candidate.level.code}` : ""}
-              </option>
-            ))}
-          </Select>
+            placeholder="No one — top of the org tree"
+            searchPlaceholder="Search positions…"
+          />
           <p className="text-xs text-muted-foreground">
             {levelId
               ? "Anyone bank-wide at the same level or more senior is shown."

@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { fullName } from "@/lib/format-name"
@@ -132,25 +133,25 @@ export default async function AdminPerformanceReviewsPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={filters.departmentId ?? ""} className="w-40">
-                <option value="">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="departmentId"
+                defaultValue={filters.departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-40">
-                <option value="">All branches</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                name="branchId"
+                defaultValue={filters.branchId ?? ""}
+                placeholder="All branches"
+                searchPlaceholder="Search branches…"
+                className="w-40"
+              />
             </div>
             <button
               type="submit"

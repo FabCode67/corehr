@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchFunctions, fetchUnits } from "@/lib/api/departments"
@@ -232,80 +233,80 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Function</label>
-              <Select name="functionId" defaultValue={raw.functionId ?? ""} className="w-40">
-                <option value="">All functions</option>
-                {functions.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={functions.map((f) => ({ value: f.id, label: f.name }))}
+                name="functionId"
+                defaultValue={raw.functionId ?? ""}
+                placeholder="All functions"
+                searchPlaceholder="Search functions…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={raw.departmentId ?? ""} className="w-40">
-                <option value="">All departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                name="departmentId"
+                defaultValue={raw.departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Unit</label>
-              <Select name="unitId" defaultValue={raw.unitId ?? ""} className="w-36">
-                <option value="">All units</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={units.map((u) => ({ value: u.id, label: u.name }))}
+                name="unitId"
+                defaultValue={raw.unitId ?? ""}
+                placeholder="All units"
+                searchPlaceholder="Search units…"
+                className="w-36"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="branchId" defaultValue={raw.branchId ?? ""} className="w-36">
-                <option value="">All branches</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                name="branchId"
+                defaultValue={raw.branchId ?? ""}
+                placeholder="All branches"
+                searchPlaceholder="Search branches…"
+                className="w-36"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position</label>
-              <Select name="positionId" defaultValue={raw.positionId ?? ""} className="w-40">
-                <option value="">All positions</option>
-                {positions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={positions.map((p) => ({ value: p.id, label: p.title }))}
+                name="positionId"
+                defaultValue={raw.positionId ?? ""}
+                placeholder="All positions"
+                searchPlaceholder="Search positions…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position Level</label>
-              <Select name="levelId" defaultValue={raw.levelId ?? ""} className="w-36">
-                <option value="">All levels</option>
-                {levels.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={levels.map((l) => ({ value: l.id, label: l.name }))}
+                name="levelId"
+                defaultValue={raw.levelId ?? ""}
+                placeholder="All levels"
+                searchPlaceholder="Search levels…"
+                className="w-36"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Band</label>
-              <Select name="bandId" defaultValue={raw.bandId ?? ""} className="w-32">
-                <option value="">All bands</option>
-                {bands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={bands.map((b) => ({ value: b.id, label: b.name }))}
+                name="bandId"
+                defaultValue={raw.bandId ?? ""}
+                placeholder="All bands"
+                searchPlaceholder="Search bands…"
+                className="w-32"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Contract Type</label>

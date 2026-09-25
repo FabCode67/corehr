@@ -5,6 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Department, OrgFunction } from "@/lib/api/departments"
@@ -76,14 +77,13 @@ export function DepartmentForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="parentDepartmentId">Parent Department (optional)</Label>
-        <Select id="parentDepartmentId" name="parentDepartmentId" defaultValue={department?.parentDepartmentId ?? ""}>
-          <option value="">None</option>
-          {departments.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.name}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={departments.map((candidate) => ({ value: candidate.id, label: candidate.name }))}
+          name="parentDepartmentId"
+          defaultValue={department?.parentDepartmentId ?? ""}
+          placeholder="None"
+          searchPlaceholder="Search departments…"
+        />
         <p className="text-xs text-muted-foreground">
           A genuine Department-to-Department hierarchy, separate from Function above. Org chart and dashboards still key off Function only.
         </p>
@@ -91,14 +91,13 @@ export function DepartmentForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="headOfDepartmentId">Head of Department (optional)</Label>
-        <Select id="headOfDepartmentId" name="headOfDepartmentId" defaultValue={department?.headOfDepartmentId ?? ""}>
-          <option value="">None</option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {fullName(employee)} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({ value: employee.employeeNumber, label: `${fullName(employee)} (${employee.employeeNumber})` }))}
+          name="headOfDepartmentId"
+          defaultValue={department?.headOfDepartmentId ?? ""}
+          placeholder="None"
+          searchPlaceholder="Search employees…"
+        />
         <p className="text-xs text-muted-foreground">
           Grants this person access to the Department Dashboard in their Staff Portal, with reports scoped to this department.
         </p>
@@ -106,18 +105,13 @@ export function DepartmentForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="actingHeadOfDepartmentId">Acting Head of Department (optional)</Label>
-        <Select
-          id="actingHeadOfDepartmentId"
+        <SearchableSelect
+          options={employees.map((employee) => ({ value: employee.employeeNumber, label: `${fullName(employee)} (${employee.employeeNumber})` }))}
           name="actingHeadOfDepartmentId"
           defaultValue={department?.actingHeadOfDepartmentId ?? ""}
-        >
-          <option value="">None</option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {fullName(employee)} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+          placeholder="None"
+          searchPlaceholder="Search employees…"
+        />
         <p className="text-xs text-muted-foreground">
           Temporary stand-in with the exact same access as Head of Department above — for when the real head is on leave or the role is vacant. Set and cleared manually; clear it once the head is back.
         </p>

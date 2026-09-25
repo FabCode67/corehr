@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { Band } from "@/lib/api/bands"
 import type { JobDescription, JobRequisition } from "@/lib/api/recruitment"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
@@ -28,14 +29,16 @@ export function RequisitionEditForm({ requisition, bands, jobDescriptions, actio
     <form action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bandId">Band</Label>
-          <Select id="bandId" name="bandId" required defaultValue={requisition.bandId}>
-            {bands.map((band) => (
-              <option key={band.id} value={band.id}>
-                {band.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Band</Label>
+          <SearchableSelect
+            options={bands.map((band) => ({ value: band.id, label: band.name }))}
+            name="bandId"
+            defaultValue={requisition.bandId}
+            required
+            clearable={false}
+            placeholder="Select…"
+            searchPlaceholder="Search bands…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -84,15 +87,14 @@ export function RequisitionEditForm({ requisition, bands, jobDescriptions, actio
         </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label htmlFor="jobDescriptionId">Job description template (optional)</Label>
-          <Select id="jobDescriptionId" name="jobDescriptionId" defaultValue={requisition.jobDescriptionId ?? ""}>
-            <option value="">None</option>
-            {jobDescriptions.map((jobDescription) => (
-              <option key={jobDescription.id} value={jobDescription.id}>
-                {jobDescription.jobTitle}
-              </option>
-            ))}
-          </Select>
+          <Label>Job description template (optional)</Label>
+          <SearchableSelect
+            options={jobDescriptions.map((jobDescription) => ({ value: jobDescription.id, label: jobDescription.jobTitle }))}
+            name="jobDescriptionId"
+            defaultValue={requisition.jobDescriptionId ?? ""}
+            placeholder="None"
+            searchPlaceholder="Search job descriptions…"
+          />
         </div>
       </div>
 

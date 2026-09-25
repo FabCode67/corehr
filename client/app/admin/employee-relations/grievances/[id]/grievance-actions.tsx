@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { assignGrievance, updateGrievanceStatus } from "@/lib/api/employee-relations-actions"
@@ -52,14 +53,17 @@ export function GrievanceActions({
       <div className="flex flex-col gap-1.5">
         <label className="text-xs text-muted-foreground">Assign to</label>
         <div className="flex gap-2">
-          <Select value={assignedToId} onChange={(event) => setAssignedToId(event.target.value)} className="flex-1">
-            <option value="">Unassigned</option>
-            {hrEmployees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={hrEmployees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName}`,
+            }))}
+            value={assignedToId}
+            onValueChange={setAssignedToId}
+            placeholder="Unassigned"
+            searchPlaceholder="Search employees…"
+            className="flex-1"
+          />
           <Button
             type="button"
             size="sm"

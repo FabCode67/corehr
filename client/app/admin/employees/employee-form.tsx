@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { Branch } from "@/lib/api/branches"
 import type { Employee } from "@/lib/api/employees"
 import { uploadFile } from "@/lib/api/uploads"
@@ -200,21 +201,15 @@ export function BasicInfoForm({ employee, branches, action, submitLabel }: Basic
 
       <div className="flex flex-col gap-1.5 sm:w-1/2">
         <Label htmlFor="branchId">Work location / Branch</Label>
-        <Select
-          id="branchId"
+        <SearchableSelect
+          options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
           name="branchId"
           defaultValue={employee?.branchId ?? ""}
+          placeholder="Select…"
+          searchPlaceholder="Search locations…"
+          clearable={false}
           required
-        >
-          <option value="" disabled>
-            Select…
-          </option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </Select>
+        />
       </div>
 
       {state?.error ? (

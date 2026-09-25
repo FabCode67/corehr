@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { addSignatureStage, removeSignatureStage, updateSignatureStage } from "@/lib/api/forms-actions"
 import { SIGNER_ROLE_LABELS, type FormSignatureStage, type SignerRole } from "@/lib/api/forms"
@@ -87,16 +88,17 @@ function StageEditor({
       {role === "SPECIFIC_APPROVER" ? (
         <div className="flex flex-col gap-1.5">
           <Label>Specific approver</Label>
-          <Select value={specificApproverId} onChange={(event) => setSpecificApproverId(event.target.value)}>
-            <option value="" disabled>
-              Select an employee…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={employees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+            }))}
+            value={specificApproverId}
+            onValueChange={setSpecificApproverId}
+            placeholder="Select an employee…"
+            searchPlaceholder="Search employees…"
+            clearable={false}
+          />
         </div>
       ) : null}
 

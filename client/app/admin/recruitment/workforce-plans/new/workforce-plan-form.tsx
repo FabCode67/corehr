@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
@@ -59,43 +60,40 @@ export function WorkforcePlanForm({ departments, units, branches, actingEmployee
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="departmentId">Department</Label>
-          <Select id="departmentId" name="departmentId" required defaultValue="">
-            <option value="" disabled>
-              Select a department…
-            </option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Department</Label>
+          <SearchableSelect
+            options={departments.map((department) => ({ value: department.id, label: department.name }))}
+            name="departmentId"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select a department…"
+            searchPlaceholder="Search departments…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="unitId">Unit (optional)</Label>
-          <Select id="unitId" name="unitId" defaultValue="">
-            <option value="">None</option>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.department.name} – {unit.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Unit (optional)</Label>
+          <SearchableSelect
+            options={units.map((unit) => ({ value: unit.id, label: `${unit.department.name} – ${unit.name}` }))}
+            name="unitId"
+            defaultValue=""
+            placeholder="None"
+            searchPlaceholder="Search units…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="branchId">Branch</Label>
-          <Select id="branchId" name="branchId" required defaultValue="">
-            <option value="" disabled>
-              Select a branch…
-            </option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Branch</Label>
+          <SearchableSelect
+            options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+            name="branchId"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select a branch…"
+            searchPlaceholder="Search branches…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

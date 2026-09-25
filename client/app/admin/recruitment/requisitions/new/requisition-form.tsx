@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { Band } from "@/lib/api/bands"
 import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
@@ -53,17 +54,16 @@ export function RequisitionForm({
       <input type="hidden" name="actingEmployeeId" value={actingEmployeeId} />
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="workforcePlanId">Workforce plan</Label>
-        <Select id="workforcePlanId" name="workforcePlanId" required defaultValue={defaultWorkforcePlanId ?? ""}>
-          <option value="" disabled>
-            Select an approved plan…
-          </option>
-          {workforcePlans.map((plan) => (
-            <option key={plan.id} value={plan.id}>
-              {plan.title}
-            </option>
-          ))}
-        </Select>
+        <Label>Workforce plan</Label>
+        <SearchableSelect
+          options={workforcePlans.map((plan) => ({ value: plan.id, label: plan.title }))}
+          name="workforcePlanId"
+          defaultValue={defaultWorkforcePlanId ?? ""}
+          required
+          clearable={false}
+          placeholder="Select an approved plan…"
+          searchPlaceholder="Search plans…"
+        />
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
@@ -85,16 +85,18 @@ export function RequisitionForm({
         </div>
 
         {positionMode === "existing" ? (
-          <Select name="positionId" defaultValue="" required={positionMode === "existing"}>
-            <option value="" disabled>
-              Select a position…
-            </option>
-            {positions.map((position) => (
-              <option key={position.id} value={position.id}>
-                {position.title} {position.department ? `(${position.department.name})` : ""}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={positions.map((position) => ({
+              value: position.id,
+              label: `${position.title} ${position.department ? `(${position.department.name})` : ""}`.trim(),
+            }))}
+            name="positionId"
+            defaultValue=""
+            required={positionMode === "existing"}
+            clearable={false}
+            placeholder="Select a position…"
+            searchPlaceholder="Search positions…"
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -102,52 +104,48 @@ export function RequisitionForm({
               <Input id="newPositionTitle" name="newPositionTitle" required={positionMode === "new"} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="newPositionDepartmentId">Department</Label>
-              <Select id="newPositionDepartmentId" name="newPositionDepartmentId" defaultValue="" required={positionMode === "new"}>
-                <option value="" disabled>
-                  Select…
-                </option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <Label>Department</Label>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="newPositionDepartmentId"
+                defaultValue=""
+                required={positionMode === "new"}
+                clearable={false}
+                placeholder="Select…"
+                searchPlaceholder="Search departments…"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="newPositionUnitId">Unit (optional)</Label>
-              <Select id="newPositionUnitId" name="newPositionUnitId" defaultValue="">
-                <option value="">None</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.department.name} – {unit.name}
-                  </option>
-                ))}
-              </Select>
+              <Label>Unit (optional)</Label>
+              <SearchableSelect
+                options={units.map((unit) => ({ value: unit.id, label: `${unit.department.name} – ${unit.name}` }))}
+                name="newPositionUnitId"
+                defaultValue=""
+                placeholder="None"
+                searchPlaceholder="Search units…"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="newPositionLevelId">Level</Label>
-              <Select id="newPositionLevelId" name="newPositionLevelId" defaultValue="" required={positionMode === "new"}>
-                <option value="" disabled>
-                  Select…
-                </option>
-                {levels.map((level) => (
-                  <option key={level.id} value={level.id}>
-                    {level.name}
-                  </option>
-                ))}
-              </Select>
+              <Label>Level</Label>
+              <SearchableSelect
+                options={levels.map((level) => ({ value: level.id, label: level.name }))}
+                name="newPositionLevelId"
+                defaultValue=""
+                required={positionMode === "new"}
+                clearable={false}
+                placeholder="Select…"
+                searchPlaceholder="Search levels…"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="newPositionReportsToPositionId">Reports to (optional)</Label>
-              <Select id="newPositionReportsToPositionId" name="newPositionReportsToPositionId" defaultValue="">
-                <option value="">None</option>
-                {positions.map((position) => (
-                  <option key={position.id} value={position.id}>
-                    {position.title}
-                  </option>
-                ))}
-              </Select>
+              <Label>Reports to (optional)</Label>
+              <SearchableSelect
+                options={positions.map((position) => ({ value: position.id, label: position.title }))}
+                name="newPositionReportsToPositionId"
+                defaultValue=""
+                placeholder="None"
+                searchPlaceholder="Search positions…"
+              />
             </div>
           </div>
         )}
@@ -155,17 +153,16 @@ export function RequisitionForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bandId">Band</Label>
-          <Select id="bandId" name="bandId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {bands.map((band) => (
-              <option key={band.id} value={band.id}>
-                {band.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Band</Label>
+          <SearchableSelect
+            options={bands.map((band) => ({ value: band.id, label: band.name }))}
+            name="bandId"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select…"
+            searchPlaceholder="Search bands…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -187,17 +184,16 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="branchId">Branch</Label>
-          <Select id="branchId" name="branchId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Branch</Label>
+          <SearchableSelect
+            options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+            name="branchId"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select…"
+            searchPlaceholder="Search branches…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -227,17 +223,19 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="requestedById">Requested by</Label>
-          <Select id="requestedById" name="requestedById" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
+          <Label>Requested by</Label>
+          <SearchableSelect
+            options={employees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName}`,
+            }))}
+            name="requestedById"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select…"
+            searchPlaceholder="Search employees…"
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -256,15 +254,14 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label htmlFor="jobDescriptionId">Job description template (optional)</Label>
-          <Select id="jobDescriptionId" name="jobDescriptionId" defaultValue="">
-            <option value="">None yet</option>
-            {jobDescriptions.map((jobDescription) => (
-              <option key={jobDescription.id} value={jobDescription.id}>
-                {jobDescription.jobTitle}
-              </option>
-            ))}
-          </Select>
+          <Label>Job description template (optional)</Label>
+          <SearchableSelect
+            options={jobDescriptions.map((jobDescription) => ({ value: jobDescription.id, label: jobDescription.jobTitle }))}
+            name="jobDescriptionId"
+            defaultValue=""
+            placeholder="None yet"
+            searchPlaceholder="Search job descriptions…"
+          />
         </div>
       </div>
 

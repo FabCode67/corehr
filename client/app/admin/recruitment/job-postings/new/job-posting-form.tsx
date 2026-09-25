@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Branch } from "@/lib/api/branches"
 import type { JobRequisition } from "@/lib/api/recruitment"
@@ -28,17 +29,19 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
       <input type="hidden" name="actingEmployeeId" value={actingEmployeeId} />
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="requisitionId">Job requisition</Label>
-        <Select id="requisitionId" name="requisitionId" required defaultValue={defaultRequisitionId ?? ""}>
-          <option value="" disabled>
-            Select…
-          </option>
-          {requisitions.map((requisition) => (
-            <option key={requisition.id} value={requisition.id}>
-              {requisition.position.title} — {requisition.department.name}
-            </option>
-          ))}
-        </Select>
+        <Label>Job requisition</Label>
+        <SearchableSelect
+          options={requisitions.map((requisition) => ({
+            value: requisition.id,
+            label: `${requisition.position.title} — ${requisition.department.name}`,
+          }))}
+          name="requisitionId"
+          defaultValue={defaultRequisitionId ?? ""}
+          required
+          clearable={false}
+          placeholder="Select…"
+          searchPlaceholder="Search requisitions…"
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -63,17 +66,16 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
           <Input id="closingDate" name="closingDate" type="date" required />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="branchId">Branch</Label>
-          <Select id="branchId" name="branchId" required defaultValue="">
-            <option value="" disabled>
-              Select…
-            </option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Branch</Label>
+          <SearchableSelect
+            options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+            name="branchId"
+            defaultValue=""
+            required
+            clearable={false}
+            placeholder="Select…"
+            searchPlaceholder="Search branches…"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="employmentType">Employment type</Label>

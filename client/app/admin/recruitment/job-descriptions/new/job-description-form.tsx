@@ -5,7 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Band } from "@/lib/api/bands"
 import type { Position, PositionLevel } from "@/lib/api/positions"
@@ -70,37 +70,37 @@ export function JobDescriptionForm({ levels, bands, positions, action, submitLab
           <Input id="workLocation" name="workLocation" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="requiredLevelId">Required level (optional)</Label>
-          <Select id="requiredLevelId" name="requiredLevelId" defaultValue="">
-            <option value="">Any level</option>
-            {levels.map((level) => (
-              <option key={level.id} value={level.id}>
-                {level.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Required level (optional)</Label>
+          <SearchableSelect
+            options={levels.map((level) => ({ value: level.id, label: level.name }))}
+            name="requiredLevelId"
+            defaultValue=""
+            placeholder="Any level"
+            searchPlaceholder="Search levels…"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="requiredBandId">Required band (optional)</Label>
-          <Select id="requiredBandId" name="requiredBandId" defaultValue="">
-            <option value="">Any band</option>
-            {bands.map((band) => (
-              <option key={band.id} value={band.id}>
-                {band.name}
-              </option>
-            ))}
-          </Select>
+          <Label>Required band (optional)</Label>
+          <SearchableSelect
+            options={bands.map((band) => ({ value: band.id, label: band.name }))}
+            name="requiredBandId"
+            defaultValue=""
+            placeholder="Any band"
+            searchPlaceholder="Search bands…"
+          />
         </div>
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label htmlFor="reportingManagerPositionId">Reports to (position, optional)</Label>
-          <Select id="reportingManagerPositionId" name="reportingManagerPositionId" defaultValue="">
-            <option value="">None</option>
-            {positions.map((position) => (
-              <option key={position.id} value={position.id}>
-                {position.title} {position.department ? `(${position.department.name})` : ""}
-              </option>
-            ))}
-          </Select>
+          <Label>Reports to (position, optional)</Label>
+          <SearchableSelect
+            options={positions.map((position) => ({
+              value: position.id,
+              label: `${position.title} ${position.department ? `(${position.department.name})` : ""}`.trim(),
+            }))}
+            name="reportingManagerPositionId"
+            defaultValue=""
+            placeholder="None"
+            searchPlaceholder="Search positions…"
+          />
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Label } from "@/components/ui/label"
 import type { Employee } from "@/lib/api/employees"
 import { createReview } from "@/lib/api/performance-actions"
@@ -57,16 +58,18 @@ export function NewReviewForm({
     <form action={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <Select id="employeeId" name="employeeId" defaultValue="" required>
-          <option value="" disabled>
-            Select…
-          </option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+          }))}
+          name="employeeId"
+          defaultValue=""
+          placeholder="Select…"
+          searchPlaceholder="Search employees…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -96,14 +99,16 @@ export function NewReviewForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="reviewerId">Reviewer (optional — defaults to reporting manager)</Label>
-        <Select id="reviewerId" name="reviewerId" defaultValue="">
-          <option value="">Auto-detect reporting manager</option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName}`,
+          }))}
+          name="reviewerId"
+          defaultValue=""
+          placeholder="Auto-detect reporting manager"
+          searchPlaceholder="Search employees…"
+        />
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

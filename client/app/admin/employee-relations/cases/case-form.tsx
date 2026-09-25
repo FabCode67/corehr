@@ -5,6 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { createDisciplinaryCase, type ErActionState } from "@/lib/api/employee-relations-actions"
@@ -39,16 +40,18 @@ export function CaseForm({ employees, reportedById }: { employees: EmployeeOptio
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <Select id="employeeId" name="employeeId" required defaultValue="">
-          <option value="" disabled>
-            Select the employee involved…
-          </option>
-          {employees.map((employee) => (
-            <option key={employee.employeeNumber} value={employee.employeeNumber}>
-              {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={employees.map((employee) => ({
+            value: employee.employeeNumber,
+            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+          }))}
+          name="employeeId"
+          defaultValue=""
+          placeholder="Select the employee involved…"
+          searchPlaceholder="Search employees…"
+          clearable={false}
+          required
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

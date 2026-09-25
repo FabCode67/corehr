@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
@@ -121,58 +121,58 @@ export default async function AdminEmployeesPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Location</label>
-              <Select name="branchId" defaultValue={branchId ?? ""} className="w-44">
-                <option value="">All locations</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                name="branchId"
+                defaultValue={branchId ?? ""}
+                placeholder="All locations"
+                searchPlaceholder="Search locations…"
+                className="w-44"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={departmentId ?? ""} className="w-44">
-                <option value="">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="departmentId"
+                defaultValue={departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-44"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position</label>
-              <Select name="positionId" defaultValue={positionId ?? ""} className="w-44">
-                <option value="">All positions</option>
-                {positions.map((position) => (
-                  <option key={position.id} value={position.id}>
-                    {position.title}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={positions.map((position) => ({ value: position.id, label: position.title }))}
+                name="positionId"
+                defaultValue={positionId ?? ""}
+                placeholder="All positions"
+                searchPlaceholder="Search positions…"
+                className="w-44"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Level</label>
-              <Select name="levelId" defaultValue={levelId ?? ""} className="w-40">
-                <option value="">All levels</option>
-                {levels.map((level) => (
-                  <option key={level.id} value={level.id}>
-                    {level.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={levels.map((level) => ({ value: level.id, label: level.name }))}
+                name="levelId"
+                defaultValue={levelId ?? ""}
+                placeholder="All levels"
+                searchPlaceholder="Search levels…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Band</label>
-              <Select name="bandId" defaultValue={bandId ?? ""} className="w-36">
-                <option value="">All bands</option>
-                {bands.map((band) => (
-                  <option key={band.id} value={band.id}>
-                    {band.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={bands.map((band) => ({ value: band.id, label: band.name }))}
+                name="bandId"
+                defaultValue={bandId ?? ""}
+                placeholder="All bands"
+                searchPlaceholder="Search bands…"
+                className="w-36"
+              />
             </div>
             <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
               Apply

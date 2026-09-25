@@ -5,6 +5,7 @@ import { useActionState, useRef, useState, type ChangeEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { OrgFunction, Department, UnitWithDepartment } from "@/lib/api/departments"
@@ -95,28 +96,29 @@ export function CourseForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="categoryId">Training category</Label>
-            <Select id="categoryId" name="categoryId" defaultValue={course?.categoryId ?? ""} required>
-              <option value="" disabled>
-                Select a category…
-              </option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name} {category.isMandatory ? "(Mandatory)" : ""}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={categories.map((category) => ({
+                value: category.id,
+                label: `${category.name} ${category.isMandatory ? "(Mandatory)" : ""}`.trim(),
+              }))}
+              name="categoryId"
+              defaultValue={course?.categoryId ?? ""}
+              placeholder="Select a category…"
+              searchPlaceholder="Search categories…"
+              clearable={false}
+              required
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="institutionId">Institution / provider (optional)</Label>
-            <Select id="institutionId" name="institutionId" defaultValue={course?.institutionId ?? ""}>
-              <option value="">None</option>
-              {institutions.map((institution) => (
-                <option key={institution.id} value={institution.id}>
-                  {institution.name}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={institutions.map((institution) => ({ value: institution.id, label: institution.name }))}
+              name="institutionId"
+              defaultValue={course?.institutionId ?? ""}
+              placeholder="None"
+              searchPlaceholder="Search institutions…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -224,67 +226,60 @@ export function CourseForm({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requiredDepartmentId">Required department</Label>
-            <Select
-              id="requiredDepartmentId"
+            <SearchableSelect
+              options={departments.map((department) => ({ value: department.id, label: department.name }))}
               name="requiredDepartmentId"
               defaultValue={course?.requiredDepartmentId ?? ""}
-            >
-              <option value="">Any department</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </Select>
+              placeholder="Any department"
+              searchPlaceholder="Search departments…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requiredUnitId">Required unit</Label>
-            <Select id="requiredUnitId" name="requiredUnitId" defaultValue={course?.requiredUnitId ?? ""}>
-              <option value="">Any unit</option>
-              {units.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.department.name} – {unit.name}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={units.map((unit) => ({ value: unit.id, label: `${unit.department.name} – ${unit.name}` }))}
+              name="requiredUnitId"
+              defaultValue={course?.requiredUnitId ?? ""}
+              placeholder="Any unit"
+              searchPlaceholder="Search units…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requiredPositionId">Required position</Label>
-            <Select id="requiredPositionId" name="requiredPositionId" defaultValue={course?.requiredPositionId ?? ""}>
-              <option value="">Any position</option>
-              {positions.map((position) => (
-                <option key={position.id} value={position.id}>
-                  {position.title}
-                  {position.department ? ` (${position.department.name})` : ""}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={positions.map((position) => ({
+                value: position.id,
+                label: `${position.title}${position.department ? ` (${position.department.name})` : ""}`,
+              }))}
+              name="requiredPositionId"
+              defaultValue={course?.requiredPositionId ?? ""}
+              placeholder="Any position"
+              searchPlaceholder="Search positions…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requiredLevelId">Required position level</Label>
-            <Select id="requiredLevelId" name="requiredLevelId" defaultValue={course?.requiredLevelId ?? ""}>
-              <option value="">Any level</option>
-              {levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={levels.map((level) => ({ value: level.id, label: level.name }))}
+              name="requiredLevelId"
+              defaultValue={course?.requiredLevelId ?? ""}
+              placeholder="Any level"
+              searchPlaceholder="Search levels…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requiredBandId">Required band</Label>
-            <Select id="requiredBandId" name="requiredBandId" defaultValue={course?.requiredBandId ?? ""}>
-              <option value="">Any band</option>
-              {bands.map((band) => (
-                <option key={band.id} value={band.id}>
-                  {band.name}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={bands.map((band) => ({ value: band.id, label: band.name }))}
+              name="requiredBandId"
+              defaultValue={course?.requiredBandId ?? ""}
+              placeholder="Any band"
+              searchPlaceholder="Search bands…"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

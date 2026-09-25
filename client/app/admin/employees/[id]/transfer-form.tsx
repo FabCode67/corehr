@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Position } from "@/lib/api/positions"
 
@@ -36,21 +37,20 @@ export function TransferForm({ positions, currentPositionId, action }: TransferF
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="transfer-positionId">New position</Label>
-          <Select
-            id="transfer-positionId"
+          <SearchableSelect
+            options={positions.map((position) => ({
+              value: position.id,
+              label:
+                position.title +
+                (position.department ? ` (${position.unit?.name ?? position.department.name})` : ""),
+            }))}
             name="positionId"
             defaultValue={currentPositionId}
+            placeholder="Select a position…"
+            searchPlaceholder="Search positions…"
+            clearable={false}
             required
-          >
-            {positions.map((position) => (
-              <option key={position.id} value={position.id}>
-                {position.title}
-                {position.department
-                  ? ` (${position.unit?.name ?? position.department.name})`
-                  : ""}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="transfer-changeType">Change type</Label>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { chooseFormSignatory, saveFormDraftResponses, submitFormInstance } from "@/lib/api/forms-actions"
@@ -238,19 +239,17 @@ export function FillForm({ instance, employees, actingEmployeeId }: { instance: 
           {unresolvedSignatures.map((signature) => (
             <div key={signature.id} className="flex flex-col gap-1.5">
               <Label>{signature.formSignatureStage.label ?? signature.formSignatureStage.role}</Label>
-              <Select
+              <SearchableSelect
+                options={employees.map((employee) => ({
+                  value: employee.employeeNumber,
+                  label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
+                }))}
                 value={signatoryChoices[signature.id] ?? ""}
-                onChange={(event) => setSignatoryChoices((prev) => ({ ...prev, [signature.id]: event.target.value }))}
-              >
-                <option value="" disabled>
-                  Select a person…
-                </option>
-                {employees.map((employee) => (
-                  <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                    {employee.firstName} {employee.lastName} ({employee.employeeNumber})
-                  </option>
-                ))}
-              </Select>
+                onValueChange={(next) => setSignatoryChoices((prev) => ({ ...prev, [signature.id]: next }))}
+                placeholder="Select a person…"
+                searchPlaceholder="Search employees…"
+                clearable={false}
+              />
             </div>
           ))}
         </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { previewLeaveDays, type LeaveActionState } from "@/lib/api/leave-actions"
 import type { LeaveBalance } from "@/lib/api/leave"
@@ -166,19 +167,16 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="delegateEmployeeId">Delegate / acting employee (optional)</Label>
-          <Select
-            id="delegateEmployeeId"
+          <SearchableSelect
+            options={colleagues.map((colleague) => ({
+              value: colleague.id,
+              label: `${colleague.firstName} ${colleague.lastName}${colleague.positionTitle ? ` — ${colleague.positionTitle}` : ""}`,
+            }))}
             name="delegateEmployeeId"
             defaultValue=""
-          >
-            <option value="">None</option>
-            {colleagues.map((colleague) => (
-              <option key={colleague.id} value={colleague.id}>
-                {colleague.firstName} {colleague.lastName}
-                {colleague.positionTitle ? ` — ${colleague.positionTitle}` : ""}
-              </option>
-            ))}
-          </Select>
+            placeholder="None"
+            searchPlaceholder="Search colleagues…"
+          />
         </div>
       </div>
 

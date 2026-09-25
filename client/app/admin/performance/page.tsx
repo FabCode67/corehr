@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchFunctions } from "@/lib/api/departments"
@@ -214,14 +215,14 @@ export default async function AdminPerformanceDashboardPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <Select name="departmentId" defaultValue={filters.departmentId ?? ""} className="w-40">
-                <option value="">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={departments.map((department) => ({ value: department.id, label: department.name }))}
+                name="departmentId"
+                defaultValue={filters.departmentId ?? ""}
+                placeholder="All departments"
+                searchPlaceholder="Search departments…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Function</label>
@@ -236,36 +237,36 @@ export default async function AdminPerformanceDashboardPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Branch</label>
-              <Select name="branchId" defaultValue={filters.branchId ?? ""} className="w-40">
-                <option value="">All branches</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
+                name="branchId"
+                defaultValue={filters.branchId ?? ""}
+                placeholder="All branches"
+                searchPlaceholder="Search branches…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position level</label>
-              <Select name="levelId" defaultValue={filters.levelId ?? ""} className="w-40">
-                <option value="">All levels</option>
-                {levels.map((level) => (
-                  <option key={level.id} value={level.id}>
-                    {level.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={levels.map((level) => ({ value: level.id, label: level.name }))}
+                name="levelId"
+                defaultValue={filters.levelId ?? ""}
+                placeholder="All levels"
+                searchPlaceholder="Search levels…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Band</label>
-              <Select name="bandId" defaultValue={filters.bandId ?? ""} className="w-40">
-                <option value="">All bands</option>
-                {bands.map((band) => (
-                  <option key={band.id} value={band.id}>
-                    {band.name}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                options={bands.map((band) => ({ value: band.id, label: band.name }))}
+                name="bandId"
+                defaultValue={filters.bandId ?? ""}
+                placeholder="All bands"
+                searchPlaceholder="Search bands…"
+                className="w-40"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Contract type</label>

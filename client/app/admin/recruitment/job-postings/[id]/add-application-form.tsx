@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { createApplication } from "@/lib/api/recruitment-actions"
 import type { Candidate } from "@/lib/api/recruitment"
 
@@ -33,14 +33,17 @@ export function AddApplicationForm({ postingId, actingEmployeeId, candidates }: 
     <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
       <p className="text-xs font-medium text-muted-foreground">Record an application for an existing candidate</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} className="w-64">
-          <option value="">Select a candidate…</option>
-          {candidates.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.firstName} {candidate.lastName} ({candidate.email})
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          options={candidates.map((candidate) => ({
+            value: candidate.id,
+            label: `${candidate.firstName} ${candidate.lastName} (${candidate.email})`,
+          }))}
+          value={candidateId}
+          onValueChange={setCandidateId}
+          className="w-64"
+          placeholder="Select a candidate…"
+          searchPlaceholder="Search candidates…"
+        />
         <Button type="button" size="sm" disabled={pending || !candidateId} onClick={submit}>
           {pending ? "Recording…" : "Record application"}
         </Button>

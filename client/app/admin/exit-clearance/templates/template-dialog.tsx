@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { ClearanceFormTemplate } from "@/lib/api/exit-clearance"
 import type { ExitClearanceActionState } from "@/lib/api/exit-clearance-actions"
@@ -79,36 +79,30 @@ export function TemplateDialog({ departments, positions, template, action, trigg
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="responsibleDepartmentId">Responsible department</Label>
-                <Select
-                  id="responsibleDepartmentId"
+                <SearchableSelect
+                  options={departments.map((dept) => ({ value: dept.id, label: dept.name }))}
                   name="responsibleDepartmentId"
                   value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
+                  onValueChange={setDepartmentId}
+                  placeholder="Select a department…"
+                  searchPlaceholder="Search departments…"
+                  clearable={false}
                   required
-                >
-                  <option value="" disabled>
-                    Select a department…
-                  </option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </Select>
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="responsiblePositionId">Responsible position</Label>
-                <Select id="responsiblePositionId" name="responsiblePositionId" defaultValue={template?.responsiblePositionId ?? ""} required disabled={!departmentId}>
-                  <option value="" disabled>
-                    {departmentId ? "Select a position…" : "Choose a department first"}
-                  </option>
-                  {positionsInDepartment.map((pos) => (
-                    <option key={pos.id} value={pos.id}>
-                      {pos.title}
-                    </option>
-                  ))}
-                </Select>
+                <SearchableSelect
+                  options={positionsInDepartment.map((pos) => ({ value: pos.id, label: pos.title }))}
+                  name="responsiblePositionId"
+                  defaultValue={template?.responsiblePositionId ?? ""}
+                  disabled={!departmentId}
+                  placeholder={departmentId ? "Select a position…" : "Choose a department first"}
+                  searchPlaceholder="Search positions…"
+                  clearable={false}
+                  required
+                />
               </div>
             </div>
 

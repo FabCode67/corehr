@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { completeInvestigation, openInvestigation, type ErActionState } from "@/lib/api/employee-relations-actions"
 import type { Investigation } from "@/lib/api/employee-relations"
@@ -27,16 +27,18 @@ export function OpenInvestigationForm({ caseId, actingEmployeeId, employees }: {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="investigatorId">Investigator</Label>
-          <Select id="investigatorId" name="investigatorId" required defaultValue="">
-            <option value="" disabled>
-              Select an investigator…
-            </option>
-            {employees.map((employee) => (
-              <option key={employee.employeeNumber} value={employee.employeeNumber}>
-                {employee.firstName} {employee.lastName}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={employees.map((employee) => ({
+              value: employee.employeeNumber,
+              label: `${employee.firstName} ${employee.lastName}`,
+            }))}
+            name="investigatorId"
+            defaultValue=""
+            placeholder="Select an investigator…"
+            searchPlaceholder="Search employees…"
+            clearable={false}
+            required
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="startDate">Start date</Label>

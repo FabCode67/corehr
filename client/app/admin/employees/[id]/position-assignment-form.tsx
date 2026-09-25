@@ -5,7 +5,7 @@ import { useActionState, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { Band } from "@/lib/api/bands"
 import type { Department } from "@/lib/api/departments"
 import type { Employee } from "@/lib/api/employees"
@@ -69,61 +69,49 @@ export function PositionAssignmentForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="assign-departmentId">Department</Label>
-          <Select
-            id="assign-departmentId"
+          <SearchableSelect
+            options={departments.map((department) => ({ value: department.id, label: department.name }))}
             value={departmentId}
-            onChange={(event) => {
-              setDepartmentId(event.target.value)
+            onValueChange={(next) => {
+              setDepartmentId(next)
               setPositionId("")
             }}
-            required
-          >
-            <option value="" disabled>
-              Select a department…
-            </option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+            placeholder="Select a department…"
+            searchPlaceholder="Search departments…"
+            clearable={false}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="assign-positionId">Position</Label>
-          <Select
-            id="assign-positionId"
+          <SearchableSelect
+            options={positionsForDepartment.map((position) => ({
+              value: position.id,
+              label: position.unit ? `${position.title} (${position.unit.name})` : position.title,
+            }))}
             name="positionId"
             value={positionId}
-            onChange={(event) => setPositionId(event.target.value)}
+            onValueChange={setPositionId}
             disabled={!departmentId}
+            placeholder={departmentId ? "Select a position…" : "Select a department first"}
+            searchPlaceholder="Search positions…"
+            clearable={false}
             required
-          >
-            <option value="" disabled>
-              {departmentId ? "Select a position…" : "Select a department first"}
-            </option>
-            {positionsForDepartment.map((position) => (
-              <option key={position.id} value={position.id}>
-                {position.title}
-                {position.unit ? ` (${position.unit.name})` : ""}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="assign-bandId">Band</Label>
-          <Select id="assign-bandId" name="bandId" defaultValue="" required>
-            <option value="" disabled>
-              Select a band…
-            </option>
-            {bands.map((band) => (
-              <option key={band.id} value={band.id}>
-                {band.name}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            options={bands.map((band) => ({ value: band.id, label: band.name }))}
+            name="bandId"
+            defaultValue=""
+            placeholder="Select a band…"
+            searchPlaceholder="Search bands…"
+            clearable={false}
+            required
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="assign-effectiveFrom">Employment start date</Label>
