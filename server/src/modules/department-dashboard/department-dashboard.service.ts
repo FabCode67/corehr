@@ -5,10 +5,12 @@ import { resolveDepartmentFilterIds } from "../../common/department-hierarchy.ut
 import { PrismaService } from "../../prisma/prisma.service"
 import { EmployeesExportService } from "../employees/employees-export.service"
 import { EmployeesService } from "../employees/employees.service"
+import { AnnualLeavePlanService } from "../leave/annual-leave-plan/annual-leave-plan.service"
 import { AdjustBalanceDto } from "../leave/leave-balances/dto/adjust-balance.dto"
 import { LeaveBalancesService } from "../leave/leave-balances/leave-balances.service"
 import { LeaveRequestsService } from "../leave/leave-requests/leave-requests.service"
 import { OrgChartService } from "../organization/org-chart/org-chart.service"
+import { ProfileService } from "../professional-profile/profile/profile.service"
 import { CreateRequisitionDto } from "../recruitment/requisitions/dto/create-requisition.dto"
 import { RequisitionsService } from "../recruitment/requisitions/requisitions.service"
 
@@ -40,7 +42,9 @@ export class DepartmentDashboardService {
     private readonly orgChartService: OrgChartService,
     private readonly requisitionsService: RequisitionsService,
     private readonly leaveRequestsService: LeaveRequestsService,
-    private readonly leaveBalancesService: LeaveBalancesService
+    private readonly leaveBalancesService: LeaveBalancesService,
+    private readonly profileService: ProfileService,
+    private readonly annualLeavePlanService: AnnualLeavePlanService
   ) {}
 
   /** Every active department this employee is the designated head OR
@@ -268,6 +272,23 @@ export class DepartmentDashboardService {
       throw new ForbiddenException("This employee is not part of your department.")
     }
     return employee
+  }
+
+  /** Shared department-membership check reused by every per-employee
+   *  "full profile" method below (family, relations, professional profile,
+   *  forms, leave detail, performance history) — the exact same rule
+   *  getEmployee() and adjustLeaveBalance() already inline, pulled out once
+   *  it grew past two call sites. Never trust employeeId alone — a
+   *  department head could otherwise type in any employee's id. */
+  private async assertEmployeeInDepartment(departmentId: string, employeeId: string) {
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    const employee = await this.prisma.employee.findUnique({
+      where: { employeeNumber: employeeId },
+      select: { position: { select: { departmentId: true } } },
+    })
+    if (!employee?.position || !departmentIds.includes(employee.position.departmentId)) {
+      throw new ForbiddenException("This employee is not part of your department.")
+    }
   }
 
   /** Builds the export buffer — mirrors EmployeesController.exportEmployees
@@ -579,5 +600,169 @@ export class DepartmentDashboardService {
       submittedAt: review.submittedAt,
       finalizedAt: review.finalizedAt,
     }))
+  }
+
+  // ---------------------------------------------------------------------
+  // Employee full profile — "see a profile of his each and every employee,
+  // including birthdate, joining date, leaves, employee relation status,
+  // performance, learning hours, relatives, forms and everything related to
+  // his or her employee" (the follow-up request this section answers).
+  // getEmployee() above already returns birthdate/joining date/marital
+  // status/exit info/children/education via EmployeesService.findOne(); the
+  // methods below fill in everything else that request named, each gated
+  // by the same assertAccess() + assertEmployeeInDepartment() pair. Every
+  // one deliberately queries Prisma directly (or, for professional profile,
+  // reuses ProfileService without a viewer override) rather than routing
+  // through that data's own module's access-scope service, for the same
+  // reason getEmployeePerformance()/getLearningHours() above do: Learning,
+  // Performance, Forms and Employee Relations each define "who can see
+  // this employee's data" via their own org-chart-derived scope (direct
+  // reports / auto-head), a different and narrower concept than
+  // Department.headOfDepartmentId — see this module's top doc comment.
+  // ---------------------------------------------------------------------
+
+  /** Extended family/relatives (parents, siblings, spouse, children, other)
+   *  — reuses EmployeesService.getFamilyTree() exactly as the admin
+   *  Employees page does (that method itself has no access control of its
+   *  own — see its doc comment in employees.service.ts), gated here to the
+   *  department head's own scope first. */
+  async getEmployeeFamily(departmentId: string, employeeId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+    return this.employeesService.getFamilyTree(employeeId)
+  }
+
+  /** Employee Relations status — deliberately narrower than the HR/admin
+   *  view (DisciplinaryCasesService.findHistoryForEmployee): only
+   *  non-confidential disciplinary cases, summarized (no meeting/
+   *  investigation/sanction detail), and no grievances at all — grievances
+   *  stay an employee-to-HR channel, matching the "only self or HR see
+   *  grievances" rule the admin EmployeeRelationsHistory component already
+   *  enforces for line managers. */
+  async getEmployeeRelations(departmentId: string, employeeId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+
+    const cases = await this.prisma.disciplinaryCase.findMany({
+      where: { employeeId, isConfidential: false },
+      select: {
+        id: true,
+        caseNumber: true,
+        category: true,
+        subject: true,
+        status: true,
+        dateReported: true,
+        incidentDate: true,
+        closedAt: true,
+      },
+      orderBy: { dateReported: "desc" },
+    })
+
+    return { cases }
+  }
+
+  /** Professional profile (work experience, education, certifications,
+   *  skills) — reuses ProfileService.getFullProfile() without a
+   *  viewerEmployeeId, so it returns the same filtered view a non-owner/
+   *  non-admin viewer gets (unverified education/certification entries
+   *  stay hidden — see that service's isOwnerOrAdmin gate). */
+  async getEmployeeProfessionalProfile(departmentId: string, employeeId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+    return this.profileService.getFullProfile(employeeId)
+  }
+
+  /** This employee's form instances (onboarding/compliance/exit-clearance/
+   *  etc. forms assigned to them) — queried directly rather than through
+   *  FormInstancesService.findAll()'s own FormsAccessService scope, same
+   *  reasoning as elsewhere in this section. */
+  async getEmployeeForms(departmentId: string, employeeId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+
+    return this.prisma.formInstance.findMany({
+      where: { employeeId },
+      include: {
+        formTemplate: { select: { title: true, category: { select: { name: true } } } },
+        assignedBy: { select: { employeeNumber: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
+  }
+
+  /** Full performance review history for one employee (not just the
+   *  latest, which getEmployeePerformance() above already covers for the
+   *  whole department at a glance). */
+  async getEmployeePerformanceHistory(departmentId: string, employeeId: string, actingEmployeeId: string) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+
+    return this.prisma.performanceReview.findMany({
+      where: { employeeId },
+      include: {
+        period: { select: { name: true, year: true } },
+        reviewer: { select: { employeeNumber: true, firstName: true, lastName: true } },
+      },
+      orderBy: [{ period: { year: "desc" } }, { createdAt: "desc" }],
+    })
+  }
+
+  /** This employee's leave balances plus their own request history — the
+   *  department-wide getLeaveBalances()/getLeaveRequests() above already
+   *  cover "everyone in my department"; this is the single-employee
+   *  drill-down for the full-profile page. */
+  async getEmployeeLeaveDetail(departmentId: string, employeeId: string, actingEmployeeId: string, year?: number) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    await this.assertEmployeeInDepartment(departmentId, employeeId)
+
+    const [balances, requests] = await Promise.all([
+      this.leaveBalancesService.getSummary(employeeId, year),
+      this.leaveRequestsService.findAll({ employeeId }),
+    ])
+    return { balances, requests }
+  }
+
+  // ---------------------------------------------------------------------
+  // Annual Leave Plan — a Head of Department downloads a template prefilled
+  // with their own department's employees, fills in each employee's
+  // planned leave months offline, and uploads it back. See
+  // AnnualLeavePlanService's doc comment for why this is a separate
+  // forecast layer from the LeaveRequest/approval workflow above. Scoped
+  // exactly like every other per-department capability: assertAccess() plus
+  // resolveDepartmentFilterIds()'s cascade, both here and passed down as the
+  // upload's allowlist so a department head can never plant rows for
+  // employees outside their own department.
+  // ---------------------------------------------------------------------
+
+  async getAnnualLeavePlanTemplate(departmentId: string, actingEmployeeId: string, year: number): Promise<Buffer> {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    const employees = await this.prisma.employee.findMany({
+      where: { isActive: true, position: { departmentId: { in: departmentIds } } },
+      select: { employeeNumber: true },
+    })
+    return this.annualLeavePlanService.buildTemplate(employees.map((employee) => employee.employeeNumber), year)
+  }
+
+  async uploadAnnualLeavePlan(
+    departmentId: string,
+    actingEmployeeId: string,
+    year: number,
+    file: { buffer: Buffer; originalname: string }
+  ) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    const employees = await this.prisma.employee.findMany({
+      where: { position: { departmentId: { in: departmentIds } } },
+      select: { employeeNumber: true },
+    })
+    const allowedEmployeeNumbers = new Set(employees.map((employee) => employee.employeeNumber))
+    return this.annualLeavePlanService.upload(file.buffer, file.originalname, year, actingEmployeeId, allowedEmployeeNumbers)
+  }
+
+  async getAnnualLeavePlan(departmentId: string, actingEmployeeId: string, year: number) {
+    await this.assertAccess(departmentId, actingEmployeeId)
+    const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
+    return this.annualLeavePlanService.getForDepartments(departmentIds, year)
   }
 }

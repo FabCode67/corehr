@@ -230,6 +230,7 @@ model Department {
   offers             Offer[]
   formTemplates      FormTemplate[]
   exitClearanceFormTemplates ExitClearanceFormTemplate[]
+  annualLeavePlanEntries     AnnualLeavePlanEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -711,6 +712,10 @@ model Employee {
   aiAuditLogs          AiAuditLog[]
   aiPendingActionsMade AiPendingAction[] @relation("AiActionRequestedBy")
   aiPendingActionsConfirmed AiPendingAction[] @relation("AiActionConfirmedBy")
+
+  // --- Annual Leave Plan -------------------------------------------------
+  annualLeavePlanEntries         AnnualLeavePlanEntry[] @relation("AnnualLeavePlanEmployee")
+  uploadedAnnualLeavePlanEntries AnnualLeavePlanEntry[] @relation("AnnualLeavePlanUploader")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1443,6 +1448,59 @@ model LeaveBalance {
 
   @@unique([employeeId, leaveTypeId, year])
   @@map("leave_balances")
+}
+
+/// ANNUAL LEAVE PLAN — a Head of Department uploads a spreadsheet once a
+/// year forecasting when each of their employees intends to take annual
+/// leave (a planned schedule, deliberately independent of the actual
+/// LeaveRequest/approval workflow — see AnnualLeavePlanService's doc
+/// comment). One row per (employee, year); `departmentId` is a snapshot of
+/// the employee's department at upload time (same "denormalized
+/// departmentId" convention PerformanceReview already uses) so HR can
+/// filter/export/chart across departments even if an employee later
+/// transfers. The 12 month columns are the planned days-off schedule;
+/// carryForwardBalance/annualEntitlement/totalEntitled/leaveTaken/
+/// leaveBalance mirror LeaveBalance's ANNUAL-category figures at the time
+/// of upload (a point-in-time copy, not a live join — the plan is a
+/// snapshot HR reviews, not a recomputed balance).
+model AnnualLeavePlanEntry {
+  id           String @id @default(uuid()) @db.Uuid
+  employeeId   String
+  year         Int
+  departmentId String @db.Uuid
+
+  carryForwardBalance Float @default(0)
+  annualEntitlement   Float @default(0)
+  totalEntitled       Float @default(0)
+  leaveTaken          Float @default(0)
+  leaveBalance        Float @default(0)
+
+  january   Float @default(0)
+  february  Float @default(0)
+  march     Float @default(0)
+  april     Float @default(0)
+  may       Float @default(0)
+  june      Float @default(0)
+  july      Float @default(0)
+  august    Float @default(0)
+  september Float @default(0)
+  october   Float @default(0)
+  november  Float @default(0)
+  december  Float @default(0)
+
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  employee   Employee   @relation("AnnualLeavePlanEmployee", fields: [employeeId], references: [employeeNumber])
+  department Department @relation(fields: [departmentId], references: [id])
+  uploadedBy Employee   @relation("AnnualLeavePlanUploader", fields: [uploadedById], references: [employeeNumber])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, year])
+  @@index([departmentId, year])
+  @@map("annual_leave_plan_entries")
 }
 
 model LeaveRequest {

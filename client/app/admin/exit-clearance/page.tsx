@@ -24,7 +24,6 @@ const STAT_CARDS: { key: "completed" | "pending" | "rejected" | "overdue"; label
  */
 export default async function ExitClearanceDashboardPage() {
   const dashboardResult = await fetchExitClearanceHrDashboard()
-  const dashboard = dashboardResult.ok ? dashboardResult.data : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,7 +43,7 @@ export default async function ExitClearanceDashboardPage() {
             <CardDescription>{dashboardResult.error}</CardDescription>
           </CardHeader>
         </Card>
-      ) : dashboard.employees.length === 0 ? (
+      ) : dashboardResult.data.employees.length === 0 ? (
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle className="text-base">No exits currently in progress</CardTitle>
@@ -57,7 +56,7 @@ export default async function ExitClearanceDashboardPage() {
             {STAT_CARDS.map((stat) => (
               <Card key={stat.key}>
                 <CardContent className="pt-6">
-                  <p className={`text-2xl font-semibold ${stat.accent}`}>{dashboard.counts[stat.key]}</p>
+                  <p className={`text-2xl font-semibold ${stat.accent}`}>{dashboardResult.data.counts[stat.key]}</p>
                   <p className="text-xs text-muted-foreground">{stat.label}</p>
                 </CardContent>
               </Card>
@@ -70,7 +69,7 @@ export default async function ExitClearanceDashboardPage() {
               <CardDescription>Sorted by most overdue first.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              {dashboard.employees.map((row) => (
+              {dashboardResult.data.employees.map((row) => (
                 <Link
                   key={row.employee.employeeNumber}
                   href={`/admin/employees/${row.employee.employeeNumber}`}

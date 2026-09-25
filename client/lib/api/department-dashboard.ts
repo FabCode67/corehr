@@ -1,9 +1,11 @@
 import type { OrgChartNode } from "@/lib/org-chart"
 
 import { apiFetchSafe } from "./client"
-import type { Employee } from "./employees"
+import type { Employee, EmployeeFamilyTree } from "./employees"
+import type { FormInstance } from "./forms"
 import type { LeaveBalance, LeaveCalendarData, LeaveRequest, LeaveRequestStatus } from "./leave"
 import type { PaginatedResult } from "./pagination"
+import type { FullProfile } from "./professional-profile"
 
 export interface HeadedDepartment {
   id: string
@@ -204,4 +206,95 @@ export interface DepartmentPerformanceRow {
 
 export function fetchDepartmentPerformance(departmentId: string, actingEmployeeId: string) {
   return apiFetchSafe<DepartmentPerformanceRow[]>(`/department-dashboard/${departmentId}/performance?actingEmployeeId=${actingEmployeeId}`)
+}
+
+// ---------------------------------------------------------------------
+// Employee full profile — "see a profile of his each and every employee,
+// including birthdate, joining date, leaves, employee relation status,
+// performance, learning hours, relatives, forms and everything related to
+// his or her employee". fetchDepartmentEmployee() above already returns
+// birthdate/joining date/marital status/exit info/children/education; the
+// fetchers below cover everything else that request named, each scoped to
+// department head + department/employee id like every other fetcher here.
+// ---------------------------------------------------------------------
+
+export function fetchDepartmentEmployeeFamily(departmentId: string, employeeId: string, actingEmployeeId: string) {
+  return apiFetchSafe<EmployeeFamilyTree>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/family?actingEmployeeId=${actingEmployeeId}`
+  )
+}
+
+export interface DepartmentEmployeeRelationsCase {
+  id: string
+  caseNumber: string
+  category: string
+  subject: string
+  status: string
+  dateReported: string
+  incidentDate: string
+  closedAt: string | null
+}
+
+export interface DepartmentEmployeeRelations {
+  cases: DepartmentEmployeeRelationsCase[]
+}
+
+/** Deliberately narrower than the HR/admin Employee Relations view — only
+ *  non-confidential disciplinary cases, no grievances (see the server
+ *  method's doc comment). */
+export function fetchDepartmentEmployeeRelations(departmentId: string, employeeId: string, actingEmployeeId: string) {
+  return apiFetchSafe<DepartmentEmployeeRelations>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/relations?actingEmployeeId=${actingEmployeeId}`
+  )
+}
+
+export function fetchDepartmentEmployeeProfessionalProfile(departmentId: string, employeeId: string, actingEmployeeId: string) {
+  return apiFetchSafe<FullProfile>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/professional-profile?actingEmployeeId=${actingEmployeeId}`
+  )
+}
+
+export function fetchDepartmentEmployeeForms(departmentId: string, employeeId: string, actingEmployeeId: string) {
+  return apiFetchSafe<FormInstance[]>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/forms?actingEmployeeId=${actingEmployeeId}`
+  )
+}
+
+export interface DepartmentEmployeePerformanceRecord {
+  id: string
+  reviewType: string
+  status: string
+  overallRating: number | null
+  period: { name: string; year: number }
+  reviewer: { employeeNumber: string; firstName: string; lastName: string } | null
+  submittedAt: string | null
+  acknowledgedAt: string | null
+  finalizedAt: string | null
+}
+
+/** Full review history for one employee — fetchDepartmentPerformance()
+ *  above only returns the latest review per employee across the whole
+ *  department. */
+export function fetchDepartmentEmployeePerformanceHistory(departmentId: string, employeeId: string, actingEmployeeId: string) {
+  return apiFetchSafe<DepartmentEmployeePerformanceRecord[]>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/performance-history?actingEmployeeId=${actingEmployeeId}`
+  )
+}
+
+export interface DepartmentEmployeeLeaveDetail {
+  balances: LeaveBalance[]
+  requests: LeaveRequest[]
+}
+
+export function fetchDepartmentEmployeeLeaveDetail(
+  departmentId: string,
+  employeeId: string,
+  actingEmployeeId: string,
+  year?: number
+) {
+  const query = new URLSearchParams({ actingEmployeeId })
+  if (year) query.set("year", String(year))
+  return apiFetchSafe<DepartmentEmployeeLeaveDetail>(
+    `/department-dashboard/${departmentId}/employees/${employeeId}/leave-detail?${query.toString()}`
+  )
 }

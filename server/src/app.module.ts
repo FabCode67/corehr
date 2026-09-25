@@ -13,6 +13,7 @@ import { LeaveBalancesModule } from "./modules/leave/leave-balances/leave-balanc
 import { NotificationsModule } from "./modules/leave/notifications/notifications.module"
 import { LeaveRequestsModule } from "./modules/leave/leave-requests/leave-requests.module"
 import { LeaveAnalyticsModule } from "./modules/leave/leave-analytics/leave-analytics.module"
+import { AnnualLeavePlanModule } from "./modules/leave/annual-leave-plan/annual-leave-plan.module"
 import { PerformanceAccessModule } from "./modules/performance/access/performance-access.module"
 import { RatingScaleModule } from "./modules/performance/rating-scale/rating-scale.module"
 import { ReviewPeriodsModule } from "./modules/performance/review-periods/review-periods.module"
@@ -90,6 +91,7 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     NotificationsModule,
     LeaveRequestsModule,
     LeaveAnalyticsModule,
+    AnnualLeavePlanModule,
     PerformanceAccessModule,
     RatingScaleModule,
     ReviewPeriodsModule,

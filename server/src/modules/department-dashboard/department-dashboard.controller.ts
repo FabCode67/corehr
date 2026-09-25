@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from "@nestjs/common"
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile, UploadedFile, UseInterceptors } from "@nestjs/common"
+import { FileInterceptor } from "@nestjs/platform-express"
 import { LeaveRequestStatus } from "@prisma/client"
 
 import { AdjustBalanceDto } from "../leave/leave-balances/dto/adjust-balance.dto"
@@ -68,6 +69,71 @@ export class DepartmentDashboardController {
     @Query("actingEmployeeId") actingEmployeeId: string
   ) {
     return this.departmentDashboardService.getEmployee(departmentId, employeeId, actingEmployeeId)
+  }
+
+  // --- Employee full profile ---------------------------------------------
+  // Each mirrors getEmployee() above: departmentId + employeeId + the
+  // acting head, gated by DepartmentDashboardService's own
+  // assertAccess()/assertEmployeeInDepartment() checks.
+
+  @Get(":departmentId/employees/:employeeId/family")
+  getEmployeeFamily(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string
+  ) {
+    return this.departmentDashboardService.getEmployeeFamily(departmentId, employeeId, actingEmployeeId)
+  }
+
+  @Get(":departmentId/employees/:employeeId/relations")
+  getEmployeeRelations(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string
+  ) {
+    return this.departmentDashboardService.getEmployeeRelations(departmentId, employeeId, actingEmployeeId)
+  }
+
+  @Get(":departmentId/employees/:employeeId/professional-profile")
+  getEmployeeProfessionalProfile(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string
+  ) {
+    return this.departmentDashboardService.getEmployeeProfessionalProfile(departmentId, employeeId, actingEmployeeId)
+  }
+
+  @Get(":departmentId/employees/:employeeId/forms")
+  getEmployeeForms(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string
+  ) {
+    return this.departmentDashboardService.getEmployeeForms(departmentId, employeeId, actingEmployeeId)
+  }
+
+  @Get(":departmentId/employees/:employeeId/performance-history")
+  getEmployeePerformanceHistory(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string
+  ) {
+    return this.departmentDashboardService.getEmployeePerformanceHistory(departmentId, employeeId, actingEmployeeId)
+  }
+
+  @Get(":departmentId/employees/:employeeId/leave-detail")
+  getEmployeeLeaveDetail(
+    @Param("departmentId") departmentId: string,
+    @Param("employeeId") employeeId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string,
+    @Query("year") year?: string
+  ) {
+    return this.departmentDashboardService.getEmployeeLeaveDetail(
+      departmentId,
+      employeeId,
+      actingEmployeeId,
+      year ? Number(year) : undefined
+    )
   }
 
   @Get(":departmentId/positions")
@@ -158,5 +224,44 @@ export class DepartmentDashboardController {
   @Get(":departmentId/performance")
   getEmployeePerformance(@Param("departmentId") departmentId: string, @Query("actingEmployeeId") actingEmployeeId: string) {
     return this.departmentDashboardService.getEmployeePerformance(departmentId, actingEmployeeId)
+  }
+
+  // --- Annual Leave Plan ---------------------------------------------------
+  // Must stay above the generic employees/:employeeId-style routes'
+  // equivalent ambiguity isn't a concern here since "leave-plan" is a fixed
+  // segment, not a param — order relative to other routes doesn't matter.
+
+  @Get(":departmentId/leave-plan/template")
+  async downloadAnnualLeavePlanTemplate(
+    @Param("departmentId") departmentId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string,
+    @Query("year") year: string
+  ) {
+    const buffer = await this.departmentDashboardService.getAnnualLeavePlanTemplate(departmentId, actingEmployeeId, Number(year))
+    return new StreamableFile(buffer, {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: `attachment; filename="annual-leave-plan-template-${year}.xlsx"`,
+    })
+  }
+
+  @Post(":departmentId/leave-plan/upload")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async uploadAnnualLeavePlan(
+    @Param("departmentId") departmentId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Query("actingEmployeeId") actingEmployeeId: string,
+    @Query("year") year: string
+  ) {
+    if (!file) throw new BadRequestException("No file uploaded.")
+    return this.departmentDashboardService.uploadAnnualLeavePlan(departmentId, actingEmployeeId, Number(year), file)
+  }
+
+  @Get(":departmentId/leave-plan")
+  getAnnualLeavePlan(
+    @Param("departmentId") departmentId: string,
+    @Query("actingEmployeeId") actingEmployeeId: string,
+    @Query("year") year: string
+  ) {
+    return this.departmentDashboardService.getAnnualLeavePlan(departmentId, actingEmployeeId, Number(year))
   }
 }

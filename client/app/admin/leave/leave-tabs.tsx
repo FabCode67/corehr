@@ -9,6 +9,7 @@ const TABS = [
   { label: "Approvals", href: "/admin/leave/approvals" },
   { label: "Calendar", href: "/admin/leave/calendar" },
   { label: "Analytics", href: "/admin/leave/analytics" },
+  { label: "Annual Plan", href: "/admin/leave/annual-plan" },
   { label: "Settings", href: "/admin/leave/settings" },
 ]
 

@@ -28,7 +28,11 @@ import { getSession } from "@/lib/get-session"
 
 import { EmployeeRelationsHistory } from "./employee-relations-history"
 import { ExitProcessSection } from "./exit-process-section"
+import { FormsSection } from "./forms-section"
+import { LeaveSection } from "./leave-section"
+import { LearningSection } from "./learning-section"
 import { OnboardingDocumentsSection } from "./onboarding-documents-section"
+import { PerformanceHistorySection } from "./performance-history-section"
 import {
   addChild,
   addEducation,
@@ -283,6 +287,14 @@ export default async function EmployeeDetailPage({
       </Card>
 
       <OnboardingDocumentsSection employee={employee} actingEmployeeId={session?.employeeId ?? ""} />
+
+      <LeaveSection employeeId={employee.employeeNumber} />
+
+      <PerformanceHistorySection employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
+
+      <LearningSection employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
+
+      <FormsSection employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
 
       <EmployeeRelationsHistory employeeId={employee.employeeNumber} actingEmployeeId={session?.employeeId ?? ""} />
     </div>

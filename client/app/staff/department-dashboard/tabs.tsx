@@ -10,6 +10,7 @@ const TABS = [
   { key: "org-chart", label: "Org Chart", href: "/staff/department-dashboard/org-chart" },
   { key: "requisitions", label: "Requisitions", href: "/staff/department-dashboard/requisitions" },
   { key: "leave", label: "Leave", href: "/staff/department-dashboard/leave" },
+  { key: "leave-plan", label: "Annual Leave Plan", href: "/staff/department-dashboard/leave-plan" },
   { key: "performance", label: "Performance", href: "/staff/department-dashboard/performance" },
 ] as const
 
