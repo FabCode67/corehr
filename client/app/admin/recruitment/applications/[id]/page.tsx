@@ -144,7 +144,6 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             applicationId={application.id}
             actingEmployeeId={actingEmployeeId}
             assessments={assessmentsResult.ok ? assessmentsResult.data : []}
-            employees={employeesResult.ok ? employeesResult.data : []}
           />
         </CardContent>
       </Card>

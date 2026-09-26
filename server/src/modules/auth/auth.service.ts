@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common"
+import { JwtService } from "@nestjs/jwt"
 import * as bcrypt from "bcryptjs"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
 import { ChangePasswordDto } from "./dto/change-password.dto"
 import { LoginDto } from "./dto/login.dto"
+import type { SessionClaims } from "./session-claims.type"
 
 const SALT_ROUNDS = 10
 
@@ -15,15 +17,19 @@ const LOGIN_INCLUDE = {
 
 /**
  * Real credential-based auth against Employee.passwordHash — replaces the
- * client's old hardcoded DEMO_USERS map. Deliberately simple: no JWTs, no
- * session table. The Next.js client still just carries an unsigned mock
- * session cookie (see client/lib/session.ts) built from whatever this
- * returns; only the credential check itself is real. Revisit if/when this
- * app needs actual bearer-token auth for a non-browser client.
+ * client's old hardcoded DEMO_USERS map. login() now also signs a JWT
+ * (see jwt.constants.ts/jwt-auth.guard.ts) that both ends treat as the one
+ * source of truth for the session: the Next.js client stores this exact
+ * token as its session cookie (client/lib/session.ts) and forwards it as
+ * `Authorization: Bearer <token>` on every API call, closing the previous
+ * "every endpoint trusts the caller with no server-side check at all" gap.
  */
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService
+  ) {}
 
   async login(dto: LoginDto) {
     const employee = await this.prisma.employee.findUnique({
@@ -57,8 +63,20 @@ export class AuthService {
       throw new UnauthorizedException("Your temporary password has expired. Please contact HR to have your account reset.")
     }
 
-    const { passwordHash: _passwordHash, ...safeEmployee } = employee
-    return safeEmployee
+    const claims: SessionClaims = {
+      id: employee.employeeNumber,
+      employeeId: employee.employeeNumber,
+      name: [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
+      email: employee.email,
+      role: employee.isAdmin ? "admin" : "staff",
+      jobTitle: employee.position?.title ?? "Not yet assigned",
+      department: employee.position?.department.name ?? "Not yet assigned",
+      branch: employee.branch?.name ?? "Not assigned",
+      mustChangePassword: employee.mustChangePassword,
+    }
+    const accessToken = this.jwtService.sign(claims)
+
+    return { accessToken }
   }
 
   async changePassword(dto: ChangePasswordDto) {

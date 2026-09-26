@@ -36,16 +36,36 @@ export async function previewImport(moduleKey: string, actingEmployeeId: string,
   }
 }
 
+/** Kicks off the import — the server now marks the job IMPORTING and
+ *  returns immediately rather than running every row inline (see
+ *  ImportsService.commit()'s doc comment), so this resolves quickly with
+ *  status still IMPORTING. Callers (ImportManager) poll
+ *  checkImportJobAction() until the status moves on. */
 export async function commitImport(jobId: string, actingEmployeeId: string): Promise<ImportActionState> {
   try {
     const result = await apiFetch<ImportJobDetail>(`/imports/jobs/${jobId}/commit`, {
       method: "POST",
       body: JSON.stringify({ actingEmployeeId }),
     })
-    revalidateImportPaths()
     return { result }
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to run the import." }
+  }
+}
+
+/** Poll target for a job kicked off by commitImport() — a thin
+ *  client-callable wrapper around fetchImportJob() (same pattern as
+ *  searchEmployeesAction wrapping a Server-Component fetcher), since
+ *  ImportManager is a "use client" component. Revalidates the paths an
+ *  import can affect once the job actually leaves IMPORTING, matching what
+ *  commitImport() used to do unconditionally on every call. */
+export async function checkImportJobAction(jobId: string): Promise<ImportActionState> {
+  try {
+    const result = await apiFetch<ImportJobDetail>(`/imports/jobs/${jobId}`)
+    if (result.status !== "IMPORTING") revalidateImportPaths()
+    return { result }
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to check the import's progress." }
   }
 }
 

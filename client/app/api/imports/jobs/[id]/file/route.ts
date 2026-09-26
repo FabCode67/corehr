@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /imports/jobs/:id/file` — downloads the original
  *  uploaded file stored on the ImportJob row. */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/imports/jobs/${id}/file`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/imports/jobs/${id}/file`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

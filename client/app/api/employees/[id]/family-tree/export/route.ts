@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /**
  * Proxies to `GET /employees/:id/family-tree/export` (single-employee
  * Family Tree Report) — API_URL is server-only, so a browser download link
@@ -11,6 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
   const response = await fetch(`${apiBaseUrl}/employees/${id}/family-tree/export${request.nextUrl.search}`, {
     cache: "no-store",
+    headers: await authHeader(),
   })
 
   if (!response.ok) {

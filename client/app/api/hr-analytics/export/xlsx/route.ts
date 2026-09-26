@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /hr-analytics/export/xlsx`, forwarding every filter in
  *  the query string (not just actingEmployeeId) — same reasoning as
  *  app/api/executive-dashboard/pdf/route.ts: API_URL is server-only, so a
@@ -10,7 +12,10 @@ export async function GET(request: NextRequest) {
   }
 
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/xlsx${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/xlsx${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

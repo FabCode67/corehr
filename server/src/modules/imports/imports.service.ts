@@ -133,6 +133,17 @@ export class ImportsService {
     }
   }
 
+  /**
+   * Marks the job IMPORTING and returns immediately — the actual row
+   * processing happens off the request thread, picked up by
+   * ImportQueueProcessor's polling loop (same DB-backed-queue pattern as
+   * EmailQueueProcessor; see that class's doc comment for why not
+   * Redis/BullMQ). A large import used to hold the HTTP connection open
+   * for however long every row took to write, one row-transaction at a
+   * time — the client now polls GET /imports/jobs/:id (see
+   * fetchImportJob/ImportManager) until the status leaves IMPORTING,
+   * instead of waiting on a single long-lived response.
+   */
   async commit(jobId: string, actingEmployeeId: string) {
     const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
     if (!job) throw new NotFoundException("Import job not found.")
@@ -140,10 +151,30 @@ export class ImportsService {
       throw new ConflictException(`This import has already been ${job.status.replace("_", " ").toLowerCase()} — re-upload the file to run it again.`)
     }
 
-    const config = this.getConfig(job.module)
-    const rows = job.parsedRows as unknown as ImportRowResult[]
+    // actingEmployeeId isn't persisted separately from importedById — in
+    // every current caller (ImportManager) the same employee who uploaded
+    // the file is the one confirming the commit, so ImportQueueProcessor
+    // reads job.importedById back out when it actually runs the row loop.
+    // Revisit if a future flow lets someone other than the uploader commit.
+    void actingEmployeeId
 
     await this.prisma.importJob.update({ where: { id: jobId }, data: { status: "IMPORTING", startedAt: new Date() } })
+    // Reuse getJob()'s shape (adds label/referenceKeyLabel from config) so
+    // this response matches what polling via GET /imports/jobs/:id
+    // returns — same ImportJobDetail shape throughout the flow.
+    return this.getJob(jobId)
+  }
+
+  /** The actual row-by-row processing, run by ImportQueueProcessor — split
+   *  out from commit() so it can run off the request thread. See commit()'s
+   *  doc comment for why. */
+  async processJob(jobId: string) {
+    const job = await this.prisma.importJob.findUnique({ where: { id: jobId } })
+    if (!job || job.status !== "IMPORTING") return
+
+    const actingEmployeeId = job.importedById
+    const config = this.getConfig(job.module)
+    const rows = job.parsedRows as unknown as ImportRowResult[]
 
     const ctx = await config.buildContext(this.deps)
     const outcomes: ImportRowOutcome[] = []

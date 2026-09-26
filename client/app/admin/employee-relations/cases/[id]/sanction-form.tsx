@@ -5,27 +5,26 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Textarea } from "@/components/ui/textarea"
 import { issueSanction, type ErActionState } from "@/lib/api/employee-relations-actions"
 import type { SanctionType } from "@/lib/api/employee-relations"
-
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  lastName: string
-}
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 
 export function SanctionForm({
   caseId,
   actingEmployeeId,
   sanctionTypes,
-  employees,
+  issuedByInitialOption,
 }: {
   caseId: string
   actingEmployeeId: string
   sanctionTypes: SanctionType[]
-  employees: EmployeeOption[]
+  /** {value,label} for `actingEmployeeId` — the "Issued by" picker defaults
+   *  to the current user, so the trigger needs to show their name up front
+   *  without a search round-trip. Null if it couldn't be resolved. */
+  issuedByInitialOption: SearchableSelectOption | null
 }) {
   const [state, formAction, pending] = useActionState<ErActionState | undefined, FormData>(issueSanction.bind(null, caseId), undefined)
 
@@ -63,11 +62,9 @@ export function SanctionForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="issuedById">Issued by</Label>
-          <SearchableSelect
-            options={employees.map((employee) => ({
-              value: employee.employeeNumber,
-              label: `${employee.firstName} ${employee.lastName}`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={searchEmployeesAction}
+            initialOption={issuedByInitialOption}
             name="issuedById"
             defaultValue={actingEmployeeId}
             placeholder="Select an employee…"
@@ -78,11 +75,8 @@ export function SanctionForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="approvalAuthorityId">Approval authority (optional)</Label>
-          <SearchableSelect
-            options={employees.map((employee) => ({
-              value: employee.employeeNumber,
-              label: `${employee.firstName} ${employee.lastName}`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={searchEmployeesAction}
             name="approvalAuthorityId"
             defaultValue=""
             placeholder="None recorded"

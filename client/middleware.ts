@@ -5,7 +5,7 @@ import { decodeSession, SESSION_COOKIE } from "@/lib/session"
 const STAFF_PREFIX = "/staff"
 const ADMIN_PREFIX = "/admin"
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isStaffRoute = pathname.startsWith(STAFF_PREFIX)
   const isAdminRoute = pathname.startsWith(ADMIN_PREFIX)
@@ -14,7 +14,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const session = decodeSession(request.cookies.get(SESSION_COOKIE)?.value)
+  const session = await decodeSession(request.cookies.get(SESSION_COOKIE)?.value)
 
   if (!session) {
     const loginUrl = new URL("/login", request.url)

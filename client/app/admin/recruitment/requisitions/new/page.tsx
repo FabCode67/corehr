@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchUnits } from "@/lib/api/departments"
-import { fetchEmployees } from "@/lib/api/employees"
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { fetchJobDescriptions, fetchWorkforcePlans } from "@/lib/api/recruitment"
 import { createRequisition } from "@/lib/api/recruitment-actions"
@@ -18,7 +17,7 @@ export default async function NewRequisitionPage({ searchParams }: { searchParam
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [plansResult, positionsResult, departmentsResult, unitsResult, levelsResult, bandsResult, branchesResult, employeesResult, jobDescriptionsResult] =
+  const [plansResult, positionsResult, departmentsResult, unitsResult, levelsResult, bandsResult, branchesResult, jobDescriptionsResult] =
     await Promise.all([
       fetchWorkforcePlans({ status: "APPROVED" }, actingEmployeeId),
       fetchPositions(),
@@ -27,7 +26,6 @@ export default async function NewRequisitionPage({ searchParams }: { searchParam
       fetchPositionLevels(),
       fetchBands(),
       fetchBranches(),
-      fetchEmployees(),
       fetchJobDescriptions(),
     ])
 
@@ -76,7 +74,6 @@ export default async function NewRequisitionPage({ searchParams }: { searchParam
               levels={levelsResult.ok ? levelsResult.data : []}
               bands={bandsResult.ok ? bandsResult.data : []}
               branches={branchesResult.ok ? branchesResult.data : []}
-              employees={employeesResult.ok ? employeesResult.data : []}
               jobDescriptions={jobDescriptionsResult.ok ? jobDescriptionsResult.data : []}
               actingEmployeeId={actingEmployeeId}
               defaultWorkforcePlanId={workforcePlanId}

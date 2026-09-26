@@ -8,7 +8,7 @@ import { Download, History, Loader2, Upload, UploadCloud } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { commitImport, previewImport } from "@/lib/api/imports-actions"
+import { checkImportJobAction, commitImport, previewImport } from "@/lib/api/imports-actions"
 import {
   importErrorReportUrl,
   importJobFileUrl,
@@ -45,6 +45,11 @@ type Phase = "idle" | "previewing" | "preview" | "importing" | "done"
 export function ImportManager({ moduleKey, moduleLabel, actingEmployeeId }: { moduleKey: string; moduleLabel: string; actingEmployeeId: string }) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Guards the recursive poll loop below against setting state after the
+  // dialog's been closed/reset mid-import — the import itself keeps
+  // running server-side regardless (it's not cancelled, just no longer
+  // watched by this particular render).
+  const pollCancelledRef = useRef(false)
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState<Phase>("idle")
   const [dragOver, setDragOver] = useState(false)
@@ -54,6 +59,7 @@ export function ImportManager({ moduleKey, moduleLabel, actingEmployeeId }: { mo
   const [activeTab, setActiveTab] = useState<ImportRowStatus | "all">("all")
 
   function reset() {
+    pollCancelledRef.current = true
     setPhase("idle")
     setPreview(null)
     setResult(null)
@@ -86,15 +92,41 @@ export function ImportManager({ moduleKey, moduleLabel, actingEmployeeId }: { mo
     setPhase("preview")
   }
 
+  // Polling cadence for a running import — the server processes it off the
+  // request thread now (see ImportsService.commit()'s doc comment), so
+  // there's no single response to just await anymore. 1.5s feels
+  // responsive without hammering the API while the dialog's spinner is up.
+  const POLL_INTERVAL_MS = 1500
+
   async function handleConfirm() {
     if (!preview) return
     setError(null)
     setPhase("importing")
-    const state = await commitImport(preview.jobId, actingEmployeeId)
-    if (state.error || !state.result) {
-      setError(state.error ?? "Failed to run the import.")
+    pollCancelledRef.current = false
+
+    const started = await commitImport(preview.jobId, actingEmployeeId)
+    if (pollCancelledRef.current) return
+    if (started.error || !started.result) {
+      setError(started.error ?? "Failed to run the import.")
       setPhase("preview")
       return
+    }
+
+    await pollJob(started.result.id)
+  }
+
+  async function pollJob(jobId: string): Promise<void> {
+    const state = await checkImportJobAction(jobId)
+    if (pollCancelledRef.current) return
+    if (state.error || !state.result) {
+      setError(state.error ?? "Failed to check the import's progress.")
+      setPhase("preview")
+      return
+    }
+    if (state.result.status === "IMPORTING") {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      if (pollCancelledRef.current) return
+      return pollJob(jobId)
     }
     setResult(state.result)
     setPhase("done")

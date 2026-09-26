@@ -70,18 +70,31 @@ export class HrAnalyticsService {
     return { activeCount, newJoined, exited, changePercent }
   }
 
-  /** Average Employee Age: org-wide, by department, and a 5-year trend. */
+  /** Average Employee Age: org-wide, by department, and a 5-year trend.
+   *
+   *  Fetches the dimension-scoped population once (not once for "currently
+   *  active" and again for "every year since" — those two used to be two
+   *  separate full-table `findMany`s pulling largely overlapping rows) and
+   *  derives both the current snapshot and the historical trend from that
+   *  single result set in memory. */
   async averageAge(filters: HrAnalyticsFilters) {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
     const employees = await this.prisma.employee.findMany({
-      where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
-      select: { dateOfBirth: true, position: { select: { department: { select: { id: true, name: true } } } } },
+      where: dimensionWhere,
+      select: {
+        dateOfBirth: true,
+        employmentStatus: true,
+        employmentStartDate: true,
+        exitDate: true,
+        position: { select: { department: { select: { id: true, name: true } } } },
+      },
     })
 
-    const overall = employees.length === 0 ? null : round1(employees.reduce((sum, e) => sum + ageInYears(e.dateOfBirth), 0) / employees.length)
+    const activeNow = employees.filter((e) => e.employmentStatus === "ACTIVE")
+    const overall = activeNow.length === 0 ? null : round1(activeNow.reduce((sum, e) => sum + ageInYears(e.dateOfBirth), 0) / activeNow.length)
 
     const byDeptTotals = new Map<string, { name: string; sum: number; count: number }>()
-    for (const e of employees) {
+    for (const e of activeNow) {
       const dept = e.position?.department
       const key = dept?.id ?? "unassigned"
       const entry = byDeptTotals.get(key) ?? { name: dept?.name ?? "Unassigned", sum: 0, count: 0 }
@@ -94,16 +107,13 @@ export class HrAnalyticsService {
       .sort((a, b) => b.averageAge - a.averageAge)
 
     // Trend: current average age "as of" each of the last 5 years, computed
-    // from employees who were active then (joined by then, hadn't exited yet).
+    // from employees who were active then (joined by then, hadn't exited yet)
+    // — reuses the same fetch above instead of a second full-table query.
     const currentYear = new Date().getFullYear()
     const trendYears = Array.from({ length: 5 }, (_, i) => currentYear - 4 + i)
-    const allEmployees = await this.prisma.employee.findMany({
-      where: dimensionWhere,
-      select: { dateOfBirth: true, employmentStartDate: true, exitDate: true },
-    })
     const trend = trendYears.map((year) => {
       const asOf = new Date(Date.UTC(year, 11, 31))
-      const activeThen = allEmployees.filter((e) => e.employmentStartDate && e.employmentStartDate <= asOf && (!e.exitDate || e.exitDate > asOf))
+      const activeThen = employees.filter((e) => e.employmentStartDate && e.employmentStartDate <= asOf && (!e.exitDate || e.exitDate > asOf))
       return {
         year,
         averageAge: activeThen.length === 0 ? null : round1(activeThen.reduce((sum, e) => sum + ageInYears(e.dateOfBirth, asOf), 0) / activeThen.length),
@@ -113,19 +123,26 @@ export class HrAnalyticsService {
     return { overall, byDepartment, trend }
   }
 
-  /** Band Distribution — headcount + percent share across every Band. */
+  /** Band Distribution — headcount + percent share across every Band.
+   *  Counted with a DB-level `groupBy` rather than pulling one row per
+   *  employee into Node just to tally them — this table only ever needs the
+   *  per-band counts, never the individual rows. */
   async bandDistribution(filters: HrAnalyticsFilters) {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
-    const [bands, employees] = await Promise.all([
+    const [bands, grouped] = await Promise.all([
       this.prisma.band.findMany({ where: { isActive: true }, orderBy: { rank: "asc" } }),
-      this.prisma.employee.findMany({ where: { ...dimensionWhere, employmentStatus: "ACTIVE" }, select: { bandId: true } }),
+      this.prisma.employee.groupBy({
+        by: ["bandId"],
+        where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
+        _count: { _all: true },
+      }),
     ])
 
-    const total = employees.length
+    const total = grouped.reduce((sum, g) => sum + g._count._all, 0)
     const countByBand = new Map<string, number>()
-    for (const e of employees) {
-      const key = e.bandId ?? "unassigned"
-      countByBand.set(key, (countByBand.get(key) ?? 0) + 1)
+    for (const g of grouped) {
+      const key = g.bandId ?? "unassigned"
+      countByBand.set(key, (countByBand.get(key) ?? 0) + g._count._all)
     }
 
     const rows = bands.map((band) => ({
@@ -462,13 +479,23 @@ export class HrAnalyticsService {
     }))
   }
 
-  /** Employee Demographics — age histogram, gender, contract type. */
+  /** Employee Demographics — age histogram, gender, contract type.
+   *  Gender/contract-type are tallied with DB-level `groupBy` (no need for
+   *  individual rows there); the age histogram still pulls one column
+   *  (`dateOfBirth`) per active employee since bucketing a computed age
+   *  isn't expressible as a plain Prisma aggregate — that fetch is bounded
+   *  by active headcount, not by an ever-growing history table, so it's a
+   *  much smaller concern than the counts used to be. */
   async employeeDemographics(filters: HrAnalyticsFilters) {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
-    const employees = await this.prisma.employee.findMany({
-      where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
-      select: { dateOfBirth: true, gender: true, contractType: true },
-    })
+    const activeWhere = { ...dimensionWhere, employmentStatus: "ACTIVE" as const }
+
+    const [dobRows, genderGroups, contractGroups, totalActive] = await Promise.all([
+      this.prisma.employee.findMany({ where: activeWhere, select: { dateOfBirth: true } }),
+      this.prisma.employee.groupBy({ by: ["gender"], where: activeWhere, _count: { _all: true } }),
+      this.prisma.employee.groupBy({ by: ["contractType"], where: activeWhere, _count: { _all: true } }),
+      this.prisma.employee.count({ where: activeWhere }),
+    ])
 
     const buckets = [
       { label: "Under 25", min: 0, max: 25 },
@@ -478,16 +505,21 @@ export class HrAnalyticsService {
     ]
     const ageHistogram = buckets.map((bucket) => ({
       bucket: bucket.label,
-      count: employees.filter((e) => {
+      count: dobRows.filter((e) => {
         const age = ageInYears(e.dateOfBirth)
         return age >= bucket.min && age < bucket.max
       }).length,
     }))
 
-    const genderDistribution = this.countBy(employees, (e) => ({ key: e.gender, label: e.gender }))
-    const contractTypeDistribution = this.countBy(employees, (e) => (e.contractType ? { key: e.contractType, label: e.contractType } : null))
+    const genderDistribution = genderGroups
+      .map((g) => ({ key: g.gender, label: g.gender, count: g._count._all }))
+      .sort((a, b) => b.count - a.count)
+    const contractTypeDistribution = contractGroups
+      .filter((g) => g.contractType !== null)
+      .map((g) => ({ key: g.contractType as string, label: g.contractType as string, count: g._count._all }))
+      .sort((a, b) => b.count - a.count)
 
-    return { ageHistogram, genderDistribution, contractTypeDistribution, totalActive: employees.length }
+    return { ageHistogram, genderDistribution, contractTypeDistribution, totalActive }
   }
 
   /** Organizational Structure Analytics. */

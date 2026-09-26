@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Pagination } from "@/components/ui/pagination"
-import { fetchEmployees } from "@/lib/api/employees"
 import {
   fetchLeaveBalances,
   fetchLeaveRequestsPaginated,
@@ -63,22 +62,13 @@ export default async function StaffLeavePage({
 
   const employeeId = session.employeeId
 
-  const [balancesResult, requestsResult, employeesResult] = await Promise.all([
+  const [balancesResult, requestsResult] = await Promise.all([
     fetchLeaveBalances(employeeId),
     fetchLeaveRequestsPaginated({ employeeId }, page ? Number(page) : 1),
-    fetchEmployees(),
   ])
 
   const balances = balancesResult.ok ? balancesResult.data : []
   const requests = requestsResult.ok ? requestsResult.data.data : []
-  const colleagues = (employeesResult.ok ? employeesResult.data : [])
-    .filter((employee) => employee.employeeNumber !== employeeId)
-    .map((employee) => ({
-      id: employee.employeeNumber,
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      positionTitle: employee.position?.title ?? null,
-    }))
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,7 +134,7 @@ export default async function StaffLeavePage({
           <CardContent>
             <LeaveRequestForm
               balances={balances}
-              colleagues={colleagues}
+              employeeId={employeeId}
               action={submitLeaveRequest.bind(null, employeeId)}
             />
           </CardContent>

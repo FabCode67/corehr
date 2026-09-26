@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import type { Band } from "@/lib/api/bands"
 import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
-import type { Employee } from "@/lib/api/employees"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import type { Position, PositionLevel } from "@/lib/api/positions"
 import type { JobDescription, WorkforcePlan } from "@/lib/api/recruitment"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
@@ -23,7 +24,6 @@ interface RequisitionFormProps {
   levels: PositionLevel[]
   bands: Band[]
   branches: Branch[]
-  employees: Employee[]
   jobDescriptions: JobDescription[]
   actingEmployeeId: string
   defaultWorkforcePlanId?: string
@@ -39,7 +39,6 @@ export function RequisitionForm({
   levels,
   bands,
   branches,
-  employees,
   jobDescriptions,
   actingEmployeeId,
   defaultWorkforcePlanId,
@@ -224,17 +223,14 @@ export function RequisitionForm({
 
         <div className="flex flex-col gap-1.5">
           <Label>Requested by</Label>
-          <SearchableSelect
-            options={employees.map((employee) => ({
-              value: employee.employeeNumber,
-              label: `${employee.firstName} ${employee.lastName}`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={searchEmployeesAction}
             name="requestedById"
             defaultValue=""
             required
             clearable={false}
             placeholder="Select…"
-            searchPlaceholder="Search employees…"
+            searchPlaceholder="Search employees by name or staff ID…"
           />
         </div>
 

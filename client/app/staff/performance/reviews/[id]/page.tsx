@@ -4,7 +4,8 @@ import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployees, formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employees"
+import { fullName } from "@/lib/format-name"
 import { fetchRatingScale, fetchReview, REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
 
@@ -36,10 +37,9 @@ export default async function StaffReviewDetailPage({ params }: { params: Promis
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [reviewResult, ratingScaleResult, employeesResult] = await Promise.all([
+  const [reviewResult, ratingScaleResult] = await Promise.all([
     fetchReview(id, actingEmployeeId),
     fetchRatingScale(),
-    fetchEmployees(false),
   ])
 
   if (!reviewResult.ok) {
@@ -56,7 +56,6 @@ export default async function StaffReviewDetailPage({ params }: { params: Promis
 
   const review = reviewResult.data
   const ratingScale = ratingScaleResult.ok ? ratingScaleResult.data : []
-  const employees = employeesResult.ok ? employeesResult.data : []
   const ratingLabel = ratingScale.find((entry) => entry.rank === review.overallRating)?.label
 
   const isAdmin = session?.role === "admin"
@@ -184,7 +183,7 @@ export default async function StaffReviewDetailPage({ params }: { params: Promis
             <ReassignForm
               reviewId={review.id}
               actingEmployeeId={actingEmployeeId}
-              employees={employees}
+              currentReviewer={review.reviewer ? { value: review.reviewer.employeeNumber, label: `${fullName(review.reviewer)} (${review.reviewer.employeeNumber})` } : null}
               currentReviewerId={review.reviewer?.employeeNumber ?? ""}
             />
           </CardContent>

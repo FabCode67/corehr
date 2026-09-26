@@ -5,19 +5,17 @@ import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Label } from "@/components/ui/label"
-import type { Employee } from "@/lib/api/employees"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import { createReview } from "@/lib/api/performance-actions"
 import type { ReviewPeriod } from "@/lib/api/performance"
 
 export function NewReviewForm({
-  employees,
   periods,
   actingEmployeeId,
   basePath = "/admin/performance/reviews",
 }: {
-  employees: Employee[]
   periods: ReviewPeriod[]
   actingEmployeeId: string
   basePath?: string
@@ -58,15 +56,12 @@ export function NewReviewForm({
     <form action={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({
-            value: employee.employeeNumber,
-            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
-          }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
           name="employeeId"
           defaultValue=""
           placeholder="Select…"
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search employees by name or staff ID…"
           clearable={false}
           required
         />
@@ -99,15 +94,12 @@ export function NewReviewForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="reviewerId">Reviewer (optional — defaults to reporting manager)</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({
-            value: employee.employeeNumber,
-            label: `${employee.firstName} ${employee.lastName}`,
-          }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
           name="reviewerId"
           defaultValue=""
           placeholder="Auto-detect reporting manager"
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search employees by name or staff ID…"
         />
       </div>
 

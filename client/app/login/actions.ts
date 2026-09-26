@@ -5,8 +5,7 @@ import { redirect } from "next/navigation"
 
 import { loginRequest } from "@/lib/api/auth"
 import { ApiError } from "@/lib/api/client"
-import { fullName } from "@/lib/format-name"
-import { encodeSession, SESSION_COOKIE, type SessionUser } from "@/lib/session"
+import { decodeSession, SESSION_COOKIE } from "@/lib/session"
 
 export interface LoginState {
   error?: string
@@ -25,9 +24,9 @@ export async function login(
     return { error: "Email and password are required." }
   }
 
-  let employee
+  let accessToken: string
   try {
-    employee = await loginRequest(email, password)
+    ;({ accessToken } = await loginRequest(email, password))
   } catch (error) {
     return {
       error:
@@ -37,25 +36,22 @@ export async function login(
     }
   }
 
-  const sessionUser: SessionUser = {
-    id: employee.employeeNumber,
-    employeeId: employee.employeeNumber,
-    name: fullName(employee),
-    email: employee.email,
-    role: employee.isAdmin ? "admin" : "staff",
-    jobTitle: employee.position?.title ?? "Not yet assigned",
-    department: employee.position?.department.name ?? "Not yet assigned",
-    branch: employee.branch?.name ?? "Not assigned",
-    mustChangePassword: employee.mustChangePassword,
+  // The cookie IS the token the API just signed — see lib/session.ts's doc
+  // comment. Verify it here (rather than trusting it blindly) so a
+  // misconfigured JWT_SECRET between the two apps fails loudly at login
+  // instead of silently producing sessions middleware.ts can never decode.
+  const sessionUser = await decodeSession(accessToken)
+  if (!sessionUser) {
+    return { error: "Could not establish a session. Please contact support if this keeps happening." }
   }
 
   const cookieStore = await cookies()
-  cookieStore.set(SESSION_COOKIE, encodeSession(sessionUser), {
+  cookieStore.set(SESSION_COOKIE, accessToken, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 8, // 8 hours
+    maxAge: 60 * 60 * 8, // 8 hours — matches the token's own expiry (see server/src/modules/auth/jwt.constants.ts)
   })
 
   // First Login Security: a temporary password sends the employee straight

@@ -3,7 +3,8 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchRequisitions, type RequisitionStatus } from "@/lib/api/recruitment"
+import { Pagination } from "@/components/ui/pagination"
+import { fetchRequisitionsPaginated, type RequisitionStatus } from "@/lib/api/recruitment"
 import { getSession } from "@/lib/get-session"
 
 import { RecruitmentTabs } from "../recruitment-tabs"
@@ -16,11 +17,16 @@ const STATUS_VARIANT: Record<RequisitionStatus, "outline" | "success" | "destruc
   CLOSED: "outline",
 }
 
-export default async function RequisitionsPage() {
+export default async function RequisitionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page } = await searchParams
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
-  const result = await fetchRequisitions({}, actingEmployeeId)
-  const requisitions = result.ok ? result.data : []
+  const result = await fetchRequisitionsPaginated({}, actingEmployeeId, page ? Number(page) : 1)
+  const requisitions = result.ok ? result.data.data : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,6 +98,15 @@ export default async function RequisitionsPage() {
               </tbody>
             </table>
           </div>
+          {result.ok ? (
+            <Pagination
+              page={result.data.page}
+              totalPages={result.data.totalPages}
+              total={result.data.total}
+              pageSize={result.data.pageSize}
+              basePath="/admin/recruitment/requisitions"
+            />
+          ) : null}
         </Card>
       )}
     </div>

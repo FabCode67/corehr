@@ -6,28 +6,22 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
 import { addSignatureStage, removeSignatureStage, updateSignatureStage } from "@/lib/api/forms-actions"
 import { SIGNER_ROLE_LABELS, type FormSignatureStage, type SignerRole } from "@/lib/api/forms"
-
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  lastName: string
-}
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
+import { fullName } from "@/lib/format-name"
 
 function StageEditor({
   templateId,
   stage,
   stageOrder,
-  employees,
   onDone,
 }: {
   templateId: string
   stage?: FormSignatureStage
   stageOrder: number
-  employees: EmployeeOption[]
   onDone: () => void
 }) {
   const router = useRouter()
@@ -37,6 +31,12 @@ function StageEditor({
   const [role, setRole] = useState<SignerRole>(stage?.role ?? "MANAGER")
   const [specificApproverId, setSpecificApproverId] = useState(stage?.specificApproverId ?? "")
   const [label, setLabel] = useState(stage?.label ?? "")
+  const specificApproverInitialOption = stage?.specificApprover
+    ? {
+        value: stage.specificApprover.employeeNumber,
+        label: `${fullName(stage.specificApprover)} (${stage.specificApprover.employeeNumber})`,
+      }
+    : null
 
   function save() {
     if (role === "SPECIFIC_APPROVER" && !specificApproverId) {
@@ -88,11 +88,9 @@ function StageEditor({
       {role === "SPECIFIC_APPROVER" ? (
         <div className="flex flex-col gap-1.5">
           <Label>Specific approver</Label>
-          <SearchableSelect
-            options={employees.map((employee) => ({
-              value: employee.employeeNumber,
-              label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={searchEmployeesAction}
+            initialOption={specificApproverInitialOption}
             value={specificApproverId}
             onValueChange={setSpecificApproverId}
             placeholder="Select an employee…"
@@ -119,12 +117,10 @@ function StageEditor({
 export function StageList({
   templateId,
   stages,
-  employees,
   editable,
 }: {
   templateId: string
   stages: FormSignatureStage[]
-  employees: EmployeeOption[]
   editable: boolean
 }) {
   const router = useRouter()
@@ -147,7 +143,7 @@ export function StageList({
 
       {sorted.map((stage) =>
         editingId === stage.id ? (
-          <StageEditor key={stage.id} templateId={templateId} stage={stage} stageOrder={stage.stageOrder} employees={employees} onDone={() => setEditingId(null)} />
+          <StageEditor key={stage.id} templateId={templateId} stage={stage} stageOrder={stage.stageOrder} onDone={() => setEditingId(null)} />
         ) : (
           <div key={stage.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
             <div>
@@ -175,7 +171,7 @@ export function StageList({
 
       {editable ? (
         adding ? (
-          <StageEditor templateId={templateId} stageOrder={sorted.length > 0 ? Math.max(...sorted.map((s) => s.stageOrder)) + 1 : 1} employees={employees} onDone={() => setAdding(false)} />
+          <StageEditor templateId={templateId} stageOrder={sorted.length > 0 ? Math.max(...sorted.map((s) => s.stageOrder)) + 1 : 1} onDone={() => setAdding(false)} />
         ) : (
           <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
             Add signature stage

@@ -1,4 +1,4 @@
-import { apiFetchSafe } from "./client"
+import { apiFetchCached, apiFetchSafe } from "./client"
 import type { PaginatedResult } from "./pagination"
 
 export interface Branch {
@@ -20,10 +20,14 @@ export interface Branch {
 
 /** Full, unpaginated list — used by the employee form, leave filter bars
  *  (approvals/calendar/analytics), and plain branch-picker dropdowns. See
- *  fetchBranchesPaginated() for the admin table view. */
+ *  fetchBranchesPaginated() for the admin table view. Cached briefly (60s,
+ *  shorter than departments/bands/functions' 5 minutes) since this embeds
+ *  a live active-employee count per branch that changes as people are
+ *  hired/transferred/exited — the branch list itself barely changes, but
+ *  that count shouldn't go too stale on the Locations map. */
 export function fetchBranches(includeInactive = false) {
   const search = includeInactive ? "?includeInactive=true" : ""
-  return apiFetchSafe<Branch[]>(`/branches${search}`)
+  return apiFetchCached<Branch[]>(`/branches${search}`, 60)
 }
 
 /** Paginated version for the Branches admin table. */

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /employees`, forwarding the query string as-is (page,
  *  pageSize, branchId, search, includeInactive) — API_URL is server-only, so
  *  a client component (e.g. the Locations map's "View employees" popup, which
@@ -8,7 +10,10 @@ import { NextRequest, NextResponse } from "next/server"
  *  app/api/employees/export/route.ts, but returns JSON instead of a file. */
 export async function GET(request: NextRequest) {
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/employees${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/employees${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   let body: unknown = null
   try {

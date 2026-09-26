@@ -1,31 +1,20 @@
-import type { Branch } from "./branches"
 import { apiFetch } from "./client"
 
-/** Shape of POST /auth/login's response — never includes passwordHash
- *  (PrismaService omits it globally server-side; see server/src/prisma). */
-export interface AuthEmployee {
-  /** The Staff ID (e.g. "EMP-0001") — Employee's primary key everywhere. */
-  employeeNumber: string
-  firstName: string
-  middleName: string | null
-  lastName: string
-  email: string
-  isAdmin: boolean
-  branch: Branch | null
-  isActive: boolean
-  position: {
-    title: string
-    department: { name: string }
-  } | null
-  /** First Login Security — see app/change-password. */
-  mustChangePassword: boolean
+/** Shape of POST /auth/login's response — a signed JWT (see
+ *  server/src/modules/auth/auth.service.ts) carrying the SessionUser claims
+ *  directly, not a raw employee record. lib/session.ts's decodeSession()
+ *  verifies and decodes it into a SessionUser. */
+export interface LoginResponse {
+  accessToken: string
 }
 
 /** Only ever called from Server Actions (see app/login/actions.ts) — like
  *  the rest of lib/api, this talks to the internal NestJS API URL and must
- *  never be imported into a Client Component. */
+ *  never be imported into a Client Component. No Authorization header is
+ *  sent (there's no session cookie yet) — the API's @Public() login route
+ *  doesn't require one. */
 export function loginRequest(email: string, password: string) {
-  return apiFetch<AuthEmployee>("/auth/login", {
+  return apiFetch<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   })

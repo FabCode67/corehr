@@ -2,7 +2,6 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployees } from "@/lib/api/employees"
 import { fetchFormTemplates } from "@/lib/api/forms"
 import { getSession } from "@/lib/get-session"
 
@@ -10,7 +9,7 @@ import { AssignForm } from "../assign-form"
 
 export default async function AssignFormPage() {
   const session = await getSession()
-  const [templatesResult, employeesResult] = await Promise.all([fetchFormTemplates({ status: "ACTIVE" }), fetchEmployees()])
+  const templatesResult = await fetchFormTemplates({ status: "ACTIVE" })
 
   if (!templatesResult.ok) {
     return (
@@ -46,11 +45,7 @@ export default async function AssignFormPage() {
       ) : (
         <Card>
           <CardContent>
-            <AssignForm
-              templates={templatesResult.data}
-              employees={employeesResult.ok ? employeesResult.data : []}
-              assignedById={session?.employeeId ?? ""}
-            />
+            <AssignForm templates={templatesResult.data} assignedById={session?.employeeId ?? ""} />
           </CardContent>
         </Card>
       )}

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /employees/export`, forwarding the column list and any
  *  filters in the query string — API_URL is server-only, so a browser
  *  download link can't hit the API directly. Same pattern as
  *  app/api/hr-analytics/export/xlsx/route.ts. */
 export async function GET(request: NextRequest) {
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/employees/export${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/employees/export${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

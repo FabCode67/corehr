@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /leave/annual-plan/export` — HR's bank-wide (or
  *  department-filtered) Annual Leave Plan export. API_URL is server-only,
  *  so a browser download link can't hit the API directly. */
 export async function GET(request: NextRequest) {
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/leave/annual-plan/export${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/leave/annual-plan/export${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

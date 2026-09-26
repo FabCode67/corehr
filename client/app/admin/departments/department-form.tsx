@@ -6,19 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { Department, OrgFunction } from "@/lib/api/departments"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import { fullName } from "@/lib/format-name"
 
 import type { ActionState } from "./actions"
-
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  middleName: string | null
-  lastName: string
-}
 
 interface DepartmentFormProps {
   functions: OrgFunction[]
@@ -26,11 +21,6 @@ interface DepartmentFormProps {
    *  callers should exclude `department` itself (obvious self-reference;
    *  the server also rejects it and any cycle regardless). */
   departments?: Department[]
-  /** For the optional Head of Department picker — see
-   *  Department.headOfDepartmentId's schema doc comment. Doesn't need to be
-   *  filtered to this department's own employees; HR may designate someone
-   *  ahead of a transfer. */
-  employees?: EmployeeOption[]
   department?: Department
   action: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
   submitLabel: string
@@ -39,7 +29,6 @@ interface DepartmentFormProps {
 export function DepartmentForm({
   functions,
   departments = [],
-  employees = [],
   department,
   action,
   submitLabel,
@@ -91,12 +80,17 @@ export function DepartmentForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="headOfDepartmentId">Head of Department (optional)</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({ value: employee.employeeNumber, label: `${fullName(employee)} (${employee.employeeNumber})` }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
+          initialOption={
+            department?.headOfDepartment
+              ? { value: department.headOfDepartment.employeeNumber, label: `${fullName(department.headOfDepartment)} (${department.headOfDepartment.employeeNumber})` }
+              : null
+          }
           name="headOfDepartmentId"
           defaultValue={department?.headOfDepartmentId ?? ""}
           placeholder="None"
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search employees by name or staff ID…"
         />
         <p className="text-xs text-muted-foreground">
           Grants this person access to the Department Dashboard in their Staff Portal, with reports scoped to this department.
@@ -105,12 +99,17 @@ export function DepartmentForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="actingHeadOfDepartmentId">Acting Head of Department (optional)</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({ value: employee.employeeNumber, label: `${fullName(employee)} (${employee.employeeNumber})` }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
+          initialOption={
+            department?.actingHeadOfDepartment
+              ? { value: department.actingHeadOfDepartment.employeeNumber, label: `${fullName(department.actingHeadOfDepartment)} (${department.actingHeadOfDepartment.employeeNumber})` }
+              : null
+          }
           name="actingHeadOfDepartmentId"
           defaultValue={department?.actingHeadOfDepartmentId ?? ""}
           placeholder="None"
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search employees by name or staff ID…"
         />
         <p className="text-xs text-muted-foreground">
           Temporary stand-in with the exact same access as Head of Department above — for when the real head is on leave or the role is vacant. Set and cleared manually; clear it once the head is back.

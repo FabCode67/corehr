@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /department-dashboard/:departmentId/leave-plan/template`
  *  — API_URL is server-only, so a browser download link can't hit the API
  *  directly. Same pattern as the employees export proxy route. */
@@ -8,6 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
   const response = await fetch(`${apiBaseUrl}/department-dashboard/${departmentId}/leave-plan/template${request.nextUrl.search}`, {
     cache: "no-store",
+    headers: await authHeader(),
   })
 
   if (!response.ok) {

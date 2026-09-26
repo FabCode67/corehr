@@ -6,22 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Textarea } from "@/components/ui/textarea"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import { previewLeaveDays, type LeaveActionState } from "@/lib/api/leave-actions"
 import type { LeaveBalance } from "@/lib/api/leave"
 import { uploadFile } from "@/lib/api/uploads"
 
-interface Colleague {
-  id: string
-  firstName: string
-  lastName: string
-  positionTitle: string | null
-}
-
 interface LeaveRequestFormProps {
   balances: LeaveBalance[]
-  colleagues: Colleague[]
+  /** The requesting employee — excluded from the delegate/acting-employee
+   *  search results below (someone can't delegate to themselves), same
+   *  exclusion the old pre-fetched `colleagues` list used to apply. */
+  employeeId: string
   action: (prevState: LeaveActionState | undefined, formData: FormData) => Promise<LeaveActionState>
 }
 
@@ -32,7 +29,7 @@ interface LeaveRequestFormProps {
  * eligible for (gender restrictions, active types), so no separate
  * eligibility check is needed here.
  */
-export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestFormProps) {
+export function LeaveRequestForm({ balances, employeeId, action }: LeaveRequestFormProps) {
   const [state, formAction, pending] = useActionState<LeaveActionState | undefined, FormData>(
     action,
     undefined
@@ -167,15 +164,12 @@ export function LeaveRequestForm({ balances, colleagues, action }: LeaveRequestF
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="delegateEmployeeId">Delegate / acting employee (optional)</Label>
-          <SearchableSelect
-            options={colleagues.map((colleague) => ({
-              value: colleague.id,
-              label: `${colleague.firstName} ${colleague.lastName}${colleague.positionTitle ? ` — ${colleague.positionTitle}` : ""}`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={(query) => searchEmployeesAction(query, employeeId)}
             name="delegateEmployeeId"
             defaultValue=""
             placeholder="None"
-            searchPlaceholder="Search colleagues…"
+            searchPlaceholder="Search employees by name or staff ID…"
           />
         </div>
       </div>

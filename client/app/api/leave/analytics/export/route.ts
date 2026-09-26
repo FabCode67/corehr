@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /leave/analytics/export`, forwarding filters + format in
  *  the query string — API_URL is server-only, so a browser download link
  *  can't hit the API directly. Same pattern as app/api/employees/export/route.ts. */
 export async function GET(request: NextRequest) {
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/leave/analytics/export${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/leave/analytics/export${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

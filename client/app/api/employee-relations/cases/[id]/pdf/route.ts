@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /**
  * Proxies to the NestJS `GET /employee-relations/cases/:id/pdf` endpoint —
  * same reasoning as app/api/forms/instances/[id]/pdf/route.ts: API_URL is a
@@ -16,6 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
   const response = await fetch(`${apiBaseUrl}/employee-relations/cases/${id}/pdf?actingEmployeeId=${encodeURIComponent(actingEmployeeId)}`, {
     cache: "no-store",
+    headers: await authHeader(),
   })
 
   if (!response.ok) {

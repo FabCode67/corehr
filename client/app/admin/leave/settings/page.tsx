@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import { SearchableSelect } from "@/components/ui/searchable-select"
-import { fetchEmployees } from "@/lib/api/employees"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
+import { resolveEmployeeOptionAction, searchEmployeesAction } from "@/lib/api/employees-actions"
 import {
   fetchLeaveBalances,
   fetchLeaveSettings,
@@ -34,18 +34,17 @@ export default async function AdminLeaveSettingsPage({
   const currentYear = new Date().getUTCFullYear()
   const year = filters.year ? Number(filters.year) : currentYear
 
-  const [leaveTypesResult, holidaysResult, settingsResult, employeesResult] = await Promise.all([
+  const [leaveTypesResult, holidaysResult, settingsResult] = await Promise.all([
     fetchLeaveTypes(true),
     fetchPublicHolidaysPaginated(true, filters.holidaysPage ? Number(filters.holidaysPage) : 1),
     fetchLeaveSettings(),
-    fetchEmployees(),
   ])
 
   const balancesResult = filters.employeeId ? await fetchLeaveBalances(filters.employeeId, year) : null
+  const selectedEmployeeOption = filters.employeeId ? await resolveEmployeeOptionAction(filters.employeeId) : null
 
   const leaveTypes = leaveTypesResult.ok ? leaveTypesResult.data : []
   const holidays = holidaysResult.ok ? holidaysResult.data.data : []
-  const employees = employeesResult.ok ? employeesResult.data : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,15 +134,13 @@ export default async function AdminLeaveSettingsPage({
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Employee</label>
-              <SearchableSelect
-                options={employees.map((employee) => ({
-                  value: employee.employeeNumber,
-                  label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
-                }))}
+              <SearchableSelectAsync
+                loadOptions={searchEmployeesAction}
+                initialOption={selectedEmployeeOption}
                 name="employeeId"
                 defaultValue={filters.employeeId ?? ""}
                 placeholder="Select an employee…"
-                searchPlaceholder="Search employees…"
+                searchPlaceholder="Search employees by name or staff ID…"
                 className="w-64"
               />
             </div>

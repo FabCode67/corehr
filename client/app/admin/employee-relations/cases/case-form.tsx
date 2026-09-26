@@ -5,17 +5,12 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { createDisciplinaryCase, type ErActionState } from "@/lib/api/employee-relations-actions"
 import { formatErEnum, type DisciplinaryCaseCategory } from "@/lib/api/employee-relations"
-
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  lastName: string
-}
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 
 const CATEGORIES: DisciplinaryCaseCategory[] = [
   "MISCONDUCT",
@@ -31,7 +26,7 @@ const CATEGORIES: DisciplinaryCaseCategory[] = [
   "OTHER",
 ]
 
-export function CaseForm({ employees, reportedById }: { employees: EmployeeOption[]; reportedById: string }) {
+export function CaseForm({ reportedById }: { reportedById: string }) {
   const [state, formAction, pending] = useActionState<ErActionState | undefined, FormData>(createDisciplinaryCase, undefined)
 
   return (
@@ -40,11 +35,8 @@ export function CaseForm({ employees, reportedById }: { employees: EmployeeOptio
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({
-            value: employee.employeeNumber,
-            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
-          }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
           name="employeeId"
           defaultValue=""
           placeholder="Select the employee involved…"

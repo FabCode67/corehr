@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 export async function GET(request: NextRequest) {
   if (!request.nextUrl.searchParams.get("actingEmployeeId")) {
     return NextResponse.json({ message: "actingEmployeeId is required" }, { status: 400 })
   }
 
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/pdf${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/pdf${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

@@ -6,24 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { assignForm, type FormsActionState } from "@/lib/api/forms-actions"
 import type { FormTemplate } from "@/lib/api/forms"
-
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  lastName: string
-}
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 
 export function AssignForm({
   templates,
-  employees,
   assignedById,
 }: {
   templates: FormTemplate[]
-  employees: EmployeeOption[]
   assignedById: string
 }) {
   const [state, formAction, pending] = useActionState<FormsActionState | undefined, FormData>(assignForm, undefined)
@@ -47,11 +41,8 @@ export function AssignForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="employeeId">Employee</Label>
-        <SearchableSelect
-          options={employees.map((employee) => ({
-            value: employee.employeeNumber,
-            label: `${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`,
-          }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
           name="employeeId"
           defaultValue=""
           placeholder="Select an employee…"

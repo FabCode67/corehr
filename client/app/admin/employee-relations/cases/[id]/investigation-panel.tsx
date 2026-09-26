@@ -6,18 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Textarea } from "@/components/ui/textarea"
 import { completeInvestigation, openInvestigation, type ErActionState } from "@/lib/api/employee-relations-actions"
 import type { Investigation } from "@/lib/api/employee-relations"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 
-interface EmployeeOption {
-  employeeNumber: string
-  firstName: string
-  lastName: string
-}
-
-export function OpenInvestigationForm({ caseId, actingEmployeeId, employees }: { caseId: string; actingEmployeeId: string; employees: EmployeeOption[] }) {
+export function OpenInvestigationForm({ caseId, actingEmployeeId }: { caseId: string; actingEmployeeId: string }) {
   const [state, formAction, pending] = useActionState<ErActionState | undefined, FormData>(openInvestigation.bind(null, caseId), undefined)
 
   return (
@@ -27,11 +22,8 @@ export function OpenInvestigationForm({ caseId, actingEmployeeId, employees }: {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="investigatorId">Investigator</Label>
-          <SearchableSelect
-            options={employees.map((employee) => ({
-              value: employee.employeeNumber,
-              label: `${employee.firstName} ${employee.lastName}`,
-            }))}
+          <SearchableSelectAsync
+            loadOptions={searchEmployeesAction}
             name="investigatorId"
             defaultValue=""
             placeholder="Select an investigator…"

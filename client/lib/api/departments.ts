@@ -1,4 +1,4 @@
-import { apiFetchSafe } from "./client"
+import { apiFetchCached, apiFetchSafe } from "./client"
 import type { PaginatedResult } from "./pagination"
 
 export interface OrgFunction {
@@ -47,12 +47,19 @@ export interface Department {
   units?: DepartmentUnit[]
 }
 
+/** Functions (a handful of org-wide rows, edited rarely) — cached for 5
+ *  minutes rather than re-queried on every page load. */
 export function fetchFunctions() {
-  return apiFetchSafe<OrgFunction[]>("/organization/functions")
+  return apiFetchCached<OrgFunction[]>("/organization/functions", 300)
 }
 
+/** Departments barely change day to day — cached for 5 minutes. Callers
+ *  that need to reflect a just-made edit immediately (e.g. right after
+ *  creating/editing a department) should still work: server actions
+ *  `revalidatePath()` the pages that show this data, and Next's cache
+ *  respects that regardless of the `next.revalidate` window here. */
 export function fetchDepartments() {
-  return apiFetchSafe<Department[]>("/organization/departments?includeInactive=true")
+  return apiFetchCached<Department[]>("/organization/departments?includeInactive=true", 300)
 }
 
 /** Paginated version for the Departments admin table — see lib/api/pagination.ts. */

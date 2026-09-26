@@ -2,7 +2,6 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployees } from "@/lib/api/employees"
 import { fetchReviewPeriods } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
 
@@ -10,9 +9,8 @@ import { NewReviewForm } from "../../../../admin/performance/reviews/new/new-rev
 
 export default async function StaffNewReviewPage() {
   const session = await getSession()
-  const [employeesResult, periodsResult] = await Promise.all([fetchEmployees(false), fetchReviewPeriods()])
+  const periodsResult = await fetchReviewPeriods()
 
-  const employees = employeesResult.ok ? employeesResult.data : []
   const periods = periodsResult.ok ? periodsResult.data : []
 
   return (
@@ -38,7 +36,6 @@ export default async function StaffNewReviewPage() {
         </CardHeader>
         <CardContent>
           <NewReviewForm
-            employees={employees}
             periods={periods}
             actingEmployeeId={session?.employeeId ?? ""}
             basePath="/staff/performance/reviews"

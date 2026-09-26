@@ -1,4 +1,4 @@
-import { apiFetchSafe } from "./client"
+import { apiFetchCached } from "./client"
 
 export interface Band {
   id: string
@@ -8,6 +8,8 @@ export interface Band {
   isActive: boolean
 }
 
+/** Bands barely change (a handful of rows, edited rarely by HR admins) —
+ *  cached for 5 minutes rather than re-queried on every page load. */
 export function fetchBands() {
-  return apiFetchSafe<Band[]>("/organization/bands")
+  return apiFetchCached<Band[]>("/organization/bands", 300)
 }

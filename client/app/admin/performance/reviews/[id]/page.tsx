@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatEnumLabel } from "@/lib/api/employees"
-import { fetchEmployees } from "@/lib/api/employees"
 import { fetchRatingScale, fetchReview, REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance"
 import { getSession } from "@/lib/get-session"
 
@@ -38,10 +37,9 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [reviewResult, ratingScaleResult, employeesResult] = await Promise.all([
+  const [reviewResult, ratingScaleResult] = await Promise.all([
     fetchReview(id, actingEmployeeId),
     fetchRatingScale(),
-    fetchEmployees(false),
   ])
 
   if (!reviewResult.ok) {
@@ -58,7 +56,6 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
 
   const review = reviewResult.data
   const ratingScale = ratingScaleResult.ok ? ratingScaleResult.data : []
-  const employees = employeesResult.ok ? employeesResult.data : []
   const ratingLabel = ratingScale.find((entry) => entry.rank === review.overallRating)?.label
 
   const isAdmin = session?.role === "admin"
@@ -188,7 +185,11 @@ export default async function ReviewDetailPage({ params }: { params: Promise<{ i
             <ReassignForm
               reviewId={review.id}
               actingEmployeeId={actingEmployeeId}
-              employees={employees}
+              currentReviewer={
+                review.reviewer
+                  ? { value: review.reviewer.employeeNumber, label: `${review.reviewer.firstName} ${review.reviewer.lastName}` }
+                  : null
+              }
               currentReviewerId={review.reviewer?.employeeNumber ?? ""}
             />
           </CardContent>

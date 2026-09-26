@@ -720,6 +720,18 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Employee is the most heavily joined/filtered table in the schema (every
+  // module hangs off it) but historically carried no indexes beyond its two
+  // @unique columns. These cover the filters every list/dropdown/report
+  // endpoint actually uses: org-structure lookups (positionId/bandId/
+  // branchId), and the two status flags almost every query filters on
+  // (employmentStatus, isActive) — see the scalability review that flagged
+  // this as the single biggest missing-index gap in the schema.
+  @@index([positionId])
+  @@index([bandId])
+  @@index([branchId])
+  @@index([employmentStatus])
+  @@index([isActive])
   @@map("employees")
 }
 

@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common"
 import { EmployeesModule } from "../employees/employees.module"
 import { NotificationsModule } from "../leave/notifications/notifications.module"
 
+import { ImportQueueProcessor } from "./import-queue.processor"
 import { ImportsController } from "./imports.controller"
 import { ImportsService } from "./imports.service"
 
@@ -13,11 +14,15 @@ import { ImportsService } from "./imports.service"
  * config in registry/*.config.ts writes directly via the row-scoped
  * transaction ImportsService opens, so no other module import is needed
  * here — see registry/types.ts's ImportDeps doc comment.
+ *
+ * ImportQueueProcessor relies on @nestjs/schedule's ScheduleModule, already
+ * registered globally by EmailModule (ScheduleModule.forRoot() only needs
+ * to run once app-wide) — not re-imported here.
  */
 @Module({
   imports: [EmployeesModule, NotificationsModule],
   controllers: [ImportsController],
-  providers: [ImportsService],
+  providers: [ImportsService, ImportQueueProcessor],
   exports: [ImportsService],
 })
 export class ImportsModule {}

@@ -14,6 +14,7 @@ import {
   fetchSanctionTypes,
   formatErEnum,
 } from "@/lib/api/employee-relations"
+import { fullName } from "@/lib/format-name"
 
 import { CaseActions } from "./case-actions"
 import { DecideAppealForm, SubmitAppealForm } from "./appeal-panel"
@@ -77,6 +78,13 @@ export async function CaseDetail({
   const sanctionTypes = sanctionTypesResult.ok ? sanctionTypesResult.data : []
   const isOwner = disciplinaryCase.employeeId === actingEmployeeId
   const canAppeal = isOwner && (disciplinaryCase.status === "SANCTION_ISSUED" || disciplinaryCase.status === "CLOSED")
+  // Already have the full list for MeetingForm's invitee checkboxes below, so
+  // reuse it to resolve the "Issued by" async picker's initial label instead
+  // of an extra resolveEmployeeOptionAction round trip.
+  const actingEmployee = employees.find((employee) => employee.employeeNumber === actingEmployeeId)
+  const issuedByInitialOption = actingEmployee
+    ? { value: actingEmployee.employeeNumber, label: `${fullName(actingEmployee)} (${actingEmployee.employeeNumber})` }
+    : null
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -190,7 +198,7 @@ export async function CaseDetail({
             </div>
           ))}
           {isHr && disciplinaryCase.status === "UNDER_INVESTIGATION" ? (
-            <OpenInvestigationForm caseId={disciplinaryCase.id} actingEmployeeId={actingEmployeeId} employees={employees} />
+            <OpenInvestigationForm caseId={disciplinaryCase.id} actingEmployeeId={actingEmployeeId} />
           ) : null}
         </CardContent>
       </Card>
@@ -217,7 +225,12 @@ export async function CaseDetail({
             </div>
           ))}
           {isHr && disciplinaryCase.status === "PENDING_DECISION" ? (
-            <SanctionForm caseId={disciplinaryCase.id} actingEmployeeId={actingEmployeeId} sanctionTypes={sanctionTypes} employees={employees} />
+            <SanctionForm
+              caseId={disciplinaryCase.id}
+              actingEmployeeId={actingEmployeeId}
+              sanctionTypes={sanctionTypes}
+              issuedByInitialOption={issuedByInitialOption}
+            />
           ) : null}
         </CardContent>
       </Card>

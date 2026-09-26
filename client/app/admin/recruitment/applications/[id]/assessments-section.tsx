@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import { createAssessment, recordAssessmentResult } from "@/lib/api/recruitment-actions"
 import type { Assessment, AssessmentType } from "@/lib/api/recruitment"
-import type { Employee } from "@/lib/api/employees"
 
 const TYPES: AssessmentType[] = ["TECHNICAL_TEST", "APTITUDE_TEST", "PRACTICAL_EXERCISE", "PSYCHOMETRIC_ASSESSMENT", "COMPLIANCE_TEST"]
 
@@ -66,7 +66,7 @@ function ResultForm({ assessment, actingEmployeeId }: { assessment: Assessment; 
   )
 }
 
-function NewAssessmentForm({ applicationId, actingEmployeeId, employees }: { applicationId: string; actingEmployeeId: string; employees: Employee[] }) {
+function NewAssessmentForm({ applicationId, actingEmployeeId }: { applicationId: string; actingEmployeeId: string }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -98,15 +98,12 @@ function NewAssessmentForm({ applicationId, actingEmployeeId, employees }: { app
           ))}
         </Select>
         <Input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} className="w-40" />
-        <SearchableSelect
-          options={employees.map((employee) => ({
-            value: employee.employeeNumber,
-            label: `${employee.firstName} ${employee.lastName}`,
-          }))}
+        <SearchableSelectAsync
+          loadOptions={searchEmployeesAction}
           value={evaluatorId}
           onValueChange={setEvaluatorId}
           placeholder="Evaluator (optional)"
-          searchPlaceholder="Search employees…"
+          searchPlaceholder="Search employees by name or staff ID…"
           className="w-48"
         />
         <Button type="button" size="sm" disabled={pending} onClick={submit}>
@@ -122,12 +119,10 @@ export function AssessmentsSection({
   applicationId,
   actingEmployeeId,
   assessments,
-  employees,
 }: {
   applicationId: string
   actingEmployeeId: string
   assessments: Assessment[]
-  employees: Employee[]
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -152,7 +147,7 @@ export function AssessmentsSection({
           ))}
         </ul>
       )}
-      <NewAssessmentForm applicationId={applicationId} actingEmployeeId={actingEmployeeId} employees={employees} />
+      <NewAssessmentForm applicationId={applicationId} actingEmployeeId={actingEmployeeId} />
     </div>
   )
 }

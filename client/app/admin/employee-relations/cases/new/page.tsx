@@ -2,14 +2,12 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { fetchEmployees } from "@/lib/api/employees"
 import { getSession } from "@/lib/get-session"
 
 import { CaseForm } from "../case-form"
 
 export default async function NewDisciplinaryCasePage() {
   const session = await getSession()
-  const employeesResult = await fetchEmployees()
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -24,7 +22,7 @@ export default async function NewDisciplinaryCasePage() {
 
       <Card>
         <CardContent>
-          <CaseForm employees={employeesResult.ok ? employeesResult.data : []} reportedById={session?.employeeId ?? ""} />
+          <CaseForm reportedById={session?.employeeId ?? ""} />
         </CardContent>
       </Card>
     </div>

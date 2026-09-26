@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { authHeader } from "@/lib/api/client"
+
 /** Proxies to `GET /hr-analytics/export/custom`, forwarding every query
  *  param (filters, `sections`, `format`) — same reasoning as the other
  *  hr-analytics export routes: API_URL is server-only, so a browser
@@ -12,7 +14,10 @@ export async function GET(request: NextRequest) {
 
   const format = request.nextUrl.searchParams.get("format") === "pptx" ? "pptx" : "xlsx"
   const apiBaseUrl = process.env.API_URL ?? "http://localhost:4000/api"
-  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/custom${request.nextUrl.search}`, { cache: "no-store" })
+  const response = await fetch(`${apiBaseUrl}/hr-analytics/export/custom${request.nextUrl.search}`, {
+    cache: "no-store",
+    headers: await authHeader(),
+  })
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`

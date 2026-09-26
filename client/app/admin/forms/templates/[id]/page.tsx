@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployees } from "@/lib/api/employees"
 import { fetchFormTemplate, type FormStatus } from "@/lib/api/forms"
 
 import { FieldList } from "./field-list"
@@ -29,7 +28,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function FormTemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [templateResult, employeesResult] = await Promise.all([fetchFormTemplate(id), fetchEmployees()])
+  const templateResult = await fetchFormTemplate(id)
 
   if (!templateResult.ok) {
     if (templateResult.status === 404) notFound()
@@ -44,7 +43,6 @@ export default async function FormTemplateDetailPage({ params }: { params: Promi
   }
 
   const template = templateResult.data
-  const employees = employeesResult.ok ? employeesResult.data : []
   // A DRAFT template never has instances yet (assign() requires ACTIVE), so
   // it's always safe to edit structurally. Once published, this UI treats
   // it as locked — use "Create new version" for further changes, matching
@@ -113,7 +111,7 @@ export default async function FormTemplateDetailPage({ params }: { params: Promi
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <StageList templateId={template.id} stages={template.signatureStages} employees={employees} editable={editable} />
+          <StageList templateId={template.id} stages={template.signatureStages} editable={editable} />
         </CardContent>
       </Card>
     </div>

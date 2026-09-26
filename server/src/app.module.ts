@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common"
 import { ConfigModule } from "@nestjs/config"
+import { APP_GUARD } from "@nestjs/core"
+import { ThrottlerModule } from "@nestjs/throttler"
 
+import { AppThrottlerGuard } from "./common/app-throttler.guard"
 import { PrismaModule } from "./prisma/prisma.module"
 import { OrganizationModule } from "./modules/organization/organization.module"
 import { BranchesModule } from "./modules/branches/branches.module"
@@ -79,6 +82,10 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Coarse global limit (see AppThrottlerGuard's doc comment for why IP
+    // tracking is blunt in this app's architecture); overridden down to
+    // 5/min on POST /auth/login specifically via @Throttle() there.
+    ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 300 }]),
     PrismaModule,
     OrganizationModule,
     BranchesModule,
@@ -154,5 +161,6 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     DepartmentDashboardModule,
     AiAssistantModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],
 })
 export class AppModule {}

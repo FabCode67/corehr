@@ -4,19 +4,20 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
+import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import { reassignReviewer } from "@/lib/api/performance-actions"
-import type { Employee } from "@/lib/api/employees"
+import type { SearchableSelectOption } from "@/components/ui/searchable-select"
 
 export function ReassignForm({
   reviewId,
   actingEmployeeId,
-  employees,
+  currentReviewer,
   currentReviewerId,
 }: {
   reviewId: string
   actingEmployeeId: string
-  employees: Employee[]
+  currentReviewer?: SearchableSelectOption | null
   currentReviewerId: string
 }) {
   const router = useRouter()
@@ -42,15 +43,13 @@ export function ReassignForm({
 
   return (
     <div className="flex flex-wrap items-end gap-3">
-      <SearchableSelect
-        options={employees.map((employee) => ({
-          value: employee.employeeNumber,
-          label: `${employee.firstName} ${employee.lastName}`,
-        }))}
+      <SearchableSelectAsync
+        loadOptions={searchEmployeesAction}
+        initialOption={currentReviewer ?? null}
         value={reviewerId}
         onValueChange={setReviewerId}
         placeholder="Select…"
-        searchPlaceholder="Search employees…"
+        searchPlaceholder="Search employees by name or staff ID…"
         className="w-64"
         clearable={false}
       />

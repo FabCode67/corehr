@@ -1,4 +1,4 @@
-import { apiFetchSafe } from "./client"
+import { apiFetchCached, apiFetchSafe } from "./client"
 import type { PaginatedResult } from "./pagination"
 
 export interface PositionLevel {
@@ -41,6 +41,8 @@ export function fetchPosition(id: string) {
   return apiFetchSafe<Position>(`/organization/positions/${id}`)
 }
 
+/** The fixed 10-level position ladder — changes essentially never, so
+ *  cached longer (10 minutes) than the other reference-data lookups. */
 export function fetchPositionLevels() {
-  return apiFetchSafe<PositionLevel[]>("/organization/position-levels")
+  return apiFetchCached<PositionLevel[]>("/organization/position-levels", 600)
 }
