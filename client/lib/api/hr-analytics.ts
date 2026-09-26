@@ -269,18 +269,6 @@ export function fetchSavedViews(actingEmployeeId: string) {
   return apiFetchSafe<SavedView[]>(`/hr-analytics/saved-views?actingEmployeeId=${encodeURIComponent(actingEmployeeId)}`)
 }
 
-export function exportUrl(format: "xlsx" | "csv" | "pdf" | "pptx", filters: HrAnalyticsFilters, actingEmployeeId: string) {
-  return `/api/hr-analytics/export/${format}?${buildQuery(filters, actingEmployeeId)}`
-}
-
-/** Single-page "HR Statistics Snapshot" infographic PDF — a separate,
- *  visually distinct export from exportUrl("pdf") above (the full
- *  multi-section report). See hr-analytics-export.service.ts's
- *  generateSnapshotPdf() for what it renders. */
-export function exportSnapshotUrl(filters: HrAnalyticsFilters, actingEmployeeId: string) {
-  return `/api/hr-analytics/export/snapshot-pdf?${buildQuery(filters, actingEmployeeId)}`
-}
-
 // ==== Custom Report Builder =====================================================
 // Mirrors server/src/modules/hr-analytics/hr-analytics-export.service.ts's
 // REPORT_SECTIONS catalog + generateCustomReport().
@@ -297,23 +285,3 @@ export function fetchReportSections(actingEmployeeId: string) {
   return apiFetchSafe<ReportSectionMeta[]>(`/hr-analytics/export/custom/sections?actingEmployeeId=${encodeURIComponent(actingEmployeeId)}`)
 }
 
-export interface CustomReportSectionSelection {
-  key: string
-  dateFrom?: string
-  dateTo?: string
-}
-
-/** Each selected section (with its own optional date range) travels as one
- *  JSON-encoded query param — see the controller route's doc comment for
- *  why, vs. e.g. repeated `sections[]=` entries. */
-export function customReportUrl(
-  sections: CustomReportSectionSelection[],
-  format: "xlsx" | "pptx",
-  filters: HrAnalyticsFilters,
-  actingEmployeeId: string
-) {
-  const params = new URLSearchParams(buildQuery(filters, actingEmployeeId))
-  params.set("format", format)
-  params.set("sections", JSON.stringify(sections))
-  return `/api/hr-analytics/export/custom?${params.toString()}`
-}

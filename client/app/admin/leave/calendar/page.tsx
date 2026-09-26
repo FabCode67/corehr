@@ -5,7 +5,8 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
-import { fetchLeaveCalendar, MONTH_NAMES, type LeaveRequest, type PublicHoliday } from "@/lib/api/leave"
+import { fetchLeaveCalendar, type LeaveRequest, type PublicHoliday } from "@/lib/api/leave"
+import { MONTH_NAMES } from "@/lib/api/leave-utils"
 
 import { LeaveTabs } from "../leave-tabs"
 

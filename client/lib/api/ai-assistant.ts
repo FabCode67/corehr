@@ -96,11 +96,6 @@ export function fetchAuditLog(actingEmployeeId: string, params?: { eventType?: s
   return apiFetchSafe<{ rows: AuditLogRow[]; total: number; page: number; pageSize: number }>(`/ai-assistant/audit-log?${query.toString()}`)
 }
 
-export const SUGGESTED_PROMPTS = [
-  "What's our current headcount and how has it changed this year?",
-  "Show me the attrition rate by department.",
-  "What's our mandatory training compliance rate?",
-  "Summarize open recruitment requisitions.",
-  "What's the leave utilization for this year?",
-  "Generate an Excel workforce report.",
-]
+// SUGGESTED_PROMPTS has moved to ./ai-assistant-utils — a pure constant,
+// kept free of this file's next/headers-dependent apiFetch/apiFetchSafe
+// imports so Client Components can use it (see that file's doc comment).

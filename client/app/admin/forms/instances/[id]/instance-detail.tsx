@@ -7,14 +7,9 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { signatureReference, SignatureStamp } from "@/components/ui/signature-stamp"
 import { fetchEmployees } from "@/lib/api/employees"
-import {
-  fetchFormInstance,
-  fetchFormInstanceAuditLog,
-  formInstancePdfUrl,
-  INSTANCE_STATUS_LABELS,
-  SIGNER_ROLE_LABELS,
-  type FormInstanceStatus,
-} from "@/lib/api/forms"
+import { formInstancePdfUrl } from "@/lib/api/export-urls"
+import { fetchFormInstance, fetchFormInstanceAuditLog, type FormInstanceStatus } from "@/lib/api/forms"
+import { INSTANCE_STATUS_LABELS, SIGNER_ROLE_LABELS } from "@/lib/api/forms-utils"
 import { archiveFormInstanceForm } from "@/lib/api/forms-actions"
 
 import { FillForm } from "./fill-form"

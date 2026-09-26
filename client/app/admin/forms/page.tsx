@@ -10,9 +10,8 @@ import {
   fetchFormsOverview,
   fetchFormsStatusDistribution,
   fetchPendingSignaturesByRole,
-  INSTANCE_STATUS_LABELS,
-  SIGNER_ROLE_LABELS,
 } from "@/lib/api/forms"
+import { INSTANCE_STATUS_LABELS, SIGNER_ROLE_LABELS } from "@/lib/api/forms-utils"
 import { getSession } from "@/lib/get-session"
 
 import { ImportManager } from "../imports/import-manager"

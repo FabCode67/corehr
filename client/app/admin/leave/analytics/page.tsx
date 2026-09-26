@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import {
@@ -13,8 +13,8 @@ import {
   fetchUtilizationByBranch,
   fetchUtilizationByDepartment,
   fetchUtilizationByGender,
-  MONTH_NAMES,
 } from "@/lib/api/leave"
+import { MONTH_NAMES } from "@/lib/api/leave-utils"
 
 import { LeaveTabs } from "../leave-tabs"
 

@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { departmentEmployeesExportUrl } from "@/lib/api/department-dashboard"
+import { departmentEmployeesExportUrl } from "@/lib/api/export-urls"
 import type { EmployeeExportColumn } from "@/lib/api/employees"
 import { cn } from "@/lib/utils"
 

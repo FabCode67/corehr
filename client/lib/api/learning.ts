@@ -16,34 +16,10 @@ export type CourseAssignmentStatus =
   | "REJECTED"
   | "CLOSED"
 
-export const DELIVERY_METHOD_LABELS: Record<CourseDeliveryMethod, string> = {
-  CLASSROOM: "Classroom",
-  ONLINE: "Online",
-  HYBRID: "Hybrid",
-}
-
-export const PRIORITY_LABELS: Record<CourseAssignmentPriority, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  CRITICAL: "Critical",
-}
-
-export const ASSIGNMENT_STATUS_LABELS: Record<CourseAssignmentStatus, string> = {
-  ASSIGNED: "Assigned",
-  ACCEPTED: "Accepted",
-  IN_PROGRESS: "In Progress",
-  COMPLETED_BY_EMPLOYEE: "Completed (awaiting certificate)",
-  PENDING_VERIFICATION: "Pending HR Verification",
-  VERIFIED: "Verified",
-  REJECTED: "Certificate Rejected",
-  CLOSED: "Closed",
-}
-
-/** Assignment statuses that count as "done" for completion-rate math —
- *  mirrors the server's TERMINAL_STATUSES in assignments.service.ts /
- *  analytics.service.ts. */
-export const TERMINAL_ASSIGNMENT_STATUSES: CourseAssignmentStatus[] = ["VERIFIED", "CLOSED"]
+// DELIVERY_METHOD_LABELS, PRIORITY_LABELS, ASSIGNMENT_STATUS_LABELS, and
+// TERMINAL_ASSIGNMENT_STATUSES have moved to ./learning-utils — pure
+// exports, kept free of this file's next/headers-dependent apiFetchSafe
+// import so Client Components can use them (see that file's doc comment).
 
 function toQuery(params: Record<string, string | number | boolean | undefined>): string
 function toQuery<T extends object>(params: T): string

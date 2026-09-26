@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchEmployees } from "@/lib/api/employees"
 import { fetchBands } from "@/lib/api/bands"
 import {
-  APPLICATION_STATUS_LABELS,
   fetchApplication,
   fetchApplicationPipeline,
   fetchAssessments,
@@ -16,6 +15,7 @@ import {
   fetchOffers,
   fetchOnboardingTasks,
 } from "@/lib/api/recruitment"
+import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { getSession } from "@/lib/get-session"
 
 import { AssessmentsSection } from "./assessments-section"

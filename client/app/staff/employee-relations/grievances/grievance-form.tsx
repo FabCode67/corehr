@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { submitGrievance, type ErActionState } from "@/lib/api/employee-relations-actions"
-import { formatErEnum, type GrievanceCategory } from "@/lib/api/employee-relations"
+import type { GrievanceCategory } from "@/lib/api/employee-relations"
+import { formatErEnum } from "@/lib/api/employee-relations-utils"
 
 const CATEGORIES: GrievanceCategory[] = [
   "WORKPLACE_CONFLICT",

@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchEmployee, fetchEmployeeHistory, formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
+import { fetchEmployee, fetchEmployeeHistory } from "@/lib/api/employees"
 import { fullName } from "@/lib/format-name"
 
 import { ChangePasswordForm } from "./change-password-form"

@@ -135,8 +135,3 @@ export function fetchExecutiveDashboardOverview(actingEmployeeId: string) {
   )
 }
 
-/** Points at this Next.js app's own proxy route (API_URL is server-only —
- *  see lib/api/forms.ts's formInstancePdfUrl for the same reasoning). */
-export function executiveDashboardPdfUrl(actingEmployeeId: string) {
-  return `/api/executive-dashboard/pdf?actingEmployeeId=${encodeURIComponent(actingEmployeeId)}`
-}

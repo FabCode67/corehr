@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import { fetchLeaveBalances, fetchLeaveRequests } from "@/lib/api/leave"
 
 function formatDate(value: string | null | undefined) {

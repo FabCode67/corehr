@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { deleteDocumentTypeForm } from "@/lib/api/onboarding-documents-actions"
-import { DOCUMENT_CATEGORY_LABELS, fetchDocumentTypes } from "@/lib/api/onboarding-documents"
+import { fetchDocumentTypes } from "@/lib/api/onboarding-documents"
+import { DOCUMENT_CATEGORY_LABELS } from "@/lib/api/onboarding-documents-utils"
 
 import { OnboardingDocumentsTabs } from "../onboarding-documents-tabs"
 

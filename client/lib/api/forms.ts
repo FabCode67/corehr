@@ -39,58 +39,10 @@ export type FormInstanceStatus =
   | "ARCHIVED"
 export type FormPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
 
-export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
-  SHORT_TEXT: "Short Text",
-  LONG_TEXT: "Long Text",
-  COMMENTS: "Comments",
-  NUMBER: "Number",
-  AMOUNT: "Amount",
-  PERCENTAGE: "Percentage",
-  DATE: "Date",
-  DATE_RANGE: "Date Range",
-  DROPDOWN: "Dropdown",
-  RADIO: "Radio",
-  CHECKBOX: "Checkbox",
-  MULTI_SELECT: "Multi-Select",
-  EMPLOYEE_SELECT: "Employee Selection",
-  DEPARTMENT_SELECT: "Department Selection",
-  POSITION_SELECT: "Position Selection",
-  MANAGER_SELECT: "Manager Selection",
-  FILE_UPLOAD: "Document Upload",
-  CERTIFICATE_UPLOAD: "Certificate Upload",
-  ATTACHMENT_UPLOAD: "Attachment Upload",
-  APPROVAL_DECISION: "Approval Decision",
-  RECOMMENDATION: "Recommendation",
-  TABLE: "Table",
-}
-
-export const SIGNER_ROLE_LABELS: Record<SignerRole, string> = {
-  EMPLOYEE: "Employee",
-  MANAGER: "Manager",
-  HEAD_OF_DEPARTMENT: "Head of Department",
-  HR: "HR",
-  EXECUTIVE_MANAGEMENT: "Executive Management",
-  SPECIFIC_APPROVER: "Specific Approver",
-}
-
-export const INSTANCE_STATUS_LABELS: Record<FormInstanceStatus, string> = {
-  DRAFT: "Draft",
-  ASSIGNED: "Assigned",
-  IN_PROGRESS: "In Progress",
-  SUBMITTED: "Submitted",
-  PENDING_SIGNATURES: "Pending Signatures",
-  REJECTED: "Rejected",
-  COMPLETED: "Completed",
-  ARCHIVED: "Archived",
-}
-
-export function formatFormsEnum(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(" ")
-}
+// FIELD_TYPE_LABELS, SIGNER_ROLE_LABELS, INSTANCE_STATUS_LABELS, and
+// formatFormsEnum have moved to ./forms-utils — pure exports, kept free of
+// this file's next/headers-dependent apiFetchSafe import so Client
+// Components can use them (see that file's doc comment).
 
 function toQuery(params: Record<string, unknown>) {
   const search = new URLSearchParams()
@@ -322,14 +274,3 @@ export function fetchFormsComplianceByCategory(actingEmployeeId: string) {
   )
 }
 
-// ---- PDF export -------------------------------------------------------------------
-
-/** Points at this Next.js app's own proxy route (see
- *  app/api/forms/instances/[id]/pdf/route.ts) rather than the NestJS API
- *  directly — the API's base URL is a server-only env var (see
- *  lib/org-chart.ts's note on API_URL vs NEXT_PUBLIC_API_URL), so a
- *  browser-clickable download link has to go through this app's own route
- *  instead. */
-export function formInstancePdfUrl(id: string, actingEmployeeId: string) {
-  return `/api/forms/instances/${id}/pdf${toQuery({ actingEmployeeId })}`
-}

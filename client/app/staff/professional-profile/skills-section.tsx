@@ -4,7 +4,7 @@ import { useTransition } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import type { EmployeeSkill } from "@/lib/api/professional-profile"
 import { removeEmployeeSkill } from "@/lib/api/professional-profile-actions"
 

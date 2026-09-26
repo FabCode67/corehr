@@ -86,22 +86,6 @@ export function fetchDepartmentEmployee(departmentId: string, employeeId: string
   )
 }
 
-/** Points at the Next.js proxy route (app/api/department-dashboard/[departmentId]/employees/export/route.ts)
- *  — same employeeExportUrl() reasoning as lib/api/employees.ts (API_URL is
- *  server-only, so a browser download link can't hit the API directly). */
-export function departmentEmployeesExportUrl(
-  departmentId: string,
-  actingEmployeeId: string,
-  columnKeys: string[],
-  format: "xlsx" | "csv"
-) {
-  const params = new URLSearchParams()
-  params.set("actingEmployeeId", actingEmployeeId)
-  params.set("columns", columnKeys.join(","))
-  params.set("format", format)
-  return `/api/department-dashboard/${departmentId}/employees/export?${params.toString()}`
-}
-
 export interface DepartmentPosition {
   id: string
   title: string

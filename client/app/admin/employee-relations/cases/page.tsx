@@ -4,14 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select } from "@/components/ui/select"
-import {
-  CASE_STATUS_BADGE_VARIANT,
-  CASE_STATUS_LABELS,
-  fetchDisciplinaryCases,
-  formatErEnum,
-  type DisciplinaryCaseCategory,
-  type DisciplinaryCaseStatus,
-} from "@/lib/api/employee-relations"
+import { fetchDisciplinaryCases, type DisciplinaryCaseCategory, type DisciplinaryCaseStatus } from "@/lib/api/employee-relations"
+import { CASE_STATUS_BADGE_VARIANT, CASE_STATUS_LABELS, formatErEnum } from "@/lib/api/employee-relations-utils"
 import { getSession } from "@/lib/get-session"
 
 import { EmployeeRelationsTabs } from "../employee-relations-tabs"

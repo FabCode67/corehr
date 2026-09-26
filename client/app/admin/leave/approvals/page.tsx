@@ -5,16 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Pagination } from "@/components/ui/pagination"
 import { Select } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { fullName } from "@/lib/format-name"
-import {
-  fetchLeaveRequestsPaginated,
-  fetchLeaveTypes,
-  formatLeaveStatusLabel,
-  type LeaveRequestStatus,
-} from "@/lib/api/leave"
+import { fetchLeaveRequestsPaginated, fetchLeaveTypes, type LeaveRequestStatus } from "@/lib/api/leave"
+import { formatLeaveStatusLabel } from "@/lib/api/leave-utils"
 import { getSession } from "@/lib/get-session"
 
 import { ImportManager } from "../../imports/import-manager"

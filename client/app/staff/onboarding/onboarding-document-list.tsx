@@ -3,11 +3,8 @@
 import { useState, type ChangeEvent } from "react"
 
 import { Badge } from "@/components/ui/badge"
-import {
-  DOCUMENT_STATUS_BADGE_VARIANT,
-  DOCUMENT_STATUS_LABELS,
-  type OnboardingDocumentAssignment,
-} from "@/lib/api/onboarding-documents"
+import type { OnboardingDocumentAssignment } from "@/lib/api/onboarding-documents"
+import { DOCUMENT_STATUS_BADGE_VARIANT, DOCUMENT_STATUS_LABELS } from "@/lib/api/onboarding-documents-utils"
 import { uploadOnboardingDocument } from "@/lib/api/onboarding-documents-actions"
 import { uploadFile } from "@/lib/api/uploads"
 

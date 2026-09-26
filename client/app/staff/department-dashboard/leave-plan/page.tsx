@@ -2,7 +2,8 @@ import Link from "next/link"
 
 import { AnnualLeavePlanTable } from "@/components/annual-leave-plan-table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { annualLeavePlanTemplateUrl, fetchDepartmentAnnualLeavePlan } from "@/lib/api/annual-leave-plan"
+import { fetchDepartmentAnnualLeavePlan } from "@/lib/api/annual-leave-plan"
+import { annualLeavePlanTemplateUrl } from "@/lib/api/export-urls"
 
 import { DepartmentApiError, DepartmentEmptyState, DepartmentSwitcher, resolveDepartmentContext } from "../shared"
 import { DepartmentDashboardTabs } from "../tabs"

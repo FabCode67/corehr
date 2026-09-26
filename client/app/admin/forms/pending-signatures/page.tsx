@@ -2,7 +2,8 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchPendingSignatures, SIGNER_ROLE_LABELS } from "@/lib/api/forms"
+import { fetchPendingSignatures } from "@/lib/api/forms"
+import { SIGNER_ROLE_LABELS } from "@/lib/api/forms-utils"
 import { getSession } from "@/lib/get-session"
 
 import { FormsTabs } from "../forms-tabs"

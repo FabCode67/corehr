@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
-import { SUGGESTED_PROMPTS, type AiMessage, type ChatArtifact } from "@/lib/api/ai-assistant"
+import type { AiMessage, ChatArtifact } from "@/lib/api/ai-assistant"
+import { SUGGESTED_PROMPTS } from "@/lib/api/ai-assistant-utils"
 
 import { sendMessageAction } from "./actions"
 import { ArtifactRenderer } from "./artifact-renderer"

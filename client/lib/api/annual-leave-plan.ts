@@ -1,36 +1,9 @@
 import { apiFetchSafe } from "./client"
-
-export const MONTH_KEYS = [
-  "january",
-  "february",
-  "march",
-  "april",
-  "may",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-] as const
-
-export type MonthKey = (typeof MONTH_KEYS)[number]
-
-export const MONTH_LABELS: Record<MonthKey, string> = {
-  january: "Jan",
-  february: "Feb",
-  march: "Mar",
-  april: "Apr",
-  may: "May",
-  june: "Jun",
-  july: "Jul",
-  august: "Aug",
-  september: "Sep",
-  october: "Oct",
-  november: "Nov",
-  december: "Dec",
-}
+// MONTH_KEYS, MonthKey, and MONTH_LABELS have moved to
+// ./annual-leave-plan-utils — pure exports, kept free of this file's
+// next/headers-dependent apiFetchSafe import so Client Components can use
+// them (see that file's doc comment).
+import type { MonthKey } from "./annual-leave-plan-utils"
 
 export type AnnualLeavePlanEntry = {
   id: string
@@ -68,14 +41,6 @@ export interface AnnualLeavePlanAnalytics {
 // same access gate as every other department-dashboard capability.
 // ---------------------------------------------------------------------
 
-/** Points at the Next.js proxy route (mirrors departmentEmployeesExportUrl's
- *  reasoning — API_URL is server-only, so a browser download link can't
- *  hit the API directly). */
-export function annualLeavePlanTemplateUrl(departmentId: string, actingEmployeeId: string, year: number) {
-  const params = new URLSearchParams({ actingEmployeeId, year: String(year) })
-  return `/api/department-dashboard/${departmentId}/leave-plan/template?${params.toString()}`
-}
-
 export function fetchDepartmentAnnualLeavePlan(departmentId: string, actingEmployeeId: string, year: number) {
   const params = new URLSearchParams({ actingEmployeeId, year: String(year) })
   return apiFetchSafe<AnnualLeavePlanEntry[]>(`/department-dashboard/${departmentId}/leave-plan?${params.toString()}`)
@@ -97,9 +62,3 @@ export function fetchAnnualLeavePlanAnalytics(actingEmployeeId: string, year: nu
   return apiFetchSafe<AnnualLeavePlanAnalytics>(`/leave/annual-plan/analytics?${params.toString()}`)
 }
 
-/** Points at the Next.js proxy route app/api/leave/annual-plan/export/route.ts. */
-export function annualLeavePlanExportUrl(actingEmployeeId: string, year: number, departmentId?: string) {
-  const params = new URLSearchParams({ actingEmployeeId, year: String(year) })
-  if (departmentId) params.set("departmentId", departmentId)
-  return `/api/leave/annual-plan/export?${params.toString()}`
-}

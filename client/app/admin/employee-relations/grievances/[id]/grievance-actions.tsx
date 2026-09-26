@@ -8,7 +8,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { assignGrievance, updateGrievanceStatus } from "@/lib/api/employee-relations-actions"
-import { GRIEVANCE_STATUS_LABELS, type GrievanceStatus } from "@/lib/api/employee-relations"
+import type { GrievanceStatus } from "@/lib/api/employee-relations"
+import { GRIEVANCE_STATUS_LABELS } from "@/lib/api/employee-relations-utils"
 
 interface EmployeeOption {
   employeeNumber: string

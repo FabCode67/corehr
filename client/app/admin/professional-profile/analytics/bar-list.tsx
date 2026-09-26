@@ -1,4 +1,4 @@
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 
 export function BarList({ items, formatLabel = false }: { items: { key: string; count: number }[]; formatLabel?: boolean }) {
   if (items.length === 0) {

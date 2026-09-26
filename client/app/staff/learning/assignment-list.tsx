@@ -1,7 +1,8 @@
 import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
-import { ASSIGNMENT_STATUS_LABELS, PRIORITY_LABELS, type CourseAssignment } from "@/lib/api/learning"
+import type { CourseAssignment } from "@/lib/api/learning"
+import { ASSIGNMENT_STATUS_LABELS, PRIORITY_LABELS } from "@/lib/api/learning-utils"
 
 const STATUS_VARIANT: Record<string, "outline" | "secondary" | "success" | "destructive"> = {
   ASSIGNED: "outline",

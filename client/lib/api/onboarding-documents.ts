@@ -9,34 +9,11 @@ export type OnboardingDocumentCategory = "IDENTIFICATION" | "EMPLOYMENT" | "COMP
  *  Record type stays exhaustive against the backend enum. */
 export type OnboardingDocumentStatus = "NOT_STARTED" | "UPLOADED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "RESUBMISSION_REQUIRED"
 
-export const DOCUMENT_CATEGORY_LABELS: Record<OnboardingDocumentCategory, string> = {
-  IDENTIFICATION: "Identification",
-  EMPLOYMENT: "Employment",
-  COMPLIANCE: "Compliance",
-  FINANCIAL: "Financial",
-  MEDICAL: "Medical",
-  IT: "IT",
-  ASSET: "Asset",
-  OTHER: "Other",
-}
-
-export const DOCUMENT_STATUS_LABELS: Record<OnboardingDocumentStatus, string> = {
-  NOT_STARTED: "Not Started",
-  UPLOADED: "Uploaded",
-  UNDER_REVIEW: "Under Review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-  RESUBMISSION_REQUIRED: "Resubmission Required",
-}
-
-export const DOCUMENT_STATUS_BADGE_VARIANT: Record<OnboardingDocumentStatus, "outline" | "success" | "secondary" | "destructive" | "default"> = {
-  NOT_STARTED: "outline",
-  UPLOADED: "default",
-  UNDER_REVIEW: "default",
-  APPROVED: "success",
-  REJECTED: "destructive",
-  RESUBMISSION_REQUIRED: "secondary",
-}
+// DOCUMENT_CATEGORY_LABELS, DOCUMENT_STATUS_LABELS, and
+// DOCUMENT_STATUS_BADGE_VARIANT have moved to ./onboarding-documents-utils —
+// pure exports, kept free of this file's next/headers-dependent
+// apiFetchSafe import so Client Components can use them (see that file's
+// doc comment).
 
 function toQuery(params: Record<string, unknown>) {
   const search = new URLSearchParams()

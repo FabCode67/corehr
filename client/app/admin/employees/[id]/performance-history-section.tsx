@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchReviewHistory, REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance"
+import { fetchReviewHistory } from "@/lib/api/performance"
+import { REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance-utils"
 
 /**
  * Full-profile Performance section for the admin Employee Detail page —

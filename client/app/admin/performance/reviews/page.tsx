@@ -9,13 +9,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { fullName } from "@/lib/format-name"
-import {
-  fetchReviewPeriods,
-  fetchReviewsPaginated,
-  REVIEW_STATUS_LABELS,
-  REVIEW_TYPE_LABELS,
-  type ReviewFilters,
-} from "@/lib/api/performance"
+import { fetchReviewPeriods, fetchReviewsPaginated, type ReviewFilters } from "@/lib/api/performance"
+import { REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance-utils"
 import { getSession } from "@/lib/get-session"
 
 import { ImportManager } from "../../imports/import-manager"

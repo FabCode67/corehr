@@ -16,7 +16,8 @@ import {
   submitStageScore,
   withdrawApplicationStage,
 } from "@/lib/api/recruitment-actions"
-import { APPLICATION_STAGE_STATUS_LABELS, type ApplicationStageInstance } from "@/lib/api/recruitment"
+import type { ApplicationStageInstance } from "@/lib/api/recruitment"
+import { APPLICATION_STAGE_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 
 function statusBadgeVariant(status: ApplicationStageInstance["status"]) {
   switch (status) {

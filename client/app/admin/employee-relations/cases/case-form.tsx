@@ -9,7 +9,8 @@ import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { createDisciplinaryCase, type ErActionState } from "@/lib/api/employee-relations-actions"
-import { formatErEnum, type DisciplinaryCaseCategory } from "@/lib/api/employee-relations"
+import type { DisciplinaryCaseCategory } from "@/lib/api/employee-relations"
+import { formatErEnum } from "@/lib/api/employee-relations-utils"
 import { searchEmployeesAction } from "@/lib/api/employees-actions"
 
 const CATEGORIES: DisciplinaryCaseCategory[] = [

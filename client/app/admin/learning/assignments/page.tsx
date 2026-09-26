@@ -9,15 +9,8 @@ import { Select } from "@/components/ui/select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
-import {
-  fetchAssignmentsPaginated,
-  fetchTrainingCategories,
-  ASSIGNMENT_STATUS_LABELS,
-  PRIORITY_LABELS,
-  TERMINAL_ASSIGNMENT_STATUSES,
-  type CourseAssignmentPriority,
-  type CourseAssignmentStatus,
-} from "@/lib/api/learning"
+import { fetchAssignmentsPaginated, fetchTrainingCategories, type CourseAssignmentPriority, type CourseAssignmentStatus } from "@/lib/api/learning"
+import { ASSIGNMENT_STATUS_LABELS, PRIORITY_LABELS, TERMINAL_ASSIGNMENT_STATUSES } from "@/lib/api/learning-utils"
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { getSession } from "@/lib/get-session"
 

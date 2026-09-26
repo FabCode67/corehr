@@ -2,7 +2,8 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { APPLICATION_PIPELINE, APPLICATION_STATUS_LABELS, fetchApplications } from "@/lib/api/recruitment"
+import { fetchApplications } from "@/lib/api/recruitment"
+import { APPLICATION_PIPELINE, APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { getSession } from "@/lib/get-session"
 
 import { RecruitmentTabs } from "../recruitment-tabs"

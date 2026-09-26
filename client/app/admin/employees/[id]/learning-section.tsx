@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ASSIGNMENT_STATUS_LABELS, fetchLearningPlan, type CourseAssignmentStatus } from "@/lib/api/learning"
+import { fetchLearningPlan, type CourseAssignmentStatus } from "@/lib/api/learning"
+import { ASSIGNMENT_STATUS_LABELS } from "@/lib/api/learning-utils"
 
 const STATUS_VARIANT: Record<CourseAssignmentStatus, "outline" | "secondary" | "success" | "destructive"> = {
   ASSIGNED: "outline",

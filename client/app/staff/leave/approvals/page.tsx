@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import { fetchPendingForManager } from "@/lib/api/leave"
 import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"

@@ -4,8 +4,9 @@ import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatEnumLabel } from "@/lib/api/employees"
-import { fetchRatingScale, fetchReview, REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
+import { fetchRatingScale, fetchReview } from "@/lib/api/performance"
+import { REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance-utils"
 import { getSession } from "@/lib/get-session"
 
 import { PerformanceTabs } from "../../performance-tabs"

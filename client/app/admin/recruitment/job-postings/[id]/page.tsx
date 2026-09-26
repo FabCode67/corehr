@@ -4,7 +4,8 @@ import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { APPLICATION_STATUS_LABELS, fetchApplications, fetchCandidates, fetchJobPosting } from "@/lib/api/recruitment"
+import { fetchApplications, fetchCandidates, fetchJobPosting } from "@/lib/api/recruitment"
+import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { getSession } from "@/lib/get-session"
 
 import { AddApplicationForm } from "./add-application-form"

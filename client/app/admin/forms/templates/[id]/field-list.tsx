@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { addFormField, removeFormField, updateFormField } from "@/lib/api/forms-actions"
-import { FIELD_TYPE_LABELS, type FieldType, type FormField } from "@/lib/api/forms"
+import type { FieldType, FormField } from "@/lib/api/forms"
+import { FIELD_TYPE_LABELS } from "@/lib/api/forms-utils"
 
 const OPTION_FIELD_TYPES: FieldType[] = ["DROPDOWN", "RADIO", "CHECKBOX", "MULTI_SELECT"]
 const TABLE_FIELD_TYPES: FieldType[] = ["TABLE"]

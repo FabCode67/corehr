@@ -14,8 +14,9 @@ import {
   fetchDepartmentEmployeeRelations,
   fetchDepartmentLearningHours,
 } from "@/lib/api/department-dashboard"
-import { formatEnumLabel } from "@/lib/api/employees"
-import { INSTANCE_STATUS_LABELS, type FormInstanceStatus } from "@/lib/api/forms"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
+import type { FormInstanceStatus } from "@/lib/api/forms"
+import { INSTANCE_STATUS_LABELS } from "@/lib/api/forms-utils"
 import { fullName } from "@/lib/format-name"
 
 import { DepartmentApiError, DepartmentEmptyState, resolveDepartmentContext } from "../../shared"

@@ -4,11 +4,11 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchFunctions, fetchUnits } from "@/lib/api/departments"
-import { fetchEmployees, formatEnumLabel } from "@/lib/api/employees"
-import { executiveDashboardPdfUrl, fetchExecutiveDashboardOverview } from "@/lib/api/executive-dashboard"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
+import { fetchEmployees } from "@/lib/api/employees"
+import { executiveDashboardPdfUrl, hrAnalyticsExportSnapshotUrl, hrAnalyticsExportUrl } from "@/lib/api/export-urls"
+import { fetchExecutiveDashboardOverview } from "@/lib/api/executive-dashboard"
 import {
-  exportUrl,
-  exportSnapshotUrl,
   fetchAttritionRate,
   fetchAverageAge,
   fetchBandDistribution,
@@ -174,14 +174,14 @@ export default async function HrAnalyticsPage({ searchParams }: { searchParams: 
           {(["xlsx", "csv", "pdf", "pptx"] as const).map((format) => (
             <a
               key={format}
-              href={exportUrl(format, filters, actingEmployeeId)}
+              href={hrAnalyticsExportUrl(format, filters, actingEmployeeId)}
               className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground hover:bg-muted"
             >
               Export {format.toUpperCase()}
             </a>
           ))}
           <a
-            href={exportSnapshotUrl(filters, actingEmployeeId)}
+            href={hrAnalyticsExportSnapshotUrl(filters, actingEmployeeId)}
             className="inline-flex h-8 items-center rounded-lg border border-border bg-muted px-3 text-xs font-medium text-foreground hover:bg-muted/70"
             title="A single-page branded infographic — headcount, gender, age/tenure/band, and turnover at a glance"
           >

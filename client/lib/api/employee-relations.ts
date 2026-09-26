@@ -30,38 +30,10 @@ export type GrievanceStatus = "SUBMITTED" | "UNDER_REVIEW" | "RESOLVED" | "CLOSE
 export type AppealStatus = "SUBMITTED" | "UNDER_REVIEW" | "DECIDED"
 export type AppealOutcome = "UPHELD" | "OVERTURNED" | "MODIFIED"
 
-export const CASE_STATUS_LABELS: Record<DisciplinaryCaseStatus, string> = {
-  DRAFT: "Draft",
-  UNDER_INVESTIGATION: "Under Investigation",
-  PENDING_DECISION: "Pending Decision",
-  SANCTION_ISSUED: "Sanction Issued",
-  CLOSED: "Closed",
-  APPEALED: "Appealed",
-}
-
-export const CASE_STATUS_BADGE_VARIANT: Record<DisciplinaryCaseStatus, "outline" | "success" | "secondary" | "destructive" | "default"> = {
-  DRAFT: "outline",
-  UNDER_INVESTIGATION: "default",
-  PENDING_DECISION: "default",
-  SANCTION_ISSUED: "secondary",
-  CLOSED: "success",
-  APPEALED: "destructive",
-}
-
-export const GRIEVANCE_STATUS_LABELS: Record<GrievanceStatus, string> = {
-  SUBMITTED: "Submitted",
-  UNDER_REVIEW: "Under Review",
-  RESOLVED: "Resolved",
-  CLOSED: "Closed",
-}
-
-export function formatErEnum(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(" ")
-}
+// CASE_STATUS_LABELS, CASE_STATUS_BADGE_VARIANT, GRIEVANCE_STATUS_LABELS,
+// and formatErEnum have moved to ./employee-relations-utils — pure exports,
+// kept free of this file's next/headers-dependent apiFetchSafe import so
+// Client Components can use them (see that file's doc comment).
 
 function toQuery(params: Record<string, unknown>) {
   const search = new URLSearchParams()
@@ -366,10 +338,3 @@ export function fetchAppealStats(actingEmployeeId: string) {
   return apiFetchSafe<AppealStats>(`/employee-relations/analytics/appeal-stats${toQuery({ actingEmployeeId })}`)
 }
 
-// ---- PDF export -------------------------------------------------------------------
-
-/** Points at this Next.js app's own proxy route (API_URL is server-only —
- *  see forms.ts's formInstancePdfUrl for the same reasoning). */
-export function disciplinaryCasePdfUrl(id: string, actingEmployeeId: string) {
-  return `/api/employee-relations/cases/${id}/pdf${toQuery({ actingEmployeeId })}`
-}

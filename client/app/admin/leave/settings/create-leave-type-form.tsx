@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { createLeaveType, type LeaveActionState } from "@/lib/api/leave-actions"
-import { LEAVE_CATEGORIES } from "@/lib/api/leave"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { LEAVE_CATEGORIES } from "@/lib/api/leave-utils"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 
 export function CreateLeaveTypeForm() {
   const [state, formAction, pending] = useActionState<LeaveActionState | undefined, FormData>(

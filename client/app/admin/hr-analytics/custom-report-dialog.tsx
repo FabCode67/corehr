@@ -7,7 +7,8 @@ import { Briefcase, Building2, CalendarClock, FileSpreadsheet, GraduationCap, Pr
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { customReportUrl, type CustomReportSectionSelection, type HrAnalyticsFilters, type ReportSectionMeta } from "@/lib/api/hr-analytics"
+import { hrAnalyticsCustomReportUrl, type CustomReportSectionSelection } from "@/lib/api/export-urls"
+import type { HrAnalyticsFilters, ReportSectionMeta } from "@/lib/api/hr-analytics"
 import { cn } from "@/lib/utils"
 
 /** Icon per section — keyed by REPORT_SECTIONS' `key` (server-authoritative,
@@ -188,7 +189,7 @@ export function CustomReportDialog({
           <DialogFooter>
             <DialogClose className={buttonVariants({ variant: "outline", size: "sm" })}>Cancel</DialogClose>
             <a
-              href={canExport ? customReportUrl(sectionSelections, "xlsx", filters, actingEmployeeId) : undefined}
+              href={canExport ? hrAnalyticsCustomReportUrl(sectionSelections, "xlsx", filters, actingEmployeeId) : undefined}
               aria-disabled={!canExport}
               onClick={handleDownloadClick}
               className={cn(buttonVariants({ variant: "outline", size: "sm" }), !canExport && "pointer-events-none opacity-50")}
@@ -197,7 +198,7 @@ export function CustomReportDialog({
               Excel
             </a>
             <a
-              href={canExport ? customReportUrl(sectionSelections, "pptx", filters, actingEmployeeId) : undefined}
+              href={canExport ? hrAnalyticsCustomReportUrl(sectionSelections, "pptx", filters, actingEmployeeId) : undefined}
               aria-disabled={!canExport}
               onClick={handleDownloadClick}
               className={cn(buttonVariants({ size: "sm" }), !canExport && "pointer-events-none opacity-50")}

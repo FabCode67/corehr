@@ -2,7 +2,8 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchFormInstances, fetchPendingSignatures, INSTANCE_STATUS_LABELS, SIGNER_ROLE_LABELS, type FormInstanceStatus } from "@/lib/api/forms"
+import { fetchFormInstances, fetchPendingSignatures, type FormInstanceStatus } from "@/lib/api/forms"
+import { INSTANCE_STATUS_LABELS, SIGNER_ROLE_LABELS } from "@/lib/api/forms-utils"
 import { getSession } from "@/lib/get-session"
 
 const STATUS_VARIANT: Record<FormInstanceStatus, "outline" | "success" | "secondary" | "destructive" | "default"> = {

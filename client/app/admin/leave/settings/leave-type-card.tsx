@@ -17,13 +17,9 @@ import {
   upsertEntitlementRule,
   type LeaveActionState,
 } from "@/lib/api/leave-actions"
-import {
-  LEAVE_CATEGORIES,
-  LEAVE_ENTITLEMENT_CATEGORIES,
-  type LeaveEntitlementCategory,
-  type LeaveType,
-} from "@/lib/api/leave"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
+import type { LeaveEntitlementCategory, LeaveType } from "@/lib/api/leave"
+import { LEAVE_CATEGORIES, LEAVE_ENTITLEMENT_CATEGORIES } from "@/lib/api/leave-utils"
 
 function formatCategoryLabel(value: string) {
   return formatEnumLabel(value)

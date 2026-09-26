@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchFormInstances, INSTANCE_STATUS_LABELS, type FormInstanceStatus } from "@/lib/api/forms"
+import { fetchFormInstances, type FormInstanceStatus } from "@/lib/api/forms"
+import { INSTANCE_STATUS_LABELS } from "@/lib/api/forms-utils"
 
 const STATUS_VARIANT: Record<FormInstanceStatus, "outline" | "secondary" | "success" | "destructive"> = {
   DRAFT: "outline",

@@ -4,13 +4,8 @@ import { ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchEmployee } from "@/lib/api/employees"
-import {
-  fetchProgression,
-  fetchReviewHistory,
-  REVIEW_STATUS_LABELS,
-  REVIEW_TYPE_LABELS,
-  type PerformanceReview,
-} from "@/lib/api/performance"
+import { fetchProgression, fetchReviewHistory, type PerformanceReview } from "@/lib/api/performance"
+import { REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance-utils"
 import { getSession } from "@/lib/get-session"
 
 const STATUS_VARIANT: Record<string, "outline" | "secondary" | "success" | "destructive"> = {

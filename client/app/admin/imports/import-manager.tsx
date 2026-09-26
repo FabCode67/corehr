@@ -8,16 +8,9 @@ import { Download, History, Loader2, Upload, UploadCloud } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { importErrorReportUrl, importSuccessReportUrl, importTemplateUrl } from "@/lib/api/export-urls"
 import { checkImportJobAction, commitImport, previewImport } from "@/lib/api/imports-actions"
-import {
-  importErrorReportUrl,
-  importJobFileUrl,
-  importSuccessReportUrl,
-  importTemplateUrl,
-  type ImportJobDetail,
-  type ImportPreviewResult,
-  type ImportRowStatus,
-} from "@/lib/api/imports"
+import type { ImportJobDetail, ImportPreviewResult, ImportRowStatus } from "@/lib/api/imports"
 
 const STATUS_LABELS: Record<ImportRowStatus, string> = {
   new: "New",

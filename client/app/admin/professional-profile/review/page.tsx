@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatEnumLabel } from "@/lib/api/employees"
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import { fetchPendingCertifications, fetchPendingEducation, fetchPendingInstitutions } from "@/lib/api/professional-profile"
 import { reviewCertification, reviewEducationRecord, reviewInstitution } from "@/lib/api/professional-profile-actions"
 import { getSession } from "@/lib/get-session"

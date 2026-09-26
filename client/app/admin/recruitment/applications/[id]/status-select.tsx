@@ -4,7 +4,8 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
 import { Select } from "@/components/ui/select"
-import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from "@/lib/api/recruitment"
+import type { ApplicationStatus } from "@/lib/api/recruitment"
+import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { updateApplicationStatus } from "@/lib/api/recruitment-actions"
 
 const STATUSES: ApplicationStatus[] = ["APPLIED", "UNDER_REVIEW", "SHORTLISTED", "INTERVIEW", "OFFER", "HIRED", "REJECTED", "WITHDRAWN"]

@@ -1,4 +1,5 @@
-import { MONTH_KEYS, MONTH_LABELS, type AnnualLeavePlanEntry } from "@/lib/api/annual-leave-plan"
+import type { AnnualLeavePlanEntry } from "@/lib/api/annual-leave-plan"
+import { MONTH_KEYS, MONTH_LABELS } from "@/lib/api/annual-leave-plan-utils"
 import { fullName } from "@/lib/format-name"
 
 /** Shared table rendering for the Annual Leave Plan — used by both the

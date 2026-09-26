@@ -3,15 +3,14 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  CASE_STATUS_LABELS,
   fetchAppealStats,
   fetchCasesByCategory,
   fetchCasesByStatus,
   fetchErOverview,
   fetchInvestigationStats,
   fetchMonthlyCaseTrend,
-  formatErEnum,
 } from "@/lib/api/employee-relations"
+import { CASE_STATUS_LABELS, formatErEnum } from "@/lib/api/employee-relations-utils"
 import { getSession } from "@/lib/get-session"
 
 import { EmployeeRelationsTabs } from "./employee-relations-tabs"

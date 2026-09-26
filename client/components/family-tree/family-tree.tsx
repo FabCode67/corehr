@@ -1,7 +1,7 @@
 import { Heart, User, Users } from "lucide-react"
 
+import { formatEnumLabel } from "@/lib/api/employee-utils"
 import type { EmployeeChild, EmployeeFamilyMember, EmployeeFamilyTree } from "@/lib/api/employees"
-import { formatEnumLabel } from "@/lib/api/employees"
 import { cn } from "@/lib/utils"
 
 import styles from "./family-tree.module.css"

@@ -3,14 +3,8 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  CASE_STATUS_BADGE_VARIANT,
-  CASE_STATUS_LABELS,
-  fetchDisciplinaryCases,
-  fetchGrievances,
-  GRIEVANCE_STATUS_LABELS,
-  type GrievanceStatus,
-} from "@/lib/api/employee-relations"
+import { fetchDisciplinaryCases, fetchGrievances, type GrievanceStatus } from "@/lib/api/employee-relations"
+import { CASE_STATUS_BADGE_VARIANT, CASE_STATUS_LABELS, GRIEVANCE_STATUS_LABELS } from "@/lib/api/employee-relations-utils"
 import { getSession } from "@/lib/get-session"
 
 const GRIEVANCE_STATUS_VARIANT: Record<GrievanceStatus, "outline" | "success" | "secondary" | "destructive" | "default"> = {

@@ -9,17 +9,10 @@ export type PerformanceReviewType = "MID_YEAR" | "ANNUAL"
 export type PerformanceCycleStatus = "DRAFT" | "OPEN" | "CLOSED"
 export type PerformanceReviewStatus = "DRAFT" | "SUBMITTED" | "ACKNOWLEDGED" | "FINALIZED"
 
-export const REVIEW_TYPE_LABELS: Record<PerformanceReviewType, string> = {
-  MID_YEAR: "Mid-Year Review",
-  ANNUAL: "Annual Review",
-}
-
-export const REVIEW_STATUS_LABELS: Record<PerformanceReviewStatus, string> = {
-  DRAFT: "Draft",
-  SUBMITTED: "Submitted",
-  ACKNOWLEDGED: "Acknowledged",
-  FINALIZED: "Finalized",
-}
+// REVIEW_TYPE_LABELS and REVIEW_STATUS_LABELS have moved to
+// ./performance-utils — pure exports, kept free of this file's
+// next/headers-dependent apiFetchSafe import so Client Components can use
+// them (see that file's doc comment).
 
 // ---- Rating scale ---------------------------------------------------------
 

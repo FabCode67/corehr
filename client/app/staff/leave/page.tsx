@@ -1,12 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Pagination } from "@/components/ui/pagination"
-import {
-  fetchLeaveBalances,
-  fetchLeaveRequestsPaginated,
-  formatLeaveStatusLabel,
-  type LeaveRequestStatus,
-} from "@/lib/api/leave"
+import { fetchLeaveBalances, fetchLeaveRequestsPaginated, type LeaveRequestStatus } from "@/lib/api/leave"
+import { formatLeaveStatusLabel } from "@/lib/api/leave-utils"
 import { submitLeaveRequest } from "@/lib/api/leave-actions"
 import { getSession } from "@/lib/get-session"
 

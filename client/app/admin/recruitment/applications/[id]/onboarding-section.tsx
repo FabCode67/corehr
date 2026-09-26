@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { completeOnboarding, updateOnboardingTask, type RecruitmentActionState } from "@/lib/api/recruitment-actions"
-import { ONBOARDING_TASK_LABELS, type OnboardingTask } from "@/lib/api/recruitment"
+import type { OnboardingTask } from "@/lib/api/recruitment"
+import { ONBOARDING_TASK_LABELS } from "@/lib/api/recruitment-utils"
 
 function TaskRow({ applicationId, actingEmployeeId, task }: { applicationId: string; actingEmployeeId: string; task: OnboardingTask }) {
   const router = useRouter()

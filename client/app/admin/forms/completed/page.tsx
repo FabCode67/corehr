@@ -2,7 +2,8 @@ import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchFormInstances, formInstancePdfUrl } from "@/lib/api/forms"
+import { formInstancePdfUrl } from "@/lib/api/export-urls"
+import { fetchFormInstances } from "@/lib/api/forms"
 import { getSession } from "@/lib/get-session"
 
 import { FormsTabs } from "../forms-tabs"

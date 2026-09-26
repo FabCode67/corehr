@@ -103,20 +103,3 @@ export function fetchImportJob(id: string) {
   return apiFetchSafe<ImportJobDetail>(`/imports/jobs/${id}`)
 }
 
-// ---- Download URLs (proxied through this Next.js app — see the /api/imports/... routes) --
-
-export function importTemplateUrl(moduleKey: string) {
-  return `/api/imports/${moduleKey}/template`
-}
-
-export function importJobFileUrl(jobId: string) {
-  return `/api/imports/jobs/${jobId}/file`
-}
-
-export function importErrorReportUrl(jobId: string) {
-  return `/api/imports/jobs/${jobId}/error-report`
-}
-
-export function importSuccessReportUrl(jobId: string) {
-  return `/api/imports/jobs/${jobId}/success-report`
-}

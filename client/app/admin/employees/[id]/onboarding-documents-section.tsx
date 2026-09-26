@@ -3,12 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchDepartments } from "@/lib/api/departments"
 import type { Employee } from "@/lib/api/employees"
-import {
-  DOCUMENT_STATUS_BADGE_VARIANT,
-  DOCUMENT_STATUS_LABELS,
-  fetchApplicableDocumentTypes,
-  fetchAssignmentsForEmployee,
-} from "@/lib/api/onboarding-documents"
+import { fetchApplicableDocumentTypes, fetchAssignmentsForEmployee } from "@/lib/api/onboarding-documents"
+import { DOCUMENT_STATUS_BADGE_VARIANT, DOCUMENT_STATUS_LABELS } from "@/lib/api/onboarding-documents-utils"
 import { bulkAssignDocumentsForm, reviewOnboardingDocumentForm } from "@/lib/api/onboarding-documents-actions"
 
 /**

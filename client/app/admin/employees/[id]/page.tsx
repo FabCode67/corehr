@@ -10,18 +10,15 @@ import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { fetchExitClearanceProgress } from "@/lib/api/exit-clearance"
+import { employeeFamilyTreeExportUrl } from "@/lib/api/export-urls"
 import {
-  computeTenure,
-  computeTotalBankingExperienceYears,
-  employeeFamilyTreeExportUrl,
   fetchEmployee,
   fetchEmployeeFamilyTree,
   fetchEmployeeHistory,
   fetchEmployees,
   fetchReportingManager,
-  formatEnumLabel,
-  formatTenure,
 } from "@/lib/api/employees"
+import { computeTenure, computeTotalBankingExperienceYears, formatEnumLabel, formatTenure } from "@/lib/api/employee-utils"
 import { fetchPositions } from "@/lib/api/positions"
 import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"

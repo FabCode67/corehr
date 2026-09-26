@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { updateRequisitionStage } from "@/lib/api/recruitment-actions"
-import { STAGE_LABELS, type RecruitmentStageInstance, type StageStatus } from "@/lib/api/recruitment"
+import type { RecruitmentStageInstance, StageStatus } from "@/lib/api/recruitment"
+import { STAGE_LABELS } from "@/lib/api/recruitment-utils"
 
 const STATUS_VARIANT: Record<StageStatus, "outline" | "success" | "default"> = {
   NOT_STARTED: "outline",

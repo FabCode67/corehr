@@ -17,14 +17,6 @@ export type EducationType =
   | "COURSE"
   | "WORKSHOP"
 
-export function formatEnumLabel(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(" ")
-}
-
 export interface EmployeePosition {
   id: string
   title: string
@@ -259,25 +251,6 @@ export function fetchEmployeeFamilyTree(id: string) {
   return apiFetchSafe<EmployeeFamilyTree>(`/employees/${id}/family-tree`)
 }
 
-/** Points at the Next.js proxy route (app/api/employees/[id]/family-tree/export/route.ts)
- *  for the admin employee detail page's "Export Family Tree" button — same
- *  reasoning as employeeExportUrl() above (API_URL is server-only). */
-export function employeeFamilyTreeExportUrl(id: string, actingEmployeeId: string) {
-  const params = new URLSearchParams()
-  if (actingEmployeeId) params.set("actingEmployeeId", actingEmployeeId)
-  return `/api/employees/${id}/family-tree/export?${params.toString()}`
-}
-
-/** Bulk counterpart — "Export Family Tree" for all staff, from the admin
- *  Employees list page. Active-only by default, matching how most other
- *  exports/reports in this app scope themselves unless told otherwise. */
-export function allEmployeesFamilyTreeExportUrl(actingEmployeeId: string, includeInactive = false) {
-  const params = new URLSearchParams()
-  if (actingEmployeeId) params.set("actingEmployeeId", actingEmployeeId)
-  if (includeInactive) params.set("includeInactive", "true")
-  return `/api/employees/family-tree/export?${params.toString()}`
-}
-
 // ---- Column-picker export (Employees table "Export" button) ----------------
 
 export interface EmployeeExportColumn {
@@ -295,20 +268,6 @@ export function fetchEmployeeExportColumns() {
   return apiFetchSafe<EmployeeExportColumn[]>("/employees/export/columns")
 }
 
-/** Points at the Next.js proxy route (app/api/employees/export/route.ts),
- *  not the NestJS API directly — API_URL is server-only, so a browser
- *  download link can't hit the API directly (same reasoning as
- *  lib/api/hr-analytics.ts's exportUrl()). `includeInactive` always sends
- *  true: the admin table itself always shows exited employees (with a
- *  status badge, never hidden), so the export should match what's on screen
- *  rather than silently dropping them. */
-export function employeeExportUrl(columnKeys: string[], format: "xlsx" | "csv") {
-  const params = new URLSearchParams()
-  params.set("columns", columnKeys.join(","))
-  params.set("format", format)
-  params.set("includeInactive", "true")
-  return `/api/employees/export?${params.toString()}`
-}
 
 export interface LineManagerSummary {
   id: string
@@ -324,67 +283,7 @@ export function fetchLineManagersBatch() {
   return apiFetchSafe<Record<string, LineManagerSummary | null>>("/employees/line-managers")
 }
 
-// ---- Computed display fields (Tenure, Total Banking Experience) --------------
-// Both are derived purely from fields the API already returns, so they're
-// computed on read here rather than stored or round-tripped through the
-// backend — same "computed on read" convention used across every other
-// module this session (onboarding progress %, leave carry-forward expiry).
-
-export interface Tenure {
-  years: number
-  months: number
-  totalYears: number
-}
-
-/** Current Date − Employment Start Date, in whole years + remainder months. */
-export function computeTenure(employmentStartDate: string | null): Tenure | null {
-  if (!employmentStartDate) return null
-  const start = new Date(employmentStartDate)
-  if (Number.isNaN(start.getTime())) return null
-
-  const now = new Date()
-  let years = now.getFullYear() - start.getFullYear()
-  let months = now.getMonth() - start.getMonth()
-  if (now.getDate() < start.getDate()) months -= 1
-  if (months < 0) {
-    years -= 1
-    months += 12
-  }
-  if (years < 0) return null
-
-  return { years, months, totalYears: years + months / 12 }
-}
-
-export function formatTenure(tenure: Tenure | null): string {
-  if (!tenure) return "—"
-  return `${tenure.years} Year${tenure.years === 1 ? "" : "s"} ${tenure.months} Month${tenure.months === 1 ? "" : "s"}`
-}
-
-/** Previous Banking Experience (HR-entered) + Current Banking Experience
- *  (tenure at NCBA, computed) — see the spec's Employee Table Enhancements. */
-export function computeTotalBankingExperienceYears(employee: Pick<Employee, "previousBankingExperienceYears" | "employmentStartDate">): number | null {
-  const previous = employee.previousBankingExperienceYears ?? 0
-  const tenure = computeTenure(employee.employmentStartDate)
-  if (employee.previousBankingExperienceYears === null && !tenure) return null
-  return Math.round((previous + (tenure?.totalYears ?? 0)) * 10) / 10
-}
-
-/** Days remaining until Employee.probationEndDate — null when the employee
- *  has no probation end date set at all (most staff, once probation is
- *  over and HR hasn't left a stale date on the record). Negative once the
- *  date has already passed; the Employees table renders that case as
- *  "Completed" rather than a negative day count. Same day-granularity
- *  midnight-to-midnight math as ProbationReminderScheduler on the backend,
- *  so this reads consistently with the "in N days" wording in that
- *  reminder's notification/email. */
-export function computeProbationRemainingDays(probationEndDate: string | null): number | null {
-  if (!probationEndDate) return null
-  const end = new Date(probationEndDate)
-  if (Number.isNaN(end.getTime())) return null
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  end.setHours(0, 0, 0, 0)
-
-  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-}
+// Computed display fields (Tenure, Total Banking Experience, probation
+// countdown) have moved to ./employee-utils — pure functions, kept free of
+// this file's next/headers-dependent apiFetchSafe import so Client
+// Components can use them (see that file's doc comment).

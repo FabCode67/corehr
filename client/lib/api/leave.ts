@@ -27,22 +27,10 @@ export type ApprovalDecision = "APPROVED" | "REJECTED"
 // which covers the full NotificationType enum (leave, learning, ERC, forms,
 // recruitment, exits, imports, professional profile) for the header bell.
 
-export const LEAVE_ENTITLEMENT_CATEGORIES: LeaveEntitlementCategory[] = [
-  "PERMANENT",
-  "TEMPORARY",
-  "GRADUATE_TRAINEE",
-  "INTERN",
-  "MANAGING_DIRECTOR",
-]
-
-export const LEAVE_CATEGORIES: LeaveCategory[] = [
-  "ANNUAL",
-  "MATERNITY",
-  "PATERNITY",
-  "SICK",
-  "COMPASSIONATE",
-  "OTHER",
-]
+// LEAVE_ENTITLEMENT_CATEGORIES and LEAVE_CATEGORIES have moved to
+// ./leave-utils — plain constant arrays, kept free of this file's
+// next/headers-dependent apiFetchSafe import so Client Components can use
+// them (see that file's doc comment).
 
 // ---- Leave Types / Policy config --------------------------------------
 
@@ -443,25 +431,5 @@ export function fetchCurrentlyOnLeave(filters: AnalyticsFilters = {}) {
   return apiFetchSafe<CurrentlyOnLeaveEntry[]>(`/leave/analytics/currently-on-leave${analyticsQuery(filters)}`)
 }
 
-export function formatLeaveStatusLabel(status: LeaveRequestStatus) {
-  return status
-    .toLowerCase()
-    .split("_")
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(" ")
-}
-
-export const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-]
+// formatLeaveStatusLabel and MONTH_NAMES have moved to ./leave-utils — see
+// the note above LEAVE_ENTITLEMENT_CATEGORIES/LEAVE_CATEGORIES.

@@ -14,7 +14,8 @@ import {
   upsertStageCriterion,
   type RecruitmentActionState,
 } from "@/lib/api/recruitment-actions"
-import { STAGE_TYPE_LABELS, type RecruitmentStageDefinition, type RecruitmentStageType } from "@/lib/api/recruitment"
+import type { RecruitmentStageDefinition, RecruitmentStageType } from "@/lib/api/recruitment"
+import { STAGE_TYPE_LABELS } from "@/lib/api/recruitment-utils"
 
 const STAGE_TYPES = Object.keys(STAGE_TYPE_LABELS) as RecruitmentStageType[]
 

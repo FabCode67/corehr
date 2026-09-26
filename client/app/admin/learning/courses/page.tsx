@@ -3,7 +3,8 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchCourses, DELIVERY_METHOD_LABELS } from "@/lib/api/learning"
+import { fetchCourses } from "@/lib/api/learning"
+import { DELIVERY_METHOD_LABELS } from "@/lib/api/learning-utils"
 
 import { LearningTabs } from "../learning-tabs"
 

@@ -4,11 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination } from "@/components/ui/pagination"
-import {
-  fetchReviewsPaginated,
-  REVIEW_STATUS_LABELS,
-  REVIEW_TYPE_LABELS,
-} from "@/lib/api/performance"
+import { fetchReviewsPaginated } from "@/lib/api/performance"
+import { REVIEW_STATUS_LABELS, REVIEW_TYPE_LABELS } from "@/lib/api/performance-utils"
 import { getSession } from "@/lib/get-session"
 
 const STATUS_VARIANT: Record<string, "outline" | "secondary" | "success" | "destructive"> = {

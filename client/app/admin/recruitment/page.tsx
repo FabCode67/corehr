@@ -3,13 +3,13 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 import {
-  APPLICATION_STATUS_LABELS,
   fetchOfferStats,
   fetchRecruitmentFunnel,
   fetchRecruitmentOverview,
   fetchTimeToHire,
   fetchVacanciesByDepartment,
 } from "@/lib/api/recruitment"
+import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { getSession } from "@/lib/get-session"
 
 import { RecruitmentTabs } from "./recruitment-tabs"

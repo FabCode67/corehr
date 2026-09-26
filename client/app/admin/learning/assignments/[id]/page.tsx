@@ -4,7 +4,8 @@ import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ASSIGNMENT_STATUS_LABELS, DELIVERY_METHOD_LABELS, PRIORITY_LABELS, fetchAssignment } from "@/lib/api/learning"
+import { fetchAssignment } from "@/lib/api/learning"
+import { ASSIGNMENT_STATUS_LABELS, DELIVERY_METHOD_LABELS, PRIORITY_LABELS } from "@/lib/api/learning-utils"
 import { getSession } from "@/lib/get-session"
 
 import { AuditLogList } from "./audit-log-list"

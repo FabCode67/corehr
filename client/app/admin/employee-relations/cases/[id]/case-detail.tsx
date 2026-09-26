@@ -5,15 +5,10 @@ import { ArrowLeft, Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { disciplinaryCasePdfUrl } from "@/lib/api/export-urls"
 import { fetchEmployees } from "@/lib/api/employees"
-import {
-  CASE_STATUS_BADGE_VARIANT,
-  CASE_STATUS_LABELS,
-  disciplinaryCasePdfUrl,
-  fetchDisciplinaryCase,
-  fetchSanctionTypes,
-  formatErEnum,
-} from "@/lib/api/employee-relations"
+import { fetchDisciplinaryCase, fetchSanctionTypes } from "@/lib/api/employee-relations"
+import { CASE_STATUS_BADGE_VARIANT, CASE_STATUS_LABELS, formatErEnum } from "@/lib/api/employee-relations-utils"
 import { fullName } from "@/lib/format-name"
 
 import { CaseActions } from "./case-actions"
