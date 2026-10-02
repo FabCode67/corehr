@@ -6,6 +6,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardCheck,
+  FileSpreadsheet,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -53,6 +54,7 @@ const ADMIN_NAV: PortalNavItem[] = [
   { label: "Bulk Imports", href: "/admin/imports", icon: Upload },
   { label: "Email Notifications", href: "/admin/email", icon: Mail },
   { label: "Professional Profiles", href: "/admin/professional-profile/review", icon: UserCircle },
+  { label: "EDWH Report", href: "/admin/reports/edwh", icon: FileSpreadsheet },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ]
 

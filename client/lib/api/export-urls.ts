@@ -125,6 +125,12 @@ export function hrAnalyticsCustomReportUrl(
   return `/api/hr-analytics/export/custom?${params.toString()}`
 }
 
+// ---- EDWH Report (BNR regulatory submission) -----------------------------------------
+
+export function edwhReportUrl(yearMonth: string) {
+  return `/api/edwh-report/export${toQuery({ yearMonth })}`
+}
+
 // ---- Imports ------------------------------------------------------------------------
 
 export function importTemplateUrl(moduleKey: string) {

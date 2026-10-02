@@ -78,6 +78,7 @@ import { ProfileAnalyticsModule } from "./modules/professional-profile/analytics
 import { HrAnalyticsModule } from "./modules/hr-analytics/hr-analytics.module"
 import { DepartmentDashboardModule } from "./modules/department-dashboard/department-dashboard.module"
 import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
+import { EdwhReportModule } from "./modules/edwh-report/edwh-report.module"
 
 @Module({
   imports: [
@@ -160,6 +161,7 @@ import { AiAssistantModule } from "./modules/ai-assistant/ai-assistant.module"
     HrAnalyticsModule,
     DepartmentDashboardModule,
     AiAssistantModule,
+    EdwhReportModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],
 })
