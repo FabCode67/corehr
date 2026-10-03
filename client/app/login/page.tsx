@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useActionState } from "react"
+import { useActionState, useEffect } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +21,18 @@ const initialState: LoginState = {}
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, initialState)
+
+  // A full navigation (not router.push) on purpose: by now the Set-Cookie
+  // from the login action's response has actually landed in the browser,
+  // so this request to /staff or /admin carries the session cookie like
+  // any normal request and middleware.ts sees it — see the comment in
+  // login/actions.ts on why that cookie isn't reliable yet if we instead
+  // called redirect() straight from the Server Action.
+  useEffect(() => {
+    if (state?.redirectTo) {
+      window.location.href = state.redirectTo
+    }
+  }, [state?.redirectTo])
 
   return (
     <div
@@ -87,8 +99,8 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? "Signing in…" : "Sign in"}
+              <Button type="submit" className="w-full" disabled={pending || Boolean(state?.redirectTo)}>
+                {pending || state?.redirectTo ? "Signing in…" : "Sign in"}
               </Button>
               <Link
                 href="/"

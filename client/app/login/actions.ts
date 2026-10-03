@@ -9,6 +9,9 @@ import { decodeSession, SESSION_COOKIE } from "@/lib/session"
 
 export interface LoginState {
   error?: string
+  /** Set on success instead of calling redirect() directly here — see the
+   *  comment above the final return below for why. */
+  redirectTo?: string
 }
 
 export async function login(
@@ -54,9 +57,26 @@ export async function login(
     maxAge: 60 * 60 * 8, // 8 hours — matches the token's own expiry (see server/src/modules/auth/jwt.constants.ts)
   })
 
+  // Deliberately NOT calling redirect() here. redirect() from a Server
+  // Action resolves the destination server-side in the same turnaround as
+  // this response — including rerunning middleware.ts — and middleware
+  // doesn't reliably see the Set-Cookie above yet (it's only guaranteed to
+  // reach the browser, not to be visible to that internal re-resolution on
+  // Vercel). That race bounces straight back to /login?next=..., which is
+  // the "stuck on login after a 303" bug this fixes. Returning the target
+  // instead and letting the client navigate (see login/page.tsx) means the
+  // cookie has actually landed in the browser before /staff or /admin is
+  // ever requested, so middleware sees it like any other request.
+  //
   // First Login Security: a temporary password sends the employee straight
   // to the forced change-password/terms page instead of their portal.
-  redirect(sessionUser.mustChangePassword ? "/change-password" : sessionUser.role === "admin" ? "/admin" : "/staff")
+  return {
+    redirectTo: sessionUser.mustChangePassword
+      ? "/change-password"
+      : sessionUser.role === "admin"
+        ? "/admin"
+        : "/staff",
+  }
 }
 
 export async function logout() {
