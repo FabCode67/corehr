@@ -131,6 +131,14 @@ export async function updateEmploymentDetails(
         probationEndDate: trimmedOrUndefined(formData.get("probationEndDate")),
         contractEndDate: trimmedOrUndefined(formData.get("contractEndDate")),
         previousBankingExperienceYears: trimmedOrUndefined(formData.get("previousBankingExperienceYears")),
+        bnrApprovalRequired:
+          formData.get("bnrApprovalRequired") === "yes"
+            ? true
+            : formData.get("bnrApprovalRequired") === "no"
+              ? false
+              : undefined,
+        bnrApprovalDate: trimmedOrUndefined(formData.get("bnrApprovalDate")),
+        areaOfSpecialisation: trimmedOrUndefined(formData.get("areaOfSpecialisation")),
         previousEmployee,
         previousEmployeeNumber: previousEmployee
           ? trimmedOrUndefined(formData.get("previousEmployeeNumber"))
@@ -327,6 +335,7 @@ export async function addEducation(
       body: JSON.stringify({
         type,
         title,
+        bnrEducationCode: trimmedOrUndefined(formData.get("bnrEducationCode")),
         institution,
         startDate,
         fieldOfStudy: trimmedOrUndefined(formData.get("fieldOfStudy")),

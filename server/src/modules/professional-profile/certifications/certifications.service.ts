@@ -65,6 +65,7 @@ export class CertificationsService {
       data: {
         employeeId: dto.employeeId,
         name: dto.name,
+        bnrCertificateCode: dto.bnrCertificateCode,
         issuer: dto.issuer,
         certificateNumber: dto.certificateNumber,
         issueDate: dto.issueDate,
@@ -94,6 +95,7 @@ export class CertificationsService {
       where: { id },
       data: {
         name: dto.name,
+        bnrCertificateCode: dto.bnrCertificateCode,
         issuer: dto.issuer,
         certificateNumber: dto.certificateNumber,
         issueDate: dto.issueDate,

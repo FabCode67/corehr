@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { formatEnumLabel } from "@/lib/api/employee-utils"
+import { BNR_EDUCATION_CODES } from "@/lib/edwh-codes"
 import type { EmployeeEducation } from "@/lib/api/employees"
 import { uploadFile } from "@/lib/api/uploads"
 
@@ -74,6 +75,11 @@ export function EducationSection({ education, addAction, onRemove }: EducationSe
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary">{formatEnumLabel(record.type)}</Badge>
                   <span className="font-medium text-foreground">{record.title}</span>
+                  {record.bnrEducationCode ? (
+                    <Badge variant="outline">
+                      BNR: {BNR_EDUCATION_CODES.find((e) => e.code === record.bnrEducationCode)?.label ?? record.bnrEducationCode}
+                    </Badge>
+                  ) : null}
                 </span>
                 <form action={() => onRemove(record.id)}>
                   <button
@@ -142,6 +148,20 @@ export function EducationSection({ education, addAction, onRemove }: EducationSe
             </label>
             <Input id="edu-institution" name="institution" required />
           </div>
+        </div>
+
+        <div className="flex flex-col gap-1 sm:w-1/2">
+          <label htmlFor="edu-bnrEducationCode" className="text-xs text-muted-foreground">
+            BNR education level (for the EDWH report)
+          </label>
+          <Select id="edu-bnrEducationCode" name="bnrEducationCode" defaultValue="">
+            <option value="">Not set</option>
+            {BNR_EDUCATION_CODES.map((level) => (
+              <option key={level.code} value={level.code}>
+                {level.code} — {level.label}
+              </option>
+            ))}
+          </Select>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">

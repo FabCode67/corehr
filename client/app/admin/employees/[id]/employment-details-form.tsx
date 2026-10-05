@@ -41,6 +41,9 @@ export function EmploymentDetailsForm({ employee, action }: EmploymentDetailsFor
   const [probationEndDate, setProbationEndDate] = useState(
     employee.probationEndDate?.slice(0, 10) ?? ""
   )
+  const [bnrApprovalRequired, setBnrApprovalRequired] = useState(
+    employee.bnrApprovalRequired === null ? "" : employee.bnrApprovalRequired ? "yes" : "no"
+  )
 
   useEffect(() => {
     if (contractType === "PERMANENT" && startDate && !probationEndDate) {
@@ -91,6 +94,57 @@ export function EmploymentDetailsForm({ employee, action }: EmploymentDetailsFor
         <p className="text-xs text-muted-foreground">
           Years of banking experience before joining NCBA — combined with tenure here for the employee list&apos;s Total Banking Experience column.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5 sm:w-1/2">
+        <Label htmlFor="areaOfSpecialisation">Area of specialisation</Label>
+        <Input
+          id="areaOfSpecialisation"
+          name="areaOfSpecialisation"
+          maxLength={160}
+          placeholder="e.g. Credit risk, Treasury, Information security"
+          defaultValue={employee.areaOfSpecialisation ?? ""}
+        />
+        <p className="text-xs text-muted-foreground">Reported to BNR in the EDWH report.</p>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+        <div>
+          <p className="text-sm font-medium text-foreground">BNR approval</p>
+          <p className="text-xs text-muted-foreground">
+            Applies to Head of Department, Assistant General Manager, Deputy Director, and Director grades —
+            BNR requires their appointment to be individually approved. Leave as &quot;Not set&quot; for
+            everyone else.
+            {employee.position?.level?.name ? (
+              <> This employee&apos;s current level: <strong>{employee.position.level.name}</strong>.</>
+            ) : null}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bnrApprovalRequired">Approval required?</Label>
+            <Select
+              id="bnrApprovalRequired"
+              name="bnrApprovalRequired"
+              value={bnrApprovalRequired}
+              onChange={(event) => setBnrApprovalRequired(event.target.value)}
+            >
+              <option value="">Not set</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bnrApprovalDate">Date approved</Label>
+            <Input
+              id="bnrApprovalDate"
+              name="bnrApprovalDate"
+              type="date"
+              defaultValue={employee.bnrApprovalDate?.slice(0, 10) ?? ""}
+              disabled={bnrApprovalRequired !== "yes"}
+            />
+          </div>
+        </div>
       </div>
 
       {contractType === "PERMANENT" ? (

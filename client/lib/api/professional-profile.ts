@@ -37,6 +37,7 @@ export interface EducationRecord {
   id: string
   employeeId: string
   type: string
+  bnrEducationCode: number | null
   title: string
   institution: string
   institutionId: string | null
@@ -61,6 +62,7 @@ export interface Certification {
   id: string
   employeeId: string
   name: string
+  bnrCertificateCode: string | null
   issuer: string
   certificateNumber: string | null
   issueDate: string

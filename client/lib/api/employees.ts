@@ -73,6 +73,8 @@ export interface EmployeeFamilyTree {
 export interface EmployeeEducation {
   id: string
   type: EducationType
+  /** BNR/EDWH Education Code (1-8); see lib/edwh-codes.ts. */
+  bnrEducationCode?: number | null
   title: string
   institution: string
   fieldOfStudy: string | null
@@ -119,6 +121,15 @@ export interface Employee {
   previousExitDate: string | null
   previousReasonForLeaving: string | null
   previousBankingExperienceYears: number | null
+
+  // BNR/EDWH regulatory compliance — HR sets these directly on the
+  // employee's profile, typically only for senior grades (Head of
+  // Department, Assistant General Manager, Deputy Director, Director; see
+  // edwh-report.service.ts's GRADE_CODE mapping), but nothing enforces that
+  // here. Both null until HR fills them in.
+  bnrApprovalRequired: boolean | null
+  bnrApprovalDate: string | null
+  areaOfSpecialisation: string | null
 
   // Step 3: Position Assignment
   positionId: string | null

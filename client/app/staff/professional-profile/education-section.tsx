@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { formatEnumLabel } from "@/lib/api/employee-utils"
+import { BNR_EDUCATION_CODES } from "@/lib/edwh-codes"
 import type { EducationRecord, RecordVerificationStatus } from "@/lib/api/professional-profile"
 import { addEducationRecord, removeEducationRecord, type ActionState } from "@/lib/api/professional-profile-actions"
 import { uploadFile } from "@/lib/api/uploads"
@@ -89,6 +90,11 @@ export function EducationSection({
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <Badge variant="secondary">{formatEnumLabel(record.type)}</Badge>
+                      {record.bnrEducationCode ? (
+                        <Badge variant="outline">
+                          BNR: {BNR_EDUCATION_CODES.find((e) => e.code === record.bnrEducationCode)?.label ?? record.bnrEducationCode}
+                        </Badge>
+                      ) : null}
                       <Badge variant={STATUS_VARIANT[record.verificationStatus]}>{formatEnumLabel(record.verificationStatus)}</Badge>
                     </div>
                     {record.verificationStatus === "REJECTED" && record.hrComment ? (
@@ -140,6 +146,21 @@ export function EducationSection({
                 </Label>
                 <Input id="edu-title" name="title" required />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1 sm:w-1/2">
+              <Label htmlFor="edu-bnr" className="text-xs text-muted-foreground">
+                BNR Education Level
+              </Label>
+              <Select id="edu-bnr" name="bnrEducationCode" defaultValue="">
+                <option value="">Select…</option>
+                {BNR_EDUCATION_CODES.map((level) => (
+                  <option key={level.code} value={level.code}>
+                    {level.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">Used in the BNR report — pick the level this qualification corresponds to.</p>
             </div>
 
             <InstitutionPicker actingEmployeeId={actingEmployeeId} />

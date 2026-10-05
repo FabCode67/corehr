@@ -38,7 +38,7 @@ export default function EdwhReportPage() {
         <CardHeader>
           <CardTitle className="text-base">Generate report</CardTitle>
           <CardDescription>
-            Choose the reporting month, then download the CSV. COUNTRY is derived from each employee&apos;s
+            Choose the reporting month, then download the CSV. YEAR_MONTH is tracked per employee: it is the month their EDWH data last changed (employees exported for the first time use the month chosen here). COUNTRY is derived from each employee&apos;s
             Nationality (RW/KE/UG/TZ — unrecognized nationalities export blank), and LE_BOOK is fixed at 035
             for every row.
           </CardDescription>
@@ -69,13 +69,16 @@ export default function EdwhReportPage() {
           <div className="flex items-start gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
             <FileSpreadsheet className="mt-0.5 size-4 shrink-0" />
             <p>
-              VISION_OUC, BNR_APPROVAL_REQD, DATE_OF_BNR_APPROVAL, PREVIOUS_EMPLOYER, and
-              AREA_OF_SPECIALISATION have no source data in PeopleSuite yet, so those columns are exported
-              blank for every row. DEPARTMENT_ID uses the Department&apos;s code, ROLE_CODE uses the
+              VISION_OUC and PREVIOUS_EMPLOYER have no source data in PeopleSuite yet, so those columns
+              are exported blank for every row. AREA_OF_SPECIALISATION comes from the Employment Details
+              step of onboarding. BNR_APPROVAL_REQD and
+              DATE_OF_BNR_APPROVAL come from the BNR approval section on the employee&apos;s Employment
+              Details. DEPARTMENT_ID uses the Department&apos;s code, ROLE_CODE uses the
               employee&apos;s Position code, GRADE_CODE groups the Position Level into A (Director/Deputy
               Director), B (General Manager), C (Senior Manager/Manager/Assistant General Manager), or D
-              (Assistant Manager/Officer and below), and EDUCATION uses their highest recorded
-              qualification.
+              (Assistant Manager/Officer and below), EDUCATION is the BNR education code of their
+              highest qualification (picked on each education record), and PROFESSIONAL_CERTIFICATES lists
+              the BNR codes chosen on their certifications, separated by semicolons.
             </p>
           </div>
         </CardContent>

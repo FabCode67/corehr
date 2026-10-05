@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto"
+
 import { Injectable } from "@nestjs/common"
 import type { EducationType, Prisma } from "@prisma/client"
 
 import { buildCsv } from "../imports/spreadsheet.util"
+import { EDUCATION_TYPE_TO_BNR_CODE } from "./edwh-codes"
 import { PrismaService } from "../../prisma/prisma.service"
 
 /**
@@ -10,13 +13,19 @@ import { PrismaService } from "../../prisma/prisma.service"
  * expects; do not reorder without checking the spec again.
  *
  * Several columns have no real source of data anywhere in this app yet
- * (VISION_OUC, BNR_APPROVAL_REQD, DATE_OF_BNR_APPROVAL, PREVIOUS_EMPLOYER —
- * an external employer, distinct from Employee.previousDepartment/
- * previousPositionHeld which only track an earlier *internal* stint before
- * a rehire — and AREA_OF_SPECIALISATION). Those are emitted as empty
- * strings rather than invented, so HR can see exactly what's missing per
- * employee rather than silently filling plausible but wrong values. If
- * these become trackable later (new Employee fields), wire them in here.
+ * (VISION_OUC and PREVIOUS_EMPLOYER — an external employer, distinct from
+ * Employee.previousDepartment/previousPositionHeld which only track an
+ * earlier *internal* stint before a rehire).
+ * Those are emitted as empty strings rather than invented, so HR can see
+ * exactly what's missing per employee rather than silently filling
+ * plausible but wrong values. If these become trackable later (new
+ * Employee fields), wire them in here.
+ *
+ * BNR_APPROVAL_REQD/DATE_OF_BNR_APPROVAL ARE trackable — HR sets them
+ * directly on an employee's profile (Employee.bnrApprovalRequired/
+ * bnrApprovalDate, edited via the employment-details endpoint), typically
+ * only for the senior grades BNR cares about (see GRADE_CODE below), but
+ * nothing stops setting it on anyone. Both blank until HR fills them in.
  */
 export const EDWH_REPORT_HEADERS = [
   "COUNTRY",
@@ -46,6 +55,8 @@ export const EDWH_REPORT_HEADERS = [
   "PREVIOUS_EMPLOYER",
   "AREA_OF_SPECIALISATION",
 ]
+
+const YEAR_MONTH_INDEX = EDWH_REPORT_HEADERS.indexOf("YEAR_MONTH")
 
 /** ID_TYPE code table from the EDWH spec. */
 const ID_TYPE = {
@@ -96,24 +107,17 @@ function nationalityToCountry(nationality: string | null | undefined): string {
   return NATIONALITY_TO_COUNTRY[key] ?? ""
 }
 
-/** Ranks EducationType so "highest" qualification can be picked out of an
- *  employee's full EmployeeEducation history — higher number wins. Mirrors
- *  the real-world hierarchy (a Master's outranks a Diploma, etc.); types
- *  that aren't a formal qualification (TRAINING/COURSE/WORKSHOP/
- *  SHORT_COURSE) rank lowest so a one-off training session never shadows an
- *  actual degree on record. */
-const EDUCATION_RANK: Record<EducationType, number> = {
-  PHD: 7,
-  MASTERS_DEGREE: 6,
-  DEGREE: 5,
-  PROFESSIONAL_CERTIFICATION: 4,
-  DIPLOMA: 3,
-  CERTIFICATE: 2,
-  SECONDARY_SCHOOL: 1,
-  SHORT_COURSE: 0,
-  TRAINING: 0,
-  COURSE: 0,
-  WORKSHOP: 0,
+/** EDUCATION: the BNR Education Code (1 PHD ... 8 Below Primary) of the
+ *  employee's highest qualification. Each education record carries a code
+ *  picked by the user (bnrEducationCode); records without one fall back to
+ *  the closest code for their EducationType (see edwh-codes.ts). Lower code
+ *  = higher education, so "highest" is the minimum. Blank when no record
+ *  maps to a code. */
+function highestEducationCode(records: { type: EducationType; bnrEducationCode: number | null }[]): number | "" {
+  const codes = records
+    .map((r) => r.bnrEducationCode ?? EDUCATION_TYPE_TO_BNR_CODE[r.type])
+    .filter((c): c is number => typeof c === "number")
+  return codes.length > 0 ? Math.min(...codes) : ""
 }
 
 function formatDate(value: Date | null | undefined): string {
@@ -151,8 +155,8 @@ function levelToGradeCode(levelName: string | null | undefined): string {
 
 const EDWH_EMPLOYEE_INCLUDE = {
   position: { include: { department: true, level: true } },
-  education: { select: { type: true, title: true } },
-  certifications: { select: { name: true } },
+  education: { select: { type: true, bnrEducationCode: true } },
+  certifications: { select: { bnrCertificateCode: true } },
 } as const
 
 type EdwhEmployee = Prisma.EmployeeGetPayload<{ include: typeof EDWH_EMPLOYEE_INCLUDE }>
@@ -161,13 +165,62 @@ type EdwhEmployee = Prisma.EmployeeGetPayload<{ include: typeof EDWH_EMPLOYEE_IN
 export class EdwhReportService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generateCsv(yearMonth: string): Promise<Buffer> {
+  /**
+   * YEAR_MONTH is per employee: the month their EDWH row last changed, not
+   * the reporting month picked in the UI. Changes are detected by hashing
+   * each employee's freshly built row (everything except YEAR_MONTH) and
+   * comparing it to the hash stored on the employee at the previous export:
+   * - no stored hash yet (first export): baseline = the selected reporting
+   *   month;
+   * - hash differs (any EDWH field changed — profile, position, education,
+   *   certificates, exit, BNR approval, ... — via any code path, including
+   *   bulk imports): YEAR_MONTH becomes the current calendar month and is
+   *   stored;
+   * - hash unchanged: the stored YEAR_MONTH is reused, so re-exporting is
+   *   stable.
+   * This means the export has a small write side effect (it persists the
+   * hash/month for new or changed employees).
+   */
+  async generateCsv(reportingMonth: string): Promise<Buffer> {
     const employees = await this.prisma.employee.findMany({
       include: EDWH_EMPLOYEE_INCLUDE,
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     })
 
-    const rows = employees.map((employee) => this.buildRow(employee, yearMonth))
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`
+    const updates: Prisma.PrismaPromise<unknown>[] = []
+
+    const rows = employees.map((employee) => {
+      const row = this.buildRow(employee, "")
+      const hash = createHash("sha256").update(JSON.stringify(row)).digest("hex")
+
+      let yearMonth = employee.edwhYearMonth
+      if (!employee.edwhRowHash || !yearMonth) {
+        yearMonth = reportingMonth
+      } else if (employee.edwhRowHash !== hash) {
+        yearMonth = currentMonth
+      }
+
+      if (hash !== employee.edwhRowHash || yearMonth !== employee.edwhYearMonth) {
+        updates.push(
+          this.prisma.employee.update({
+            where: { employeeNumber: employee.employeeNumber },
+            data: { edwhRowHash: hash, edwhYearMonth: yearMonth },
+            select: { employeeNumber: true },
+          })
+        )
+      }
+
+      row[YEAR_MONTH_INDEX] = yearMonth
+      return row
+    })
+
+    // Chunked so a first export of a large workforce doesn't open one huge transaction.
+    for (let i = 0; i < updates.length; i += 200) {
+      await this.prisma.$transaction(updates.slice(i, i + 200))
+    }
+
     return buildCsv(EDWH_REPORT_HEADERS, rows)
   }
 
@@ -183,11 +236,13 @@ export class EdwhReportService {
       ? [ID_TYPE.PASSPORT, employee.passportNumber]
       : [ID_TYPE.NATIONAL_ID, employee.nationalIdNumber]
 
-    const highestEducation = [...employee.education].sort(
-      (a, b) => EDUCATION_RANK[b.type] - EDUCATION_RANK[a.type]
-    )[0]
-
-    const certificates = employee.certifications.map((c) => c.name).join("; ")
+    // Distinct BNR certificate codes, in entry order; certifications the user
+    // didn't tag with a BNR code are skipped (nothing valid to report).
+    const certificates = [
+      ...new Set(
+        employee.certifications.map((c) => c.bnrCertificateCode).filter((c): c is string => Boolean(c))
+      ),
+    ].join(";")
 
     return [
       nationalityToCountry(employee.nationality),
@@ -204,7 +259,7 @@ export class EdwhReportService {
       formatDate(employee.dateOfBirth),
       employee.position?.code ?? "",
       levelToGradeCode(employee.position?.level?.name),
-      highestEducation?.title ?? "",
+      highestEducationCode(employee.education),
       certificates,
       employee.phone,
       employee.email,
@@ -212,10 +267,14 @@ export class EdwhReportService {
       employee.employmentStatus === "ACTIVE" ? STAFF_STATUS.ACTIVE : STAFF_STATUS.INACTIVE,
       formatDate(employee.exitDate),
       employee.exitReason ?? "",
-      "", // BNR_APPROVAL_REQD — no source field yet
-      "", // DATE_OF_BNR_APPROVAL — no source field yet
+      employee.bnrApprovalRequired === null || employee.bnrApprovalRequired === undefined
+        ? ""
+        : employee.bnrApprovalRequired
+          ? "Y"
+          : "N",
+      formatDate(employee.bnrApprovalDate),
       "", // PREVIOUS_EMPLOYER — no source field yet (previousDepartment/previousPositionHeld track an internal rehire, not an external employer)
-      "", // AREA_OF_SPECIALISATION — no source field yet
+      employee.areaOfSpecialisation ?? "",
     ]
   }
 }

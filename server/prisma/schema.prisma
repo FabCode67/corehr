@@ -533,6 +533,30 @@ model Employee {
   /// with employmentStartDate the way a duplicated stored value could.
   previousBankingExperienceYears Float?
 
+  // --- BNR/EDWH regulatory compliance -------------------------------------
+  // Only meaningful for the senior grades BNR tracks individually (Head of
+  // Department / General Manager, Assistant General Manager, Deputy
+  // Director, Director — see GRADE_CODE in edwh-report.service.ts), but not
+  // DB-enforced to that set since grade is derived from the assigned
+  // Position and can change over time; HR sets these directly on the
+  // employee's profile instead. Both null until HR fills them in — the
+  // EDWH export emits "" for BNR_APPROVAL_REQD/DATE_OF_BNR_APPROVAL until
+  // then, same "leave it blank rather than guess" convention as every other
+  // not-yet-trackable EDWH column.
+  bnrApprovalRequired Boolean?
+  bnrApprovalDate     DateTime?
+  /// EDWH AREA_OF_SPECIALISATION — free text (BNR gave no code list), entered
+  /// during onboarding on the Employment Details step.
+  areaOfSpecialisation String?
+  /// EDWH YEAR_MONTH tracking. edwhRowHash is a hash of the employee's last
+  /// exported EDWH row (everything except YEAR_MONTH); edwhYearMonth is the
+  /// "YYYYMM" in which that row last changed. EdwhReportService compares the
+  /// freshly built row to the hash on every export and bumps edwhYearMonth
+  /// when anything differs, so YEAR_MONTH follows real EDWH data changes
+  /// regardless of which part of the app made them.
+  edwhRowHash   String?
+  edwhYearMonth String?
+
   // --- Step 3: Position Assignment (optional) ---
   // Nullable: an employee can exist with basic info only, before ever being
   // placed on the org chart. Once set, PositionHistory (below) tracks every
@@ -769,6 +793,10 @@ model EmployeeEducation {
   id             String        @id @default(uuid()) @db.Uuid
   employeeId     String
   type           EducationType
+  /// BNR/EDWH Education Code (1 PHD ... 8 Below Primary), picked by the user
+  /// from the BNR list. Optional — when unset the EDWH export falls back to
+  /// a mapping from `type`. See edwh-codes.ts.
+  bnrEducationCode Int?
   title          String
   institution    String
   institutionId  String?             @db.Uuid
@@ -830,6 +858,9 @@ model EmployeeCertification {
   id                String    @id @default(uuid()) @db.Uuid
   employeeId        String
   name              String
+  /// BNR/EDWH Professional Certificate Code (e.g. "CCNA", "ACCA", "OTHER"),
+  /// picked from the BNR list. Optional; see edwh-codes.ts.
+  bnrCertificateCode String?
   issuer            String
   certificateNumber String?
   issueDate         DateTime

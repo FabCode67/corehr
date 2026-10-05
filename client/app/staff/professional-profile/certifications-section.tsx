@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { formatEnumLabel } from "@/lib/api/employee-utils"
 import type { Certification, RecordVerificationStatus, CertificationStatus } from "@/lib/api/professional-profile"
 import { addCertification, removeCertification, type ActionState } from "@/lib/api/professional-profile-actions"
 import { uploadFile } from "@/lib/api/uploads"
+import { BNR_CERTIFICATE_CODES } from "@/lib/edwh-codes"
 
 const STATUS_VARIANT: Record<RecordVerificationStatus, "outline" | "success" | "destructive"> = {
   PENDING_REVIEW: "outline",
@@ -76,7 +78,12 @@ export function CertificationsSection({
               <li key={cert.id} className="rounded-lg border border-border px-3 py-2 text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium text-foreground">{cert.name}</p>
+                    <p className="font-medium text-foreground">
+                      {cert.name}
+                      {cert.bnrCertificateCode ? (
+                        <Badge variant="outline" className="ml-2">BNR: {cert.bnrCertificateCode}</Badge>
+                      ) : null}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {cert.issuer} · Issued {formatDate(cert.issueDate)}
                       {cert.expiryDate ? ` · Expires ${formatDate(cert.expiryDate)}` : ""}
@@ -118,6 +125,19 @@ export function CertificationsSection({
                   Certification Name
                 </Label>
                 <Input id="cert-name" name="name" placeholder="e.g. PMP, AWS Certified Solutions Architect" required />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="cert-bnr" className="text-xs text-muted-foreground">
+                  BNR Professional Certificate
+                </Label>
+                <Select id="cert-bnr" name="bnrCertificateCode" defaultValue="">
+                  <option value="">Select…</option>
+                  {BNR_CERTIFICATE_CODES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} — {c.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="cert-issuer" className="text-xs text-muted-foreground">

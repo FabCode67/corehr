@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { Type } from "class-transformer"
-import { IsDate, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsDate, IsIn, IsOptional, IsString, MaxLength } from "class-validator"
+
+import { BNR_CERTIFICATE_CODE_VALUES } from "../../../edwh-report/edwh-codes"
 
 export class CreateCertificationDto {
   @IsString()
@@ -9,6 +11,12 @@ export class CreateCertificationDto {
   @MaxLength(160)
   @IsString()
   name!: string
+
+  @ApiPropertyOptional({ description: "BNR/EDWH Professional Certificate Code, used in the EDWH report." })
+  @IsString()
+  @IsIn(BNR_CERTIFICATE_CODE_VALUES)
+  @IsOptional()
+  bnrCertificateCode?: string
 
   @MaxLength(160)
   @IsString()

@@ -1,7 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { EducationType } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsDate, IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsDate, IsEnum, IsIn, IsInt, IsOptional, IsString, MaxLength } from "class-validator"
+
+import { BNR_EDUCATION_CODE_VALUES } from "../../edwh-report/edwh-codes"
 
 /** Step 5 (Education & Professional Development) — one record per
  *  degree/diploma/certificate/training/course/workshop. Unlimited per
@@ -9,6 +11,13 @@ import { IsDate, IsEnum, IsOptional, IsString, MaxLength } from "class-validator
 export class CreateEducationDto {
   @IsEnum(EducationType)
   type!: EducationType
+
+  @ApiPropertyOptional({ description: "BNR/EDWH Education Code (1-8), used in the EDWH report." })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(BNR_EDUCATION_CODE_VALUES)
+  @IsOptional()
+  bnrEducationCode?: number
 
   @MaxLength(160)
   @IsString()
@@ -56,6 +65,13 @@ export class UpdateEducationDto {
   @IsEnum(EducationType)
   @IsOptional()
   type?: EducationType
+
+  @ApiPropertyOptional({ description: "BNR/EDWH Education Code (1-8), used in the EDWH report." })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(BNR_EDUCATION_CODE_VALUES)
+  @IsOptional()
+  bnrEducationCode?: number
 
   @ApiPropertyOptional()
   @MaxLength(160)

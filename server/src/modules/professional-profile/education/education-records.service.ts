@@ -70,6 +70,7 @@ export class EducationRecordsService {
       data: {
         employeeId: dto.employeeId,
         type: dto.type,
+        bnrEducationCode: dto.bnrEducationCode,
         title: dto.title,
         institution: institutionName!,
         institutionId: dto.institutionId,
@@ -116,6 +117,7 @@ export class EducationRecordsService {
       where: { id },
       data: {
         type: dto.type,
+        bnrEducationCode: dto.bnrEducationCode,
         title: dto.title,
         institution: institutionName,
         institutionId,

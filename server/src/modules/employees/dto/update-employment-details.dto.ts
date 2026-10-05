@@ -81,4 +81,24 @@ export class UpdateEmploymentDetailsDto {
   @Min(0)
   @IsOptional()
   previousBankingExperienceYears?: number
+
+  @ApiPropertyOptional({
+    description:
+      "BNR/EDWH regulatory submission — whether this employee's appointment requires BNR approval. Relevant for senior grades (Head of Department, Assistant General Manager, Deputy Director, Director); leave unset for everyone else.",
+  })
+  @IsBoolean()
+  @IsOptional()
+  bnrApprovalRequired?: boolean
+
+  @ApiPropertyOptional({ description: "Date BNR approved this employee's appointment, if required." })
+  @Type(() => Date)
+  @IsDate()
+  @IsOptional()
+  bnrApprovalDate?: Date
+
+  @ApiPropertyOptional({ description: "EDWH AREA_OF_SPECIALISATION — the employee's professional area of specialisation." })
+  @MaxLength(160)
+  @IsString()
+  @IsOptional()
+  areaOfSpecialisation?: string
 }

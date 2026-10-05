@@ -1,7 +1,9 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { EducationType } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsDate, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from "class-validator"
+import { IsDate, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength } from "class-validator"
+
+import { BNR_EDUCATION_CODE_VALUES } from "../../../edwh-report/edwh-codes"
 
 /** Either institutionId (selected from the searchable catalog) or
  *  institutionName (the "Not Found? Add Institution Manually" fallback,
@@ -15,6 +17,13 @@ export class CreateEducationRecordDto {
 
   @IsEnum(EducationType)
   type!: EducationType
+
+  @ApiPropertyOptional({ description: "BNR/EDWH Education Code (1-8), used in the EDWH report." })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(BNR_EDUCATION_CODE_VALUES)
+  @IsOptional()
+  bnrEducationCode?: number
 
   @MaxLength(200)
   @IsString()
