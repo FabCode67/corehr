@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/employees"
 import { computeTenure, computeTotalBankingExperienceYears, formatEnumLabel, formatTenure } from "@/lib/api/employee-utils"
 import { fetchPositions } from "@/lib/api/positions"
+import { fetchCertifications } from "@/lib/api/professional-profile"
 import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
@@ -70,6 +71,7 @@ export default async function EmployeeDetailPage({
     historyResult,
     managerResult,
     familyTreeResult,
+    certificationsResult,
   ] = await Promise.all([
     fetchEmployee(id),
     fetchDepartments(),
@@ -80,6 +82,7 @@ export default async function EmployeeDetailPage({
     fetchEmployeeHistory(id),
     fetchReportingManager(id),
     fetchEmployeeFamilyTree(id),
+    fetchCertifications(id),
   ])
 
   if (!employeeResult.ok) {
@@ -249,6 +252,8 @@ export default async function EmployeeDetailPage({
         }))}
         history={historyResult.ok ? historyResult.data : []}
         reportingManager={managerResult.ok ? managerResult.data : null}
+        certifications={certificationsResult.ok ? certificationsResult.data : []}
+        actingEmployeeId={session?.employeeId ?? ""}
         actions={{
           updateBasicInfo: updateBasicInfo.bind(null, employee.employeeNumber),
           updateEmploymentDetails: updateEmploymentDetails.bind(null, employee.employeeNumber),

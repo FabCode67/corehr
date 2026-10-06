@@ -9,10 +9,13 @@ import type { Band } from "@/lib/api/bands"
 import type { Branch } from "@/lib/api/branches"
 import type { Department } from "@/lib/api/departments"
 import type { Employee, PositionHistoryEntry, ReportingManagerResult } from "@/lib/api/employees"
+import type { Certification } from "@/lib/api/professional-profile"
 import { fullName } from "@/lib/format-name"
 import type { Position } from "@/lib/api/positions"
 
 import type { ActionState } from "../actions"
+import { CertificationsSection } from "@/app/staff/professional-profile/certifications-section"
+
 import { BasicInfoForm } from "../employee-form"
 import { BandForm } from "./band-form"
 import { ChildrenSection } from "./children-section"
@@ -35,6 +38,9 @@ interface RegistrationWizardProps {
   employeesForPreview: Pick<Employee, "employeeNumber" | "firstName" | "middleName" | "lastName" | "positionId" | "isActive">[]
   history: PositionHistoryEntry[]
   reportingManager: ReportingManagerResult | null
+  /** Professional certificates on file, and the HR user adding them (auto-verified server-side). */
+  certifications: Certification[]
+  actingEmployeeId: string
   actions: {
     updateBasicInfo: BoundAction
     updateEmploymentDetails: BoundAction
@@ -58,6 +64,8 @@ export function RegistrationWizard({
   employeesForPreview,
   history,
   reportingManager,
+  certifications,
+  actingEmployeeId,
   actions,
 }: RegistrationWizardProps) {
   const steps: { id: StepId; label: string; required: boolean; hasData: boolean }[] = [
@@ -258,6 +266,7 @@ export function RegistrationWizard({
       ) : null}
 
       {activeStep === "education" ? (
+        <>
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Step 5 · Education &amp; Professional Development</CardTitle>
@@ -271,6 +280,13 @@ export function RegistrationWizard({
             />
           </CardContent>
         </Card>
+        <CertificationsSection
+          employeeId={employee.employeeNumber}
+          actingEmployeeId={actingEmployeeId}
+          certifications={certifications}
+          editable
+        />
+        </>
       ) : null}
     </div>
   )
