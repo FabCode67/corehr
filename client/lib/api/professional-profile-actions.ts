@@ -168,6 +168,15 @@ export async function addInstitutionManually(actingEmployeeId: string, name: str
   })
 }
 
+/** Imports a public-directory search result into the catalog (or returns the
+ *  matching catalog row) so it can be selected like any other institution. */
+export async function importDirectoryInstitution(actingEmployeeId: string, name: string, country?: string | null, website?: string | null) {
+  return apiFetch<AcademicInstitution>("/institutions/directory", {
+    method: "POST",
+    body: JSON.stringify({ name, country: country ?? undefined, website: website ?? undefined, actingEmployeeId }),
+  })
+}
+
 export async function reviewInstitution(id: string, decision: "VERIFIED" | "REJECTED", actingEmployeeId: string, comment: string | undefined) {
   await apiFetch(`/institutions/${id}/review`, {
     method: "PATCH",

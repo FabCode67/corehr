@@ -275,6 +275,7 @@ export function RegistrationWizard({
           <CardContent>
             <EducationSection
               education={employee.education ?? []}
+              actingEmployeeId={actingEmployeeId}
               addAction={actions.addEducation}
               onRemove={actions.removeEducation}
             />

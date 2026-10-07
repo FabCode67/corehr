@@ -13,10 +13,14 @@ import { BNR_EDUCATION_CODES } from "@/lib/edwh-codes"
 import type { EmployeeEducation } from "@/lib/api/employees"
 import { uploadFile } from "@/lib/api/uploads"
 
+import { InstitutionPicker } from "@/app/staff/professional-profile/institution-picker"
+
 import type { ActionState } from "../actions"
 
 interface EducationSectionProps {
   education: EmployeeEducation[]
+  /** The HR user adding records — used when they add a new institution to the catalog. */
+  actingEmployeeId: string
   addAction: (prevState: ActionState | undefined, formData: FormData) => Promise<ActionState>
   onRemove: (educationId: string) => Promise<void>
 }
@@ -34,7 +38,7 @@ const EDUCATION_TYPES = [
 /** Step 5 (Education & Professional Development) — unlimited records,
  *  added one at a time via "Add Education", same pattern as
  *  ChildrenSection / Department Units. */
-export function EducationSection({ education, addAction, onRemove }: EducationSectionProps) {
+export function EducationSection({ education, actingEmployeeId, addAction, onRemove }: EducationSectionProps) {
   const [state, formAction, pending] = useActionState<ActionState | undefined, FormData>(
     addAction,
     undefined
@@ -120,7 +124,7 @@ export function EducationSection({ education, addAction, onRemove }: EducationSe
       >
         <input type="hidden" name="certificateUrl" value={certificateUrl} />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
             <label htmlFor="edu-type" className="text-xs text-muted-foreground">
               Type
@@ -142,13 +146,9 @@ export function EducationSection({ education, addAction, onRemove }: EducationSe
             </label>
             <Input id="edu-title" name="title" required />
           </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="edu-institution" className="text-xs text-muted-foreground">
-              Institution
-            </label>
-            <Input id="edu-institution" name="institution" required />
-          </div>
         </div>
+
+        <InstitutionPicker actingEmployeeId={actingEmployeeId} />
 
         <div className="flex flex-col gap-1 sm:w-1/2">
           <label htmlFor="edu-bnrEducationCode" className="text-xs text-muted-foreground">

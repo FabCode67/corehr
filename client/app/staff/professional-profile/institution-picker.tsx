@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { addInstitutionManually, searchInstitutionsAction } from "@/lib/api/professional-profile-actions"
+import { addInstitutionManually, importDirectoryInstitution, searchInstitutionsAction } from "@/lib/api/professional-profile-actions"
 import type { AcademicInstitution } from "@/lib/api/professional-profile"
 
 /**
@@ -45,6 +45,19 @@ export function InstitutionPicker({ actingEmployeeId }: { actingEmployeeId: stri
     }
   }, [query, selected])
 
+  async function handlePick(institution: AcademicInstitution) {
+    setResults([])
+    if (institution.source !== "directory") {
+      setSelected(institution)
+      return
+    }
+    try {
+      setSelected(await importDirectoryInstitution(actingEmployeeId, institution.name, institution.country, institution.website))
+    } catch {
+      setManualError("Couldn't select that institution. Please try again or add it manually.")
+    }
+  }
+
   async function handleAddManually() {
     if (!manualName.trim()) {
       setManualError("Institution name is required.")
@@ -68,6 +81,7 @@ export function InstitutionPicker({ actingEmployeeId }: { actingEmployeeId: stri
       <div className="flex flex-col gap-1">
         <Label className="text-xs text-muted-foreground">Institution</Label>
         <input type="hidden" name="institutionId" value={selected.id} />
+        <input type="hidden" name="institutionLabel" value={selected.name} />
         <input type="hidden" name="country" value={selected.country ?? ""} />
         <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
           <span>
@@ -102,21 +116,18 @@ export function InstitutionPicker({ actingEmployeeId }: { actingEmployeeId: stri
       <input type="hidden" name="institutionName" value="" />
       <Input
         id="institution-search"
-        placeholder="Search by name, country, or city…"
+        placeholder="Search for a school, college or university…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
       {results.length > 0 ? (
         <ul className="rounded-md border border-border text-sm">
           {results.map((institution) => (
-            <li key={institution.id}>
+            <li key={institution.id || `${institution.name}-${institution.country}`}>
               <button
                 type="button"
                 className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-muted"
-                onClick={() => {
-                  setSelected(institution)
-                  setResults([])
-                }}
+                onClick={() => handlePick(institution)}
               >
                 <span>{institution.name}</span>
                 <span className="text-xs text-muted-foreground">{institution.country ?? ""}</span>
@@ -125,6 +136,8 @@ export function InstitutionPicker({ actingEmployeeId }: { actingEmployeeId: stri
           ))}
         </ul>
       ) : null}
+
+      {!showManual && manualError ? <p className="text-xs text-destructive">{manualError}</p> : null}
 
       {!showManual ? (
         <button
@@ -135,7 +148,7 @@ export function InstitutionPicker({ actingEmployeeId }: { actingEmployeeId: stri
             setManualName(query)
           }}
         >
-          Not Found? Add Institution Manually
+          Not found? Enter it manually (Other)
         </button>
       ) : (
         <div className="mt-1 flex flex-col gap-2 rounded-md border border-dashed border-border p-3">

@@ -17,7 +17,7 @@ export class InstitutionsService {
   async search(query: string, includeUnverified = false) {
     if (!query || query.trim().length < 2) return []
 
-    return this.prisma.academicInstitution.findMany({
+    const local = await this.prisma.academicInstitution.findMany({
       where: {
         ...(includeUnverified ? {} : { verificationStatus: "VERIFIED" }),
         OR: [
@@ -28,6 +28,71 @@ export class InstitutionsService {
       },
       orderBy: { name: "asc" },
       take: 25,
+    })
+
+    // HR review lists only care about what's in our own catalog.
+    if (includeUnverified || query.trim().length < 3) return local
+
+    // Top up from the public universities directory so staff can find
+    // schools that aren't in our catalog yet (LinkedIn-style search). Results
+    // have no id — the client imports one into the catalog when it's picked
+    // (see importFromDirectory()).
+    const directory = await this.searchDirectory(query.trim())
+    const known = new Set(local.map((i) => i.name.trim().toLowerCase()))
+    const extra = directory
+      .filter((d) => !known.has(d.name.trim().toLowerCase()))
+      .slice(0, Math.max(0, 25 - local.length))
+      .map((d) => ({ id: "", name: d.name, country: d.country, city: null, website: d.website, source: "directory" as const }))
+
+    return [...local, ...extra]
+  }
+
+  /** Free public directory (universities.hipolabs.com, no API key). Best
+   *  effort: a slow/unavailable directory must never break the search, so
+   *  any failure just yields no extra results. */
+  private async searchDirectory(query: string): Promise<{ name: string; country: string | null; website: string | null }[]> {
+    try {
+      const response = await fetch(`http://universities.hipolabs.com/search?name=${encodeURIComponent(query)}`, {
+        signal: AbortSignal.timeout(4000),
+      })
+      if (!response.ok) return []
+      const data = (await response.json()) as { name?: string; country?: string; web_pages?: string[] }[]
+      return data
+        .filter((d) => typeof d.name === "string" && d.name.trim().length > 0)
+        .map((d) => ({ name: d.name!.trim(), country: d.country ?? null, website: d.web_pages?.[0] ?? null }))
+    } catch {
+      return []
+    }
+  }
+
+  /** Called when someone picks a directory result: reuses a matching
+   *  catalog row if one exists, otherwise adds it. Directory entries come
+   *  from a public list of accredited institutions, so they're stored
+   *  VERIFIED (no HR review needed, unlike free-text manual entries). */
+  async importFromDirectory(dto: CreateInstitutionDto) {
+    const actor = await this.prisma.employee.findUnique({ where: { employeeNumber: dto.actingEmployeeId }, select: { employeeNumber: true } })
+    if (!actor) throw new BadRequestException("Acting employee not found.")
+
+    const existing = await this.prisma.academicInstitution.findFirst({
+      where: {
+        name: { equals: dto.name, mode: "insensitive" },
+        ...(dto.country ? { country: { equals: dto.country, mode: "insensitive" } } : {}),
+        verificationStatus: { not: "REJECTED" },
+      },
+    })
+    if (existing) return existing
+
+    return this.prisma.academicInstitution.create({
+      data: {
+        name: dto.name,
+        country: dto.country,
+        city: dto.city,
+        website: dto.website,
+        addedById: dto.actingEmployeeId,
+        verificationStatus: "VERIFIED",
+        verifiedById: dto.actingEmployeeId,
+        verifiedAt: new Date(),
+      },
     })
   }
 

@@ -322,7 +322,8 @@ export async function addEducation(
 ): Promise<ActionState> {
   const type = trimmedOrUndefined(formData.get("type"))
   const title = trimmedOrUndefined(formData.get("title"))
-  const institution = trimmedOrUndefined(formData.get("institution"))
+  // The institution picker supplies institutionLabel (a catalog/directory pick or a manual entry).
+  const institution = trimmedOrUndefined(formData.get("institutionLabel")) ?? trimmedOrUndefined(formData.get("institution"))
   const startDate = trimmedOrUndefined(formData.get("startDate"))
 
   if (!type || !title || !institution || !startDate) {

@@ -23,7 +23,9 @@ export interface WorkExperience {
 }
 
 export interface AcademicInstitution {
+  /** Empty string for a public-directory search result that hasn't been imported into the catalog yet (source === "directory"). */
   id: string
+  source?: "directory"
   name: string
   country: string | null
   city: string | null

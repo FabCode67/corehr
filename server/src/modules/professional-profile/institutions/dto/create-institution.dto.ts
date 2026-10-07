@@ -22,7 +22,7 @@ export class CreateInstitutionDto {
   city?: string
 
   @ApiPropertyOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   @IsOptional()
   website?: string
 

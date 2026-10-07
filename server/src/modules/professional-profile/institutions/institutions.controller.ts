@@ -25,6 +25,11 @@ export class InstitutionsController {
     return this.institutionsService.create(dto)
   }
 
+  @Post("directory")
+  importFromDirectory(@Body() dto: CreateInstitutionDto) {
+    return this.institutionsService.importFromDirectory(dto)
+  }
+
   @Patch(":id/review")
   review(@Param("id") id: string, @Body() dto: ReviewInstitutionDto) {
     return this.institutionsService.review(id, dto)
