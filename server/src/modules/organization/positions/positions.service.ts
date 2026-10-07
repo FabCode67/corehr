@@ -147,8 +147,10 @@ export class PositionsService {
     }
 
     await this.assertTitleAvailable(dto.departmentId, dto.unitId ?? null, dto.title)
+    const code = dto.code?.trim() || null
+    await this.assertCodeAvailable(code)
 
-    const created = await this.prisma.position.create({ data: { ...dto, reportsToPositionId } })
+    const created = await this.prisma.position.create({ data: { ...dto, code, reportsToPositionId } })
 
     if (isDirector) {
       await this.promoteToBankHead(created.id, created.departmentId)
@@ -209,9 +211,14 @@ export class PositionsService {
       await this.assertTitleAvailable(departmentId, unitId, dto.title ?? current.title, id)
     }
 
+    // `code` follows the same "omitted vs explicitly cleared" rule as unitId.
+    const codeProvided = Object.prototype.hasOwnProperty.call(dto, "code")
+    const code = codeProvided ? dto.code?.trim() || null : undefined
+    if (codeProvided) await this.assertCodeAvailable(code ?? null, id)
+
     const updated = await this.prisma.position.update({
       where: { id },
-      data: { ...dto, reportsToPositionId },
+      data: { ...dto, ...(codeProvided ? { code } : {}), reportsToPositionId },
     })
 
     if (isDirector && !wasDirector) {
@@ -346,6 +353,16 @@ export class PositionsService {
    * not stop two department-level positions (unitId = NULL) from sharing a
    * title.
    */
+  private async assertCodeAvailable(code: string | null, excludeId?: string) {
+    if (!code) return
+    const existing = await this.prisma.position.findFirst({
+      where: { code, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
+    })
+    if (existing) {
+      throw new ConflictException(`Position code "${code}" is already used by "${existing.title}"`)
+    }
+  }
+
   private async assertTitleAvailable(
     departmentId: string,
     unitId: string | null,

@@ -12,6 +12,8 @@ export interface PositionLevel {
 export interface Position {
   id: string
   title: string
+  /** Position code — reported as ROLE_CODE in the BNR/EDWH report. */
+  code?: string | null
   departmentId: string
   unitId: string | null
   levelId: string

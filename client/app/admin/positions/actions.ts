@@ -33,6 +33,7 @@ export async function createPosition(
         title,
         departmentId,
         levelId,
+        code: trimmedOrUndefined(formData.get("code")),
         unitId: trimmedOrUndefined(formData.get("unitId")),
         reportsToPositionId: trimmedOrUndefined(formData.get("reportsToPositionId")),
       }),
@@ -66,6 +67,8 @@ export async function updatePosition(
         title,
         departmentId,
         levelId,
+        // Explicit null so clearing the code field actually clears it.
+        code: trimmedOrUndefined(formData.get("code")) ?? null,
         // Explicit null (not omitted) so the API can tell "clear the
         // unit" apart from "field wasn't sent" — see UpdatePositionDto /
         // PositionsService.update in the backend.

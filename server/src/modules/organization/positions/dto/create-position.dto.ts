@@ -6,6 +6,12 @@ export class CreatePositionDto {
   @IsString()
   title!: string
 
+  @ApiPropertyOptional({ description: "Unique position code — reported as ROLE_CODE in the BNR/EDWH report." })
+  @MaxLength(40)
+  @IsString()
+  @IsOptional()
+  code?: string | null
+
   @IsUUID()
   departmentId!: string
 

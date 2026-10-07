@@ -83,6 +83,7 @@ export default async function AdminPositionsPage({
               <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground uppercase">
                 <tr>
                   <th className="px-4 py-3 font-medium">Title</th>
+                  <th className="px-4 py-3 font-medium">Code</th>
                   <th className="px-4 py-3 font-medium">Department / Unit</th>
                   <th className="px-4 py-3 font-medium">Level</th>
                   <th className="px-4 py-3 font-medium">Reports to</th>
@@ -97,6 +98,7 @@ export default async function AdminPositionsPage({
                 {result.data.data.map((position) => (
                   <tr key={position.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3 font-medium text-foreground">{position.title}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{position.code ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {position.unit?.name ?? position.department?.name ?? "—"}
                     </td>
