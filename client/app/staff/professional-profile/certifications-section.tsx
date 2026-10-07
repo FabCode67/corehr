@@ -14,6 +14,8 @@ import { addCertification, removeCertification, type ActionState } from "@/lib/a
 import { uploadFile } from "@/lib/api/uploads"
 import { BNR_CERTIFICATE_CODES } from "@/lib/edwh-codes"
 
+import { IssuerInput } from "./issuer-input"
+
 const STATUS_VARIANT: Record<RecordVerificationStatus, "outline" | "success" | "destructive"> = {
   PENDING_REVIEW: "outline",
   VERIFIED: "success",
@@ -139,12 +141,7 @@ export function CertificationsSection({
                   ))}
                 </Select>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="cert-issuer" className="text-xs text-muted-foreground">
-                  Issuing Organization
-                </Label>
-                <Input id="cert-issuer" name="issuer" required />
-              </div>
+              <IssuerInput />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

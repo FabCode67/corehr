@@ -140,6 +140,10 @@ export function searchInstitutions(query: string) {
   return apiFetchSafe<AcademicInstitution[]>(`/institutions?q=${encodeURIComponent(query)}`)
 }
 
+export function searchCertificationIssuers(query: string) {
+  return apiFetchSafe<string[]>(`/profile-certifications/issuers?q=${encodeURIComponent(query)}`)
+}
+
 export function fetchPendingInstitutions() {
   return apiFetchSafe<AcademicInstitution[]>("/institutions/pending-review")
 }

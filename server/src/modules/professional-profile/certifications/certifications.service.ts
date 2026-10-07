@@ -5,6 +5,8 @@ import { buildClientUrl } from "../../../common/client-url.util"
 import { PrismaService } from "../../../prisma/prisma.service"
 import { EmailService } from "../../email/email.service"
 import { NotificationsService } from "../../leave/notifications/notifications.service"
+import { InstitutionsService } from "../institutions/institutions.service"
+import { COMMON_CERTIFICATION_ISSUERS } from "./certification-issuers"
 import { CreateCertificationDto } from "./dto/create-certification.dto"
 import { ReviewCertificationDto } from "./dto/review-certification.dto"
 import { UpdateCertificationDto } from "./dto/update-certification.dto"
@@ -26,8 +28,40 @@ export class CertificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly institutionsService: InstitutionsService
   ) {}
+
+  /** Suggestions for the "Issuing Organization" field: well-known
+   *  certification bodies, issuers already used on other certifications in
+   *  this system, and universities/colleges from the public directory (many
+   *  certificates are issued by schools). Purely suggestions — the field
+   *  still accepts any typed value ("Other"). */
+  async searchIssuers(query: string): Promise<string[]> {
+    const q = query.trim()
+    if (q.length < 2) return []
+    const needle = q.toLowerCase()
+
+    const curated = COMMON_CERTIFICATION_ISSUERS.filter((name) => name.toLowerCase().includes(needle))
+    const used = await this.prisma.employeeCertification.findMany({
+      where: { issuer: { contains: q, mode: "insensitive" } },
+      select: { issuer: true },
+      distinct: ["issuer"],
+      take: 10,
+    })
+    const schools = q.length >= 3 ? await this.institutionsService.searchDirectory(q) : []
+
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const name of [...curated, ...used.map((u) => u.issuer), ...schools.map((s) => s.name)]) {
+      const key = name.trim().toLowerCase()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(name.trim())
+      if (out.length >= 15) break
+    }
+    return out
+  }
 
   async listForEmployee(employeeId: string) {
     const records = await this.prisma.employeeCertification.findMany({

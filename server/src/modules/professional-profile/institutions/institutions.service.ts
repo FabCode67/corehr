@@ -50,7 +50,7 @@ export class InstitutionsService {
   /** Free public directory (universities.hipolabs.com, no API key). Best
    *  effort: a slow/unavailable directory must never break the search, so
    *  any failure just yields no extra results. */
-  private async searchDirectory(query: string): Promise<{ name: string; country: string | null; website: string | null }[]> {
+  async searchDirectory(query: string): Promise<{ name: string; country: string | null; website: string | null }[]> {
     try {
       const response = await fetch(`http://universities.hipolabs.com/search?name=${encodeURIComponent(query)}`, {
         signal: AbortSignal.timeout(4000),

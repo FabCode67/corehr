@@ -16,6 +16,11 @@ export class CertificationsController {
     return this.certificationsService.listPendingReview()
   }
 
+  @Get("issuers")
+  searchIssuers(@Query("q") q?: string) {
+    return this.certificationsService.searchIssuers(q ?? "")
+  }
+
   @Get("employee/:employeeId")
   listForEmployee(@Param("employeeId") employeeId: string) {
     return this.certificationsService.listForEmployee(employeeId)

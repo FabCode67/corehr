@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { ApiError, apiFetch } from "./client"
-import { searchInstitutions, searchSkills } from "./professional-profile"
+import { searchCertificationIssuers, searchInstitutions, searchSkills } from "./professional-profile"
 import type { AcademicInstitution, Certification, EducationRecord, EmployeeSkill, WorkExperience } from "./professional-profile"
 
 // ---- Client-callable search (wraps the Server-Component fetchers so a
@@ -11,6 +11,11 @@ import type { AcademicInstitution, Certification, EducationRecord, EmployeeSkill
 
 export async function searchInstitutionsAction(query: string) {
   const result = await searchInstitutions(query)
+  return result.ok ? result.data : []
+}
+
+export async function searchIssuersAction(query: string) {
+  const result = await searchCertificationIssuers(query)
   return result.ok ? result.data : []
 }
 
