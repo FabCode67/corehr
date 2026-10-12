@@ -1,11 +1,13 @@
 "use client"
 
 import {
+  BarChart3,
   Bot,
   Briefcase,
   Building2,
   CalendarDays,
   ClipboardCheck,
+  Download,
   FileSpreadsheet,
   FileText,
   GraduationCap,
@@ -54,7 +56,16 @@ const ADMIN_NAV: PortalNavItem[] = [
   { label: "Bulk Imports", href: "/admin/imports", icon: Upload },
   { label: "Email Notifications", href: "/admin/email", icon: Mail },
   { label: "Professional Profiles", href: "/admin/professional-profile/review", icon: UserCircle },
-  { label: "EDWH Report", href: "/admin/reports/edwh", icon: FileSpreadsheet },
+  {
+    label: "Reports",
+    href: "/admin/reports",
+    icon: BarChart3,
+    children: [
+      { label: "EDWH Report", href: "/admin/reports/edwh", icon: FileSpreadsheet },
+      { label: "Workforce Report", href: "/admin/reports/workforce", icon: Users },
+      { label: "Data Exports", href: "/admin/reports/exports", icon: Download },
+    ],
+  },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ]
 

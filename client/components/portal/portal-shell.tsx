@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { LucideIcon } from "lucide-react"
+import { ChevronDown, type LucideIcon } from "lucide-react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -11,10 +12,19 @@ import type { SessionUser } from "@/lib/session"
 
 import { NotificationBell } from "./notification-bell"
 
+export interface PortalNavChild {
+  label: string
+  href: string
+  icon?: LucideIcon
+}
+
 export interface PortalNavItem {
   label: string
   href: string
   icon: LucideIcon
+  /** When present the item is a collapsible group: `href` is its landing
+   *  page, and the children render indented underneath. */
+  children?: PortalNavChild[]
 }
 
 interface PortalShellProps {
@@ -50,9 +60,14 @@ export function PortalShell({
   // everywhere. Only ever matters for hrefs that are a strict prefix of
   // another nav item's href — "/admin" is one, since /admin/profile,
   // /admin/hr-analytics, etc. all sit underneath it.
-  const activeHref = [...nav]
+  const allLinks: { href: string }[] = nav.flatMap((item) => [item, ...(item.children ?? [])])
+  const activeHref = allLinks
     .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
+
+  // Groups the user has explicitly toggled; a group is otherwise open while
+  // the current page is inside it.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({})
 
   return (
     <div className="relative flex min-h-svh bg-muted/30">
@@ -115,23 +130,58 @@ export function PortalShell({
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {nav.map((item) => {
-            const active = item.href === activeHref
             const Icon = item.icon
+            const linkClass = (active: boolean) =>
+              cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+              )
+
+            if (!item.children?.length) {
+              return (
+                <Link key={item.href} href={item.href} className={linkClass(item.href === activeHref)}>
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              )
+            }
+
+            const inGroup = pathname === item.href || pathname.startsWith(item.href + "/")
+            const open = toggled[item.href] ?? inGroup
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="size-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Link>
+              <div key={item.href}>
+                <div className="flex items-center">
+                  <Link href={item.href} className={cn(linkClass(item.href === activeHref), "flex-1")}>
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label={`${open ? "Collapse" : "Expand"} ${item.label}`}
+                    aria-expanded={open}
+                    onClick={() => setToggled((prev) => ({ ...prev, [item.href]: !open }))}
+                    className="ml-1 rounded-md p-2 text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                  >
+                    <ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "")} />
+                  </button>
+                </div>
+                {open ? (
+                  <div className="mt-1 ml-5 space-y-1 border-l border-sidebar-border pl-2">
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon
+                      return (
+                        <Link key={child.href} href={child.href} className={linkClass(child.href === activeHref)}>
+                          {ChildIcon ? <ChildIcon className="size-4 shrink-0" /> : null}
+                          <span className="truncate">{child.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
             )
           })}
         </nav>
