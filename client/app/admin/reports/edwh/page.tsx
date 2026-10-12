@@ -44,17 +44,13 @@ const COLUMN_GROUPS: { title: string; items: { column: string; detail: string; s
       { column: "ROLE_CODE", detail: "Position code", source: "profile" },
       { column: "EDUCATION", detail: "BNR education code of the highest qualification", source: "profile" },
       { column: "PROFESSIONAL_CERTIFICATES", detail: "BNR certificate codes, separated by semicolons", source: "profile" },
+      { column: "VISION_OUC", detail: "Branch code of the employee's location", source: "profile" },
+      { column: "PREVIOUS_EMPLOYER", detail: "Latest past employer on work experience; the bank itself if onboarding marks them as previously employed here", source: "profile" },
       { column: "AREA_OF_SPECIALISATION", detail: "Employment Details step", source: "profile" },
       { column: "BNR_APPROVAL_REQD / DATE_OF_BNR_APPROVAL", detail: "BNR approval section of Employment Details", source: "profile" },
     ],
   },
-  {
-    title: "Not tracked yet",
-    items: [
-      { column: "VISION_OUC", detail: "No source data in PeopleSuite", source: "blank" },
-      { column: "PREVIOUS_EMPLOYER", detail: "No source data in PeopleSuite", source: "blank" },
-    ],
-  },
+
 ]
 
 export default function EdwhReportPage() {

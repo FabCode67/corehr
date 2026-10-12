@@ -14,9 +14,8 @@ import { PrismaService } from "../../prisma/prisma.service"
  * expects; do not reorder without checking the spec again.
  *
  * Several columns have no real source of data anywhere in this app yet
- * (VISION_OUC and PREVIOUS_EMPLOYER — an external employer, distinct from
- * Employee.previousDepartment/previousPositionHeld which only track an
- * earlier *internal* stint before a rehire).
+ * (none left — VISION_OUC is the branch code and PREVIOUS_EMPLOYER comes
+ * from work experience / the onboarding "previously worked at the bank" flag).
  * Those are emitted as empty strings rather than invented, so HR can see
  * exactly what's missing per employee rather than silently filling
  * plausible but wrong values. If these become trackable later (new
@@ -56,6 +55,24 @@ export const EDWH_REPORT_HEADERS = [
   "PREVIOUS_EMPLOYER",
   "AREA_OF_SPECIALISATION",
 ]
+
+/** Name reported as PREVIOUS_EMPLOYER for staff recorded at onboarding as
+ *  "previously worked at the bank" (Employee.previousEmployee). */
+const BANK_NAME = "NCBA Rwanda"
+
+/** PREVIOUS_EMPLOYER: the most recent past (not current) employer on the
+ *  employee's work experience; otherwise, if onboarding recorded them as a
+ *  returning bank employee, the bank itself; otherwise blank. */
+function previousEmployer(employee: {
+  previousEmployee: boolean
+  workExperiences: { companyName: string; startDate: Date; endDate: Date | null; isCurrent: boolean }[]
+}): string {
+  const past = employee.workExperiences
+    .filter((w) => !w.isCurrent)
+    .sort((a, b) => (b.endDate ?? b.startDate).getTime() - (a.endDate ?? a.startDate).getTime())[0]
+  if (past) return past.companyName
+  return employee.previousEmployee ? BANK_NAME : ""
+}
 
 const YEAR_MONTH_INDEX = EDWH_REPORT_HEADERS.indexOf("YEAR_MONTH")
 
@@ -148,6 +165,8 @@ function levelToGradeCode(levelName: string | null | undefined): string {
 
 const EDWH_EMPLOYEE_INCLUDE = {
   position: { include: { department: true, level: true } },
+  branch: { select: { code: true } },
+  workExperiences: { select: { companyName: true, startDate: true, endDate: true, isCurrent: true } },
   education: { select: { type: true, bnrEducationCode: true } },
   certifications: { select: { bnrCertificateCode: true } },
 } as const
@@ -243,7 +262,7 @@ export class EdwhReportService {
       yearMonth,
       employee.employeeNumber,
       staffName,
-      "", // VISION_OUC — no source field yet
+      employee.branch?.code ?? "", // VISION_OUC = the employee's branch code
       employee.position?.department?.code ?? "",
       employee.gender,
       employee.nationality,
@@ -266,7 +285,7 @@ export class EdwhReportService {
           ? "Y"
           : "N",
       formatDate(employee.bnrApprovalDate),
-      "", // PREVIOUS_EMPLOYER — no source field yet (previousDepartment/previousPositionHeld track an internal rehire, not an external employer)
+      previousEmployer(employee),
       employee.areaOfSpecialisation ?? "",
     ]
   }
