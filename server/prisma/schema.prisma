@@ -155,6 +155,19 @@ enum ExitReason {
   RESIGNATION
   TERMINATION
   END_OF_CONTRACT
+  /// Added for the BNR/EDWH Staff Status codes (5 Retired, 6 Deceased).
+  RETIREMENT
+  DECEASED
+}
+
+/// Manually-set status for an employee who is still employed (EDWH Staff
+/// Status 2 Suspended / 9 Disability). Null = no override. Exit-type
+/// statuses (Resigned, Terminated, Retired, Deceased, End of Contract) come
+/// from the exit flow's ExitReason, and Probation is derived from
+/// probationEndDate — see common/staff-status.util.ts.
+enum ActiveStaffStatus {
+  SUSPENDED
+  DISABILITY
 }
 
 /// Whether the bank would have preferred to retain this employee — an HR
@@ -554,6 +567,8 @@ model Employee {
   /// freshly built row to the hash on every export and bumps edwhYearMonth
   /// when anything differs, so YEAR_MONTH follows real EDWH data changes
   /// regardless of which part of the app made them.
+  /// See the ActiveStaffStatus enum. Set via PATCH /employees/:id/staff-status.
+  activeStatusOverride ActiveStaffStatus?
   edwhRowHash   String?
   edwhYearMonth String?
 

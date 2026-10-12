@@ -34,7 +34,7 @@ const COLUMN_GROUPS: { title: string; items: { column: string; detail: string; s
       { column: "LE_BOOK", detail: "Always 035", source: "auto" },
       { column: "YEAR_MONTH", detail: "Month the employee's EDWH data last changed", source: "auto" },
       { column: "GRADE_CODE", detail: "A Director/Deputy · B General Manager · C Senior Manager/Manager/AGM · D Assistant Manager and below", source: "auto" },
-      { column: "STAFF_STATUS", detail: "0 Active · 1 Inactive", source: "auto" },
+      { column: "STAFF_STATUS", detail: "1 Active · 2 Suspended · 3 Resigned · 4 Terminated · 5 Retired · 6 Deceased · 7 Probation · 8 End of Contract · 9 Disability", source: "auto" },
     ],
   },
   {

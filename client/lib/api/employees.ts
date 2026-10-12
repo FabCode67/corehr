@@ -6,7 +6,9 @@ export type Gender = "MALE" | "FEMALE"
 export type MaritalStatus = "SINGLE" | "MARRIED" | "DIVORCED" | "WIDOWED"
 export type ContractType = "PERMANENT" | "TEMPORARY" | "GRADUATE_TRAINEE" | "INTERN"
 export type EmploymentStatus = "ACTIVE" | "EXIT"
-export type ExitReason = "RESIGNATION" | "TERMINATION" | "END_OF_CONTRACT"
+export type ExitReason = "RESIGNATION" | "TERMINATION" | "END_OF_CONTRACT" | "RETIREMENT" | "DECEASED"
+/** Manually-set status for someone still employed (EDWH Staff Status 2 / 9). */
+export type ActiveStaffStatus = "SUSPENDED" | "DISABILITY"
 export type ExitType = "REGRETTABLE" | "NON_REGRETTABLE"
 export type EducationType =
   | "DEGREE"
@@ -128,6 +130,7 @@ export interface Employee {
   // edwh-report.service.ts's GRADE_CODE mapping), but nothing enforces that
   // here. Both null until HR fills them in.
   bnrApprovalRequired: boolean | null
+  activeStatusOverride?: ActiveStaffStatus | null
   bnrApprovalDate: string | null
   areaOfSpecialisation: string | null
 

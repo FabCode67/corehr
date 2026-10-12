@@ -12,7 +12,7 @@ import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
 import { allEmployeesFamilyTreeExportUrl } from "@/lib/api/export-urls"
-import { computeProbationRemainingDays, computeTenure, computeTotalBankingExperienceYears, formatTenure } from "@/lib/api/employee-utils"
+import { computeProbationRemainingDays, computeStaffStatus, computeTenure, computeTotalBankingExperienceYears, formatTenure } from "@/lib/api/employee-utils"
 import { fetchEmployeeExportColumns, fetchEmployeesPaginated, fetchLineManagersBatch } from "@/lib/api/employees"
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
 import { fullName } from "@/lib/format-name"
@@ -268,7 +268,7 @@ export default async function AdminEmployeesPage({
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "destructive"}>
-                        {employee.employmentStatus === "ACTIVE" ? "Active" : "Exit"}
+                        {computeStaffStatus(employee).label}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">

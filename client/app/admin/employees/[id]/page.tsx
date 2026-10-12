@@ -18,7 +18,7 @@ import {
   fetchEmployees,
   fetchReportingManager,
 } from "@/lib/api/employees"
-import { computeTenure, computeTotalBankingExperienceYears, formatEnumLabel, formatTenure } from "@/lib/api/employee-utils"
+import { computeStaffStatus, computeTenure, computeTotalBankingExperienceYears, formatEnumLabel, formatTenure } from "@/lib/api/employee-utils"
 import { fetchPositions } from "@/lib/api/positions"
 import { fetchCertifications } from "@/lib/api/professional-profile"
 import { fullName } from "@/lib/format-name"
@@ -34,6 +34,7 @@ import { PerformanceHistorySection } from "./performance-history-section"
 import {
   addChild,
   addEducation,
+  updateStaffStatus,
   assignPosition,
   changeEmployeeBand,
   processExit,
@@ -47,6 +48,7 @@ import {
 } from "../actions"
 import { ExitDialog } from "./exit-dialog"
 import { RegistrationWizard } from "./registration-wizard"
+import { StaffStatusControl } from "./staff-status-control"
 import { RehireDialog } from "./rehire-dialog"
 
 const STATUS_VARIANT: Record<string, "success" | "destructive"> = {
@@ -163,7 +165,7 @@ export default async function EmployeeDetailPage({
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{headerName}</h1>
           <Badge variant={STATUS_VARIANT[employee.employmentStatus] ?? "outline"}>
-            {employee.employmentStatus === "ACTIVE" ? "Active" : "Exit"}
+            {computeStaffStatus(employee).label}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -233,6 +235,10 @@ export default async function EmployeeDetailPage({
           </div>
         </div>
       )}
+
+      {employee.employmentStatus === "ACTIVE" ? (
+        <StaffStatusControl employee={employee} action={updateStaffStatus.bind(null, employee.employeeNumber)} />
+      ) : null}
 
       <ExitProcessSection employee={employee} actingEmployeeId={session?.employeeId ?? ""} />
 

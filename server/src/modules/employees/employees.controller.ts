@@ -23,6 +23,7 @@ import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
 import { CreateChildDto, UpdateChildDto, UpdatePartnerDto } from "./dto/update-family.dto"
 import { UpdateEmployeeDto } from "./dto/update-employee.dto"
+import { UpdateStaffStatusDto } from "./dto/update-staff-status.dto"
 import { UpdateEmploymentDetailsDto } from "./dto/update-employment-details.dto"
 import { EMPLOYEE_EXPORT_COLUMNS, EmployeesExportService } from "./employees-export.service"
 import { EmployeesService } from "./employees.service"
@@ -201,6 +202,11 @@ export class EmployeesController {
     @Body() dto: UpdateEmploymentDetailsDto
   ) {
     return this.employeesService.updateEmploymentDetails(id, dto)
+  }
+
+  @Patch(":id/staff-status")
+  updateStaffStatus(@Param("id") id: string, @Body() dto: UpdateStaffStatusDto) {
+    return this.employeesService.updateStaffStatus(id, dto)
   }
 
   // ---- Step 3: Position Assignment ----------------------------------------

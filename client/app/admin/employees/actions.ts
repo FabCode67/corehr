@@ -359,6 +359,29 @@ export async function removeEducation(id: string, educationId: string) {
   revalidatePath(`/admin/employees/${id}`)
 }
 
+// ---- Staff status ---------------------------------------------------------------
+
+export async function updateStaffStatus(
+  id: string,
+  _prevState: ActionState | undefined,
+  formData: FormData
+): Promise<ActionState> {
+  const status = trimmedOrUndefined(formData.get("status"))
+  if (status !== "ACTIVE" && status !== "SUSPENDED" && status !== "DISABILITY") {
+    return { error: "Choose a status." }
+  }
+
+  try {
+    await apiFetch(`/employees/${id}/staff-status`, { method: "PATCH", body: JSON.stringify({ status }) })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to update staff status." }
+  }
+
+  revalidatePath("/admin/employees")
+  revalidatePath(`/admin/employees/${id}`)
+  return {}
+}
+
 // ---- Exit Management ----------------------------------------------------------
 
 export async function processExit(

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import { Injectable } from "@nestjs/common"
 import type { EducationType, Prisma } from "@prisma/client"
 
+import { computeStaffStatusCode } from "../../common/staff-status.util"
 import { buildCsv } from "../imports/spreadsheet.util"
 import { EDUCATION_TYPE_TO_BNR_CODE } from "./edwh-codes"
 import { PrismaService } from "../../prisma/prisma.service"
@@ -66,14 +67,6 @@ const ID_TYPE = {
   PASSPORT: 4,
   FOREIGNERS_ID: 5,
   REGISTRATION_NUMBER: 6,
-} as const
-
-/** STAFF_STATUS code table from the EDWH spec. Code 9 ("Delete") has no
- *  equivalent in this app — Employee rows are never hard-deleted (see
- *  EmployeesService), so it's never emitted. */
-const STAFF_STATUS = {
-  ACTIVE: 0,
-  INACTIVE: 1,
 } as const
 
 /** LE_BOOK is a fixed constant for every employee/branch in this
@@ -264,7 +257,7 @@ export class EdwhReportService {
       employee.phone,
       employee.email,
       formatDate(employee.employmentStartDate),
-      employee.employmentStatus === "ACTIVE" ? STAFF_STATUS.ACTIVE : STAFF_STATUS.INACTIVE,
+      computeStaffStatusCode(employee) ?? "",
       formatDate(employee.exitDate),
       employee.exitReason ?? "",
       employee.bnrApprovalRequired === null || employee.bnrApprovalRequired === undefined

@@ -80,3 +80,44 @@ export function computeProbationRemainingDays(probationEndDate: string | null): 
 
   return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
+
+/** BNR/EDWH Staff Status (1 Active, 2 Suspended, 3 Resigned, 4 Terminated,
+ *  5 Retired, 6 Deceased, 7 Probation, 8 End of Contract, 9 Disability).
+ *  Mirrors server/src/common/staff-status.util.ts — keep in sync. */
+export const STAFF_STATUS_LABELS: Record<number, string> = {
+  1: "Active",
+  2: "Suspended",
+  3: "Resigned",
+  4: "Terminated",
+  5: "Retired",
+  6: "Deceased",
+  7: "Probation",
+  8: "End of Contract",
+  9: "Disability",
+}
+
+const EXIT_REASON_STAFF_STATUS: Record<string, number> = {
+  RESIGNATION: 3,
+  TERMINATION: 4,
+  RETIREMENT: 5,
+  DECEASED: 6,
+  END_OF_CONTRACT: 8,
+}
+
+/** The employee's current staff status code + label, from their real state
+ *  (exit reason, Suspended/Disability override, probation, else Active). */
+export function computeStaffStatus(
+  employee: Pick<Employee, "employmentStatus" | "exitReason" | "probationEndDate"> & { activeStatusOverride?: string | null }
+): { code: number; label: string } {
+  let code = 1
+  if (employee.employmentStatus === "EXIT") {
+    code = (employee.exitReason && EXIT_REASON_STAFF_STATUS[employee.exitReason]) || 4
+  } else if (employee.activeStatusOverride === "SUSPENDED") {
+    code = 2
+  } else if (employee.activeStatusOverride === "DISABILITY") {
+    code = 9
+  } else if (employee.probationEndDate && new Date(employee.probationEndDate).getTime() > Date.now()) {
+    code = 7
+  }
+  return { code, label: STAFF_STATUS_LABELS[code] }
+}

@@ -18,6 +18,7 @@ import { AssignPositionDto } from "./dto/assign-position.dto"
 import { ChangeBandDto } from "./dto/change-band.dto"
 import { CreateEmployeeDto } from "./dto/create-employee.dto"
 import { CreateEducationDto, UpdateEducationDto } from "./dto/education.dto"
+import { UpdateStaffStatusDto } from "./dto/update-staff-status.dto"
 import { ProcessExitDto } from "./dto/process-exit.dto"
 import { RehireEmployeeDto } from "./dto/rehire-employee.dto"
 import { TransferEmployeeDto } from "./dto/transfer-employee.dto"
@@ -568,6 +569,7 @@ export class EmployeesService {
         where: { employeeNumber: id },
         data: {
           employmentStatus: EmploymentStatus.EXIT,
+          activeStatusOverride: null,
           isActive: false,
           positionId: null,
           // No position means no admin access — see computeIsAdminForPosition()'s
@@ -598,6 +600,21 @@ export class EmployeesService {
    * spec's "employee should complete the form before exit clearance can
    * continue" being a process expectation, not an enforced block.
    */
+  /** Manual staff-status change for someone still employed (EDWH Staff
+   *  Status Suspended / Disability, or back to Active). Exits go through
+   *  processExit(); Probation is derived from probationEndDate. */
+  async updateStaffStatus(id: string, dto: UpdateStaffStatusDto) {
+    const employee = await this.findOne(id)
+    if (employee.employmentStatus !== EmploymentStatus.ACTIVE) {
+      throw new BadRequestException("Staff status can only be changed for employees who are still employed — use Exit Management / Rehire otherwise.")
+    }
+    return this.prisma.employee.update({
+      where: { employeeNumber: id },
+      data: { activeStatusOverride: dto.status === "ACTIVE" ? null : dto.status },
+      include: EMPLOYEE_DETAIL_INCLUDE,
+    })
+  }
+
   async markExitInitiated(id: string, actingEmployeeId: string) {
     const employee = await this.findOne(id)
 
@@ -659,6 +676,7 @@ export class EmployeesService {
       where: { employeeNumber: id },
       data: {
         employmentStatus: EmploymentStatus.ACTIVE,
+        activeStatusOverride: null,
         isActive: true,
         employmentStartDate,
         probationEndDate: null,

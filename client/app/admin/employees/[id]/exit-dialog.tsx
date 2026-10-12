@@ -37,6 +37,8 @@ const EXIT_REASONS = [
   { value: "RESIGNATION", label: "Resignation", description: "Employee voluntarily resigned" },
   { value: "TERMINATION", label: "Termination", description: "Employment terminated by the bank" },
   { value: "END_OF_CONTRACT", label: "End of Contract", description: "Temporary contract reached its end" },
+  { value: "RETIREMENT", label: "Retirement", description: "Employee has retired" },
+  { value: "DECEASED", label: "Deceased", description: "Employee has passed away" },
 ] as const
 
 const EXIT_TYPES = [
