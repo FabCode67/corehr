@@ -43,16 +43,23 @@ export class ExecutiveDashboardService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * DAY_MS)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * DAY_MS)
 
-    const [total, active, exiting, exited, newJoiners30, newJoiners90] = await Promise.all([
+    const contractExpiryWindowEnd = new Date(now.getTime() + 90 * DAY_MS)
+
+    const [total, active, exiting, exited, newJoiners30, newJoiners90, contractsExpiring90] = await Promise.all([
       this.prisma.employee.count(),
       this.prisma.employee.count({ where: { employmentStatus: "ACTIVE" } }),
       this.prisma.employee.count({ where: { employmentStatus: "ACTIVE", exitInitiatedAt: { not: null } } }),
       this.prisma.employee.count({ where: { employmentStatus: "EXIT" } }),
       this.prisma.employee.count({ where: { employmentStartDate: { gte: thirtyDaysAgo } } }),
       this.prisma.employee.count({ where: { employmentStartDate: { gte: ninetyDaysAgo } } }),
+      // Active employees whose contract ends within 90 days — replaces the
+      // HR Analytics page loading every employee just to count this.
+      this.prisma.employee.count({
+        where: { employmentStatus: "ACTIVE", contractEndDate: { gte: now, lte: contractExpiryWindowEnd } },
+      }),
     ])
 
-    return { totalEmployees: total, activeEmployees: active, exitingEmployees: exiting, exitedEmployees: exited, newJoinersLast30Days: newJoiners30, newJoinersLast90Days: newJoiners90 }
+    return { totalEmployees: total, activeEmployees: active, exitingEmployees: exiting, exitedEmployees: exited, newJoinersLast30Days: newJoiners30, newJoinersLast90Days: newJoiners90, contractsExpiringNext90Days: contractsExpiring90 }
   }
 
   private async recruitmentOverview(actingEmployeeId: string) {

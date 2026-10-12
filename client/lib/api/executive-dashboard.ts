@@ -12,6 +12,8 @@ export interface EmployeeOverview {
   exitedEmployees: number
   newJoinersLast30Days: number
   newJoinersLast90Days: number
+  /** Active employees whose contract ends within the next 90 days. */
+  contractsExpiringNext90Days: number
 }
 
 export interface RecruitmentOverview {
