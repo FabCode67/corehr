@@ -16,6 +16,7 @@ import {
   fetchOnboardingTasks,
 } from "@/lib/api/recruitment"
 import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
+import { APPLICATION_DOCUMENT_LABELS } from "@/lib/application-documents"
 import { getSession } from "@/lib/get-session"
 
 import { AssessmentsSection } from "./assessments-section"
@@ -102,6 +103,30 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
         </CardContent>
       </Card>
 
+      {application.documents.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Submitted documents</CardTitle>
+            <CardDescription>Files the candidate uploaded with their application.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {application.documents.map((doc) => (
+                <li key={doc.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium text-foreground">{APPLICATION_DOCUMENT_LABELS[doc.type] ?? doc.type}</span>
+                    <span className="ml-2 text-muted-foreground">{doc.fileName}</span>
+                  </span>
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-primary hover:underline">
+                    Open
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Candidate profile</CardTitle>
@@ -115,7 +140,41 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             <p className="text-xs text-muted-foreground">Phone</p>
             <p className="text-sm text-foreground">{application.candidate.phone}</p>
           </div>
-          {application.candidate.cvUrl ? (
+          {application.candidate.nationality ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Nationality</p>
+              <p className="text-sm text-foreground">{application.candidate.nationality}</p>
+            </div>
+          ) : null}
+          {application.candidate.currentEmployer || application.candidate.currentPosition ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Current role</p>
+              <p className="text-sm text-foreground">{[application.candidate.currentPosition, application.candidate.currentEmployer].filter(Boolean).join(" at ")}</p>
+            </div>
+          ) : null}
+          {application.candidate.linkedinUrl ? (
+            <div>
+              <p className="text-xs text-muted-foreground">LinkedIn</p>
+              <a href={application.candidate.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                {application.candidate.linkedinUrl}
+              </a>
+            </div>
+          ) : null}
+          {[
+            ["Education", application.candidate.education],
+            ["Experience", application.candidate.experience],
+            ["Certifications", application.candidate.certifications],
+            ["Skills", application.candidate.skills],
+            ["Cover note", application.coverNote],
+          ].map(([label, value]) =>
+            value ? (
+              <div key={label} className="sm:col-span-2">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="whitespace-pre-line text-sm text-foreground">{value}</p>
+              </div>
+            ) : null
+          )}
+          {application.candidate.cvUrl && application.documents.length === 0 ? (
             <div>
               <p className="text-xs text-muted-foreground">CV</p>
               <a href={application.candidate.cvUrl} className="text-sm text-primary hover:underline">

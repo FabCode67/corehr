@@ -5,6 +5,7 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import type { Band } from "@/lib/api/bands"
@@ -84,6 +85,11 @@ export function RequisitionEditForm({ requisition, bands, jobDescriptions, actio
             type="date"
             defaultValue={requisition.targetStartDate ? requisition.targetStartDate.slice(0, 10) : ""}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor="justification">Justification</Label>
+          <Textarea id="justification" name="justification" defaultValue={requisition.justification ?? ""} />
         </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">

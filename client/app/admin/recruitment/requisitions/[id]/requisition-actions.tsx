@@ -10,6 +10,8 @@ import {
   approveRequisition,
   closeRequisition,
   deleteRequisition,
+  hrApproveRequisition,
+  hrRejectRequisition,
   reopenRequisition,
   rejectRequisition,
   submitRequisition,
@@ -21,14 +23,15 @@ export function RequisitionActions({
   actingEmployeeId,
   status,
   canApprove,
+  canReview,
 }: {
   requisitionId: string
   actingEmployeeId: string
   status: RequisitionStatus
-  /** HR admins can approve/reject, and so can the Director-level position
-   *  holder even though that position never gets isAdmin — see
-   *  RequisitionsService.assertCanApproveRequisition on the backend. */
+  /** Managing Director (Director-level position) only — final approval. */
   canApprove: boolean
+  /** HR administrator — reviews and forwards to the MD. */
+  canReview: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -49,11 +52,12 @@ export function RequisitionActions({
     })
   }
 
-  const canSubmit = status === "DRAFT"
-  const canDecide = canApprove && status === "PENDING_APPROVAL"
+  const canSubmit = status === "DRAFT" || status === "REJECTED"
+  const canHrReview = canReview && status === "PENDING_HR_REVIEW"
+  const canDecide = canApprove && (status === "PENDING_MD_APPROVAL" || status === "PENDING_APPROVAL")
   const canClose = status === "APPROVED"
   const canReopen = status === "CLOSED"
-  const canEdit = status !== "CLOSED"
+  const canEdit = status === "DRAFT" || status === "REJECTED" || status === "PENDING_HR_REVIEW" || status === "APPROVED"
   const canDelete = status === "DRAFT"
 
   function handleDelete() {
@@ -61,7 +65,7 @@ export function RequisitionActions({
     run(() => deleteRequisition(requisitionId, actingEmployeeId))
   }
 
-  if (!canSubmit && !canDecide && !canClose && !canReopen && !canEdit && !canDelete) return null
+  if (!canSubmit && !canHrReview && !canDecide && !canClose && !canReopen && !canEdit && !canDelete) return null
 
   return (
     <div className="flex flex-col gap-2">
@@ -73,8 +77,18 @@ export function RequisitionActions({
         ) : null}
         {canSubmit ? (
           <Button type="button" size="sm" disabled={pending} onClick={() => run(() => submitRequisition(requisitionId, actingEmployeeId))}>
-            {pending ? "Submitting…" : "Submit for approval"}
+            {pending ? "Submitting…" : status === "REJECTED" ? "Resubmit to HR" : "Submit to HR"}
           </Button>
+        ) : null}
+        {canHrReview ? (
+          <>
+            <Button type="button" size="sm" disabled={pending} onClick={() => run(() => hrApproveRequisition(requisitionId, actingEmployeeId, comment.trim() || undefined))}>
+              {pending ? "Forwarding…" : "Approve & forward to MD"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setShowReject((value) => !value)}>
+              Return to HoD
+            </Button>
+          </>
         ) : null}
         {canDecide ? (
           <>
@@ -105,16 +119,22 @@ export function RequisitionActions({
 
       {showReject ? (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-          <Textarea placeholder="Reason for rejection…" value={comment} onChange={(event) => setComment(event.target.value)} />
+          <Textarea placeholder={canHrReview ? "Comment (required to return; optional when forwarding)…" : "Reason for rejection…"} value={comment} onChange={(event) => setComment(event.target.value)} />
           <div className="flex justify-end gap-2">
             <Button
               type="button"
               size="sm"
               variant="destructive"
               disabled={pending || comment.trim().length === 0}
-              onClick={() => run(() => rejectRequisition(requisitionId, actingEmployeeId, comment.trim()))}
+              onClick={() =>
+                run(() =>
+                  canHrReview
+                    ? hrRejectRequisition(requisitionId, actingEmployeeId, comment.trim())
+                    : rejectRequisition(requisitionId, actingEmployeeId, comment.trim())
+                )
+              }
             >
-              {pending ? "Rejecting…" : "Confirm rejection"}
+              {pending ? "Saving…" : canHrReview ? "Confirm return" : "Confirm rejection"}
             </Button>
           </div>
         </div>

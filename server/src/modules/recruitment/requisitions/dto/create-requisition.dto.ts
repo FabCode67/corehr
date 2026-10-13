@@ -22,8 +22,10 @@ import { NewPositionDto } from "./new-position.dto"
  * declaratively without a custom validator.
  */
 export class CreateRequisitionDto {
+  @ApiPropertyOptional({ description: "Optional link to an approved workforce plan (no longer required)." })
   @IsUUID()
-  workforcePlanId!: string
+  @IsOptional()
+  workforcePlanId?: string
 
   @ApiPropertyOptional({ description: "An existing Position's id. Omit if supplying newPosition instead." })
   @IsUUID()
@@ -36,8 +38,10 @@ export class CreateRequisitionDto {
   @IsOptional()
   newPosition?: NewPositionDto
 
+  @ApiPropertyOptional({ description: "Defaults from the position's current holders, else the lowest band." })
   @IsUUID()
-  bandId!: string
+  @IsOptional()
+  bandId?: string
 
   @IsInt()
   @Min(1)
@@ -55,11 +59,20 @@ export class CreateRequisitionDto {
   @IsEnum(HiringReason)
   hiringReason!: HiringReason
 
+  @ApiPropertyOptional({ description: "Defaults to the acting employee." })
   @IsString()
-  requestedById!: string
+  @IsOptional()
+  requestedById?: string
 
+  @ApiPropertyOptional({ description: "Defaults to the acting employee." })
   @IsString()
-  hiringManagerId!: string
+  @IsOptional()
+  hiringManagerId?: string
+
+  @ApiPropertyOptional({ description: "Why this hire is needed." })
+  @IsString()
+  @IsOptional()
+  justification?: string
 
   @ApiPropertyOptional()
   @IsEnum(RecruitmentPriority)

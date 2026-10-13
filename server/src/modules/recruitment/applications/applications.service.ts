@@ -24,6 +24,7 @@ const APPLICATION_INCLUDE = {
       },
     },
   },
+  documents: { orderBy: { createdAt: "asc" as const } },
   screening: { include: { screenedBy: { select: { employeeNumber: true, firstName: true, lastName: true } } } },
 } as const
 
@@ -108,7 +109,7 @@ export class ApplicationsService {
     return application
   }
 
-  async create(dto: CreateApplicationDto, actingEmployeeId: string) {
+  async create(dto: CreateApplicationDto, actingEmployeeId: string | null, extra: { coverNote?: string } = {}) {
     const jobPosting = await this.prisma.jobPosting.findUnique({
       where: { id: dto.jobPostingId },
       include: { requisition: { select: { bandId: true, contractType: true } } },
@@ -130,15 +131,17 @@ export class ApplicationsService {
       bandId: jobPosting.requisition?.bandId ?? null,
       contractType: jobPosting.requisition?.contractType ?? null,
     })
-    const workflowStages = await this.prisma.recruitmentWorkflowStage.findMany({
-      where: { workflowId: workflow.id },
-      orderBy: { sequence: "asc" },
-    })
+    // HR-defined steps for this posting win over the matched default workflow.
+    const postingSteps = await this.prisma.jobPostingStep.findMany({ where: { postingId: dto.jobPostingId }, orderBy: { sequence: "asc" } })
+    const workflowStages =
+      postingSteps.length > 0
+        ? postingSteps.map((s, i) => ({ stageId: s.stageId, sequence: i + 1 }))
+        : await this.prisma.recruitmentWorkflowStage.findMany({ where: { workflowId: workflow.id }, orderBy: { sequence: "asc" } })
 
     try {
       const application = await this.prisma.$transaction(async (tx) => {
         const created = await tx.application.create({
-          data: { candidateId: dto.candidateId, jobPostingId: dto.jobPostingId, workflowId: workflow.id },
+          data: { candidateId: dto.candidateId, jobPostingId: dto.jobPostingId, workflowId: workflow.id, coverNote: extra.coverNote },
           include: APPLICATION_INCLUDE,
         })
 

@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common"
 import { ApiTags } from "@nestjs/swagger"
 
+import { SetPostingStepsDto } from "./dto/set-posting-steps.dto"
 import { ActingEmployeeDto } from "./dto/acting-employee.dto"
 import { CreateJobPostingDto } from "./dto/create-job-posting.dto"
 import { UpdateJobPostingDto } from "./dto/update-job-posting.dto"
@@ -40,6 +41,26 @@ export class JobPostingsController {
   @Get(":id")
   findOne(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
     return this.jobPostingsService.findOne(id, actingEmployeeId)
+  }
+
+  @Get(":id/steps")
+  getSteps(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.jobPostingsService.getSteps(id, actingEmployeeId)
+  }
+
+  @Post(":id/steps")
+  setSteps(@Param("id", ParseUUIDPipe) id: string, @Body() dto: SetPostingStepsDto) {
+    return this.jobPostingsService.setSteps(id, dto)
+  }
+
+  @Delete(":id/steps")
+  clearSteps(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.jobPostingsService.clearSteps(id, actingEmployeeId)
+  }
+
+  @Get(":id/board")
+  board(@Param("id", ParseUUIDPipe) id: string, @Query("actingEmployeeId") actingEmployeeId: string) {
+    return this.jobPostingsService.getBoard(id, actingEmployeeId)
   }
 
   @Post()

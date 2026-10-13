@@ -11,17 +11,19 @@ import { Textarea } from "@/components/ui/textarea"
 import type { Branch } from "@/lib/api/branches"
 import type { JobRequisition } from "@/lib/api/recruitment"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
+import { APPLICATION_DOCUMENT_LABELS, APPLICATION_DOCUMENT_TYPES } from "@/lib/application-documents"
 
 interface JobPostingFormProps {
   requisitions: JobRequisition[]
   branches: Branch[]
   actingEmployeeId: string
   defaultRequisitionId?: string
+  defaults?: { title?: string; description?: string; responsibilities?: string; qualifications?: string; branchId?: string; employmentType?: string; requiredExperience?: string }
   action: (prevState: RecruitmentActionState | undefined, formData: FormData) => Promise<RecruitmentActionState>
   submitLabel: string
 }
 
-export function JobPostingForm({ requisitions, branches, actingEmployeeId, defaultRequisitionId, action, submitLabel }: JobPostingFormProps) {
+export function JobPostingForm({ requisitions, branches, actingEmployeeId, defaultRequisitionId, defaults = {}, action, submitLabel }: JobPostingFormProps) {
   const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(action, undefined)
 
   return (
@@ -46,7 +48,7 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="postingTitle">Posting title</Label>
-        <Input id="postingTitle" name="postingTitle" required />
+        <Input id="postingTitle" name="postingTitle" required defaultValue={defaults.title ?? ""} />
       </div>
 
       <div className="flex gap-6 text-sm">
@@ -55,7 +57,7 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
           Post internally
         </label>
         <label className="flex items-center gap-1.5">
-          <input type="checkbox" name="isExternal" />
+          <input type="checkbox" name="isExternal" defaultChecked />
           Post externally
         </label>
       </div>
@@ -70,7 +72,7 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
           <SearchableSelect
             options={branches.map((branch) => ({ value: branch.id, label: branch.name }))}
             name="branchId"
-            defaultValue=""
+            defaultValue={defaults.branchId ?? ""}
             required
             clearable={false}
             placeholder="Select…"
@@ -79,7 +81,7 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="employmentType">Employment type</Label>
-          <Select id="employmentType" name="employmentType" required defaultValue="">
+          <Select id="employmentType" name="employmentType" required defaultValue={defaults.employmentType ?? ""}>
             <option value="" disabled>
               Select…
             </option>
@@ -91,23 +93,36 @@ export function JobPostingForm({ requisitions, branches, actingEmployeeId, defau
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="requiredExperience">Required experience (optional)</Label>
-          <Input id="requiredExperience" name="requiredExperience" />
+          <Input id="requiredExperience" name="requiredExperience" defaultValue={defaults.requiredExperience ?? ""} />
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="description">Description</Label>
-        <Textarea id="description" name="description" required />
+        <Textarea id="description" name="description" rows={5} required defaultValue={defaults.description ?? ""} />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="responsibilities">Responsibilities</Label>
-        <Textarea id="responsibilities" name="responsibilities" required />
+        <Textarea id="responsibilities" name="responsibilities" rows={7} required defaultValue={defaults.responsibilities ?? ""} />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="qualifications">Qualifications</Label>
-        <Textarea id="qualifications" name="qualifications" required />
+        <Textarea id="qualifications" name="qualifications" rows={6} required defaultValue={defaults.qualifications ?? ""} />
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+        <p className="text-sm font-medium">Documents candidates must upload</p>
+        <p className="text-xs text-muted-foreground">A CV is always required. Tick anything else you need at application time.</p>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {APPLICATION_DOCUMENT_TYPES.filter((t) => t !== "CV").map((type) => (
+            <label key={type} className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" name="requiredDocuments" value={type} defaultChecked={type === "ID_DOCUMENT" || type === "ACADEMIC_CERTIFICATES"} />
+              {APPLICATION_DOCUMENT_LABELS[type]}
+            </label>
+          ))}
+        </div>
       </div>
 
       {state?.error ? (

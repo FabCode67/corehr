@@ -6,6 +6,7 @@ import { RecruitmentStageName } from "@prisma/client"
 import { ActingEmployeeDto } from "./dto/acting-employee.dto"
 import { CreateRequisitionDto } from "./dto/create-requisition.dto"
 import { RejectRequisitionDto } from "./dto/reject-requisition.dto"
+import { ReviewRequisitionDto } from "./dto/review-requisition.dto"
 import { UpdateRequisitionDto } from "./dto/update-requisition.dto"
 import { UpdateStageDto } from "./dto/update-stage.dto"
 import { RequisitionsService, type RequisitionFilters } from "./requisitions.service"
@@ -64,6 +65,16 @@ export class RequisitionsController {
   @Post(":id/submit")
   submit(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ActingEmployeeDto) {
     return this.requisitionsService.submit(id, dto)
+  }
+
+  @Post(":id/hr-approve")
+  hrApprove(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ReviewRequisitionDto) {
+    return this.requisitionsService.hrApprove(id, dto)
+  }
+
+  @Post(":id/hr-reject")
+  hrReject(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ReviewRequisitionDto) {
+    return this.requisitionsService.hrReject(id, dto)
   }
 
   @Post(":id/approve")

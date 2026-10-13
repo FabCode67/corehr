@@ -45,7 +45,8 @@ export default async function JobDescriptionsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {jobDescriptions.map((jobDescription) => (
-            <Card key={jobDescription.id}>
+            <Link key={jobDescription.id} href={`/admin/recruitment/job-descriptions/${jobDescription.id}`} className="block">
+            <Card className="h-full transition-colors hover:bg-muted/30">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">{jobDescription.jobTitle}</CardTitle>
@@ -57,6 +58,7 @@ export default async function JobDescriptionsPage() {
                 <p className="line-clamp-3 text-sm text-muted-foreground">{jobDescription.jobSummary}</p>
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       )}

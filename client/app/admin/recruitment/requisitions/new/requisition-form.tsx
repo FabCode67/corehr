@@ -6,42 +6,33 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { SearchableSelectAsync } from "@/components/ui/searchable-select-async"
-import type { Band } from "@/lib/api/bands"
 import type { Branch } from "@/lib/api/branches"
 import type { Department, UnitWithDepartment } from "@/lib/api/departments"
-import { searchEmployeesAction } from "@/lib/api/employees-actions"
 import type { Position, PositionLevel } from "@/lib/api/positions"
-import type { JobDescription, WorkforcePlan } from "@/lib/api/recruitment"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
 
 interface RequisitionFormProps {
-  workforcePlans: WorkforcePlan[]
   positions: Position[]
   departments: Department[]
   units: UnitWithDepartment[]
   levels: PositionLevel[]
-  bands: Band[]
   branches: Branch[]
-  jobDescriptions: JobDescription[]
   actingEmployeeId: string
-  defaultWorkforcePlanId?: string
+  defaultJustification?: string
   action: (prevState: RecruitmentActionState | undefined, formData: FormData) => Promise<RecruitmentActionState>
   submitLabel: string
 }
 
 export function RequisitionForm({
-  workforcePlans,
   positions,
   departments,
   units,
   levels,
-  bands,
   branches,
-  jobDescriptions,
   actingEmployeeId,
-  defaultWorkforcePlanId,
+  defaultJustification = "",
   action,
   submitLabel,
 }: RequisitionFormProps) {
@@ -51,19 +42,6 @@ export function RequisitionForm({
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="actingEmployeeId" value={actingEmployeeId} />
-
-      <div className="flex flex-col gap-1.5">
-        <Label>Workforce plan</Label>
-        <SearchableSelect
-          options={workforcePlans.map((plan) => ({ value: plan.id, label: plan.title }))}
-          name="workforcePlanId"
-          defaultValue={defaultWorkforcePlanId ?? ""}
-          required
-          clearable={false}
-          placeholder="Select an approved plan…"
-          searchPlaceholder="Search plans…"
-        />
-      </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
         <p className="text-xs font-medium text-muted-foreground">Position</p>
@@ -152,19 +130,6 @@ export function RequisitionForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label>Band</Label>
-          <SearchableSelect
-            options={bands.map((band) => ({ value: band.id, label: band.name }))}
-            name="bandId"
-            defaultValue=""
-            required
-            clearable={false}
-            placeholder="Select…"
-            searchPlaceholder="Search bands…"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
           <Label htmlFor="numberOfVacancies">Number of vacancies</Label>
           <Input id="numberOfVacancies" name="numberOfVacancies" type="number" min={1} defaultValue={1} required />
         </div>
@@ -222,19 +187,6 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Requested by</Label>
-          <SearchableSelectAsync
-            loadOptions={searchEmployeesAction}
-            name="requestedById"
-            defaultValue=""
-            required
-            clearable={false}
-            placeholder="Select…"
-            searchPlaceholder="Search employees by name or staff ID…"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
           <Label htmlFor="priority">Priority</Label>
           <Select id="priority" name="priority" defaultValue="MEDIUM">
             <option value="LOW">Low</option>
@@ -250,13 +202,13 @@ export function RequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label>Job description template (optional)</Label>
-          <SearchableSelect
-            options={jobDescriptions.map((jobDescription) => ({ value: jobDescription.id, label: jobDescription.jobTitle }))}
-            name="jobDescriptionId"
-            defaultValue=""
-            placeholder="None yet"
-            searchPlaceholder="Search job descriptions…"
+          <Label htmlFor="justification">Justification</Label>
+          <Textarea
+            id="justification"
+            name="justification"
+            required
+            defaultValue={defaultJustification}
+            placeholder="Why is this hire needed? Workload, replacement, new project…"
           />
         </div>
       </div>

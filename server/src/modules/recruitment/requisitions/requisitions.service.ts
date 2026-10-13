@@ -10,6 +10,7 @@ import { RecruitmentAccessScope, RecruitmentAccessService } from "../access/recr
 import { ActingEmployeeDto } from "./dto/acting-employee.dto"
 import { CreateRequisitionDto } from "./dto/create-requisition.dto"
 import { RejectRequisitionDto } from "./dto/reject-requisition.dto"
+import { ReviewRequisitionDto } from "./dto/review-requisition.dto"
 import { UpdateRequisitionDto } from "./dto/update-requisition.dto"
 import { UpdateStageDto } from "./dto/update-stage.dto"
 
@@ -120,10 +121,8 @@ export class RequisitionsService {
     return requisition
   }
 
-  /** Selects (or creates) the Position, snapshots its org context, creates
-   *  the JobRequisition, and seeds all 12 RecruitmentStageInstance rows so
-   *  the full planned timeline exists immediately — see module doc comment
-   *  on RecruitmentStageInstance. */
+  /** Raised by a Head of Department (or HR admin) from an existing/vacant
+   *  position or a brand-new one. Creates a DRAFT; submit() sends it to HR. */
   async create(dto: CreateRequisitionDto, actingEmployeeId: string) {
     if (!dto.positionId && !dto.newPosition) {
       throw new BadRequestException("Provide either an existing positionId or a newPosition to create.")
@@ -132,12 +131,21 @@ export class RequisitionsService {
       throw new BadRequestException("Provide only one of positionId or newPosition, not both.")
     }
 
-    const plan = await this.prisma.workforcePlan.findUnique({ where: { id: dto.workforcePlanId } })
-    if (!plan) {
-      throw new NotFoundException(`Workforce plan ${dto.workforcePlanId} not found`)
+    const scope = await this.accessService.resolveScope(actingEmployeeId)
+    if (!scope.allowAll && scope.departmentIds.length === 0) {
+      throw new ForbiddenException("Only a Head of Department or an HR administrator can raise a job requisition.")
     }
-    if (plan.status !== "APPROVED") {
-      throw new BadRequestException("The workforce plan must be approved before a requisition can be created against it.")
+
+    const targetDepartmentId = dto.positionId
+      ? (await this.prisma.position.findUnique({ where: { id: dto.positionId }, select: { departmentId: true } }))?.departmentId
+      : dto.newPosition!.departmentId
+    if (!scope.allowAll && targetDepartmentId && !scope.departmentIds.includes(targetDepartmentId)) {
+      throw new ForbiddenException("You can only raise requisitions for positions in the department you head.")
+    }
+
+    if (dto.workforcePlanId) {
+      const plan = await this.prisma.workforcePlan.findUnique({ where: { id: dto.workforcePlanId } })
+      if (!plan) throw new NotFoundException(`Workforce plan ${dto.workforcePlanId} not found`)
     }
 
     const position = dto.positionId
@@ -159,29 +167,35 @@ export class RequisitionsService {
       throw new NotFoundException(`Department ${position.departmentId} not found`)
     }
 
-    await this.assertBandExists(dto.bandId)
+    const bandId = dto.bandId ?? (await this.defaultBandId(position.id))
+    await this.assertBandExists(bandId)
+
+    // recruiterId is a required snapshot; until HR picks the requisition up
+    // in review, point it at an HR administrator (replaced by the reviewer).
+    const recruiterId = await this.defaultRecruiterId(actingEmployeeId)
 
     const requisition = await this.prisma.$transaction(async (tx) => {
       const created = await tx.jobRequisition.create({
         data: {
-          workforcePlanId: dto.workforcePlanId,
+          workforcePlanId: dto.workforcePlanId ?? null,
           positionId: position.id,
           departmentId: position.departmentId,
           unitId: position.unitId,
           functionId: department.functionId,
-          bandId: dto.bandId,
+          bandId,
           reportsToPositionId: position.reportsToPositionId,
           numberOfVacancies: dto.numberOfVacancies,
           contractType: dto.contractType,
           branchId: dto.branchId,
           employmentType: dto.employmentType,
           hiringReason: dto.hiringReason,
-          requestedById: dto.requestedById,
-          hiringManagerId: dto.hiringManagerId,
-          recruiterId: plan.recruiterId,
+          requestedById: dto.requestedById ?? actingEmployeeId,
+          hiringManagerId: dto.hiringManagerId ?? actingEmployeeId,
+          recruiterId,
           priority: dto.priority,
           targetStartDate: dto.targetStartDate,
           jobDescriptionId: dto.jobDescriptionId,
+          justification: dto.justification,
         },
         include: REQUISITION_INCLUDE,
       })
@@ -197,10 +211,23 @@ export class RequisitionsService {
     return requisition
   }
 
+  private async defaultBandId(positionId: string): Promise<string> {
+    const holder = await this.prisma.employee.findFirst({ where: { positionId, bandId: { not: null } }, select: { bandId: true } })
+    if (holder?.bandId) return holder.bandId
+    const lowest = await this.prisma.band.findFirst({ orderBy: { rank: "asc" }, select: { id: true } })
+    if (!lowest) throw new BadRequestException("No bands are configured; create a band first.")
+    return lowest.id
+  }
+
+  private async defaultRecruiterId(fallback: string): Promise<string> {
+    const admin = await this.prisma.employee.findFirst({ where: { isAdmin: true }, select: { employeeNumber: true }, orderBy: { employeeNumber: "asc" } })
+    return admin?.employeeNumber ?? fallback
+  }
+
   async update(id: string, dto: UpdateRequisitionDto, actingEmployeeId: string) {
     const requisition = await this.findOne(id, actingEmployeeId)
-    if (requisition.status === "CLOSED") {
-      throw new BadRequestException("A closed requisition can no longer be edited.")
+    if (!["DRAFT", "REJECTED", "PENDING_HR_REVIEW"].includes(requisition.status) && requisition.status !== "APPROVED") {
+      throw new BadRequestException("A requisition awaiting MD approval or already closed can't be edited.")
     }
     if (dto.bandId) {
       await this.assertBandExists(dto.bandId)
@@ -234,28 +261,78 @@ export class RequisitionsService {
     ])
   }
 
+  /** HoD (requester / dept head) or admin sends a DRAFT (or a returned
+   *  REJECTED one, after edits) to HR for review. */
   async submit(id: string, dto: ActingEmployeeDto) {
     const requisition = await this.findOne(id, dto.actingEmployeeId)
-    if (requisition.status !== "DRAFT") {
-      throw new BadRequestException("Only a draft requisition can be submitted for approval.")
+    if (requisition.status !== "DRAFT" && requisition.status !== "REJECTED") {
+      throw new BadRequestException("Only a draft or returned requisition can be submitted for HR review.")
     }
     const updated = await this.prisma.jobRequisition.update({
       where: { id },
-      data: { status: RequisitionStatus.PENDING_APPROVAL },
+      data: { status: RequisitionStatus.PENDING_HR_REVIEW, rejectionComment: null },
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "SUBMITTED", dto.actingEmployeeId)
     return updated
   }
 
+  /** HR reviews, approves and forwards to the MD. */
+  async hrApprove(id: string, dto: ReviewRequisitionDto) {
+    await this.assertIsHr(dto.actingEmployeeId)
+    const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
+    if (!requisition) throw new NotFoundException(`Job requisition ${id} not found`)
+    if (requisition.status !== "PENDING_HR_REVIEW") {
+      throw new BadRequestException("Only a requisition pending HR review can be forwarded.")
+    }
+    const updated = await this.prisma.jobRequisition.update({
+      where: { id },
+      data: {
+        status: RequisitionStatus.PENDING_MD_APPROVAL,
+        recruiterId: dto.actingEmployeeId,
+        hrReviewedById: dto.actingEmployeeId,
+        hrReviewedAt: new Date(),
+        hrComment: dto.comment || null,
+      },
+      include: REQUISITION_INCLUDE,
+    })
+    await this.log(id, "HR_APPROVED", dto.actingEmployeeId, dto.comment)
+    return updated
+  }
+
+  /** HR sends the requisition back to the HoD with a reason. */
+  async hrReject(id: string, dto: ReviewRequisitionDto) {
+    await this.assertIsHr(dto.actingEmployeeId)
+    if (!dto.comment?.trim()) throw new BadRequestException("A comment is required when returning a requisition.")
+    const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
+    if (!requisition) throw new NotFoundException(`Job requisition ${id} not found`)
+    if (requisition.status !== "PENDING_HR_REVIEW") {
+      throw new BadRequestException("Only a requisition pending HR review can be returned.")
+    }
+    const updated = await this.prisma.jobRequisition.update({
+      where: { id },
+      data: {
+        status: RequisitionStatus.REJECTED,
+        rejectionComment: dto.comment,
+        hrReviewedById: dto.actingEmployeeId,
+        hrReviewedAt: new Date(),
+        hrComment: dto.comment,
+      },
+      include: REQUISITION_INCLUDE,
+    })
+    await this.log(id, "HR_REJECTED", dto.actingEmployeeId, dto.comment)
+    return updated
+  }
+
+  /** Final approval by the MD (Director-level position). */
   async approve(id: string, dto: ActingEmployeeDto) {
-    await this.assertCanApproveRequisition(dto.actingEmployeeId)
+    await this.assertIsMd(dto.actingEmployeeId)
     const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
     if (!requisition) {
       throw new NotFoundException(`Job requisition ${id} not found`)
     }
-    if (requisition.status !== "PENDING_APPROVAL") {
-      throw new BadRequestException("Only a requisition pending approval can be approved.")
+    if (requisition.status !== "PENDING_MD_APPROVAL" && requisition.status !== "PENDING_APPROVAL") {
+      throw new BadRequestException("Only a requisition pending MD approval can be approved.")
     }
     const updated = await this.prisma.jobRequisition.update({
       where: { id },
@@ -267,13 +344,13 @@ export class RequisitionsService {
   }
 
   async reject(id: string, dto: RejectRequisitionDto) {
-    await this.assertCanApproveRequisition(dto.actingEmployeeId)
+    await this.assertIsMd(dto.actingEmployeeId)
     const requisition = await this.prisma.jobRequisition.findUnique({ where: { id } })
     if (!requisition) {
       throw new NotFoundException(`Job requisition ${id} not found`)
     }
-    if (requisition.status !== "PENDING_APPROVAL") {
-      throw new BadRequestException("Only a requisition pending approval can be rejected.")
+    if (requisition.status !== "PENDING_MD_APPROVAL" && requisition.status !== "PENDING_APPROVAL") {
+      throw new BadRequestException("Only a requisition pending MD approval can be rejected.")
     }
     const updated = await this.prisma.jobRequisition.update({
       where: { id },
@@ -345,19 +422,20 @@ export class RequisitionsService {
     }
   }
 
-  /** HR admins can approve/reject any requisition. The Director-level
-   *  position holder can too, even though that position is deliberately
-   *  never granted isAdmin (see DIRECTOR_LEVEL_CODE's doc comment) —
-   *  approving hiring across the bank is exactly the kind of decision
-   *  that sits with the bank's head. */
-  private async assertCanApproveRequisition(actingEmployeeId: string) {
+  private async assertIsHr(actingEmployeeId: string) {
+    const actor = await this.prisma.employee.findUnique({ where: { employeeNumber: actingEmployeeId }, select: { isAdmin: true } })
+    if (!actor?.isAdmin) throw new ForbiddenException("Only HR can review a job requisition.")
+  }
+
+  /** The MD is the Director-level (E1) position holder — deliberately not
+   *  an admin (see DIRECTOR_LEVEL_CODE), so this checks the level only. */
+  private async assertIsMd(actingEmployeeId: string) {
     const actor = await this.prisma.employee.findUnique({
       where: { employeeNumber: actingEmployeeId },
-      select: { isAdmin: true, position: { select: { level: { select: { code: true } } } } },
+      select: { position: { select: { level: { select: { code: true } } } } },
     })
-    const isDirector = actor?.position?.level?.code === DIRECTOR_LEVEL_CODE
-    if (!actor?.isAdmin && !isDirector) {
-      throw new ForbiddenException("Only an HR administrator or the Director can approve or reject a job requisition")
+    if (actor?.position?.level?.code !== DIRECTOR_LEVEL_CODE) {
+      throw new ForbiddenException("Only the Managing Director can approve or reject a job requisition.")
     }
   }
 

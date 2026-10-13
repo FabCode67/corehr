@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
 
-import { Prisma } from "@prisma/client"
+import { Prisma, RequisitionStatus } from "@prisma/client"
 
 import { PrismaService } from "../../../prisma/prisma.service"
+
+const DIRECTOR_VISIBLE_STATUSES: RequisitionStatus[] = ["PENDING_MD_APPROVAL", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CLOSED", "FILLED"]
 
 export interface RecruitmentAccessScope {
   /** Admin — no restriction, sees every recruitment record. */
@@ -11,6 +13,8 @@ export interface RecruitmentAccessScope {
   /** Departments this employee is the automatically-derived head of — same
    *  derivation as LearningAccessService/PerformanceAccessService. */
   departmentIds: string[]
+  /** Director-level (MD) — sees requisitions awaiting/after MD approval. */
+  isDirector?: boolean
 }
 
 /**
@@ -42,7 +46,10 @@ export class RecruitmentAccessService {
     }
 
     const departmentIds = await this.getHeadedDepartmentIds(actor.positionId, actor.position?.departmentId ?? null)
-    return { allowAll: false, actingEmployeeId, departmentIds }
+    const level = actor.position?.levelId
+      ? await this.prisma.positionLevel.findUnique({ where: { id: actor.position.levelId }, select: { code: true } })
+      : null
+    return { allowAll: false, actingEmployeeId, departmentIds, isDirector: level?.code === "E1" }
   }
 
   /** Departments this position is the automatically-derived head of —
@@ -83,7 +90,14 @@ export class RecruitmentAccessService {
 
   buildRequisitionWhere(scope: RecruitmentAccessScope): Prisma.JobRequisitionWhereInput {
     if (scope.allowAll) return {}
-    return { OR: this.ownershipOr(scope) }
+    return {
+      OR: [
+        ...this.ownershipOr(scope),
+        ...(scope.isDirector
+          ? [{ status: { in: DIRECTOR_VISIBLE_STATUSES } }]
+          : []),
+      ],
+    }
   }
 
   /** Applications/Assessments/Interviews/BackgroundChecks/Offers/
@@ -96,9 +110,10 @@ export class RecruitmentAccessService {
 
   canAccessRequisition(
     scope: RecruitmentAccessScope,
-    requisition: { recruiterId: string; hiringManagerId: string; departmentId: string }
+    requisition: { recruiterId: string; hiringManagerId: string; departmentId: string; status?: string }
   ) {
     if (scope.allowAll) return true
+    if (scope.isDirector && requisition.status && requisition.status !== "DRAFT" && requisition.status !== "PENDING_HR_REVIEW") return true
     return (
       requisition.recruiterId === scope.actingEmployeeId ||
       requisition.hiringManagerId === scope.actingEmployeeId ||

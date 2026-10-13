@@ -3,9 +3,10 @@ import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchBranches } from "@/lib/api/branches"
-import { fetchRequisitions } from "@/lib/api/recruitment"
+import { fetchJobDescriptionStructured, fetchRequisitions } from "@/lib/api/recruitment"
 import { createJobPosting } from "@/lib/api/recruitment-actions"
 import { getSession } from "@/lib/get-session"
+import { splitLines } from "@/lib/jd-content"
 
 import { JobPostingForm } from "./job-posting-form"
 
@@ -18,6 +19,20 @@ export default async function NewJobPostingPage({ searchParams }: { searchParams
     fetchRequisitions({ status: "APPROVED" }, actingEmployeeId),
     fetchBranches(),
   ])
+
+  // Prefill from the requisition's job description so HR only reviews and publishes.
+  const requisition = requisitionsResult.ok ? requisitionsResult.data.find((r) => r.id === requisitionId) : undefined
+  const jdResult = requisition?.jobDescriptionId ? await fetchJobDescriptionStructured(requisition.jobDescriptionId) : null
+  const jd = jdResult?.ok ? jdResult.data.content : null
+  const bullets = (text: string) => splitLines(text).map((l) => l.replace(/^#\s*/, "")).join("\n")
+  const defaults = {
+    title: requisition?.position.title,
+    branchId: requisition?.branchId,
+    employmentType: requisition?.employmentType,
+    description: jd?.purpose,
+    responsibilities: jd?.kras.filter((k) => k.output.trim()).map((k) => `${k.perspective}\n${bullets(k.output)}`).join("\n\n"),
+    qualifications: jd ? bullets(jd.specifications) : undefined,
+  }
 
   if (!requisitionsResult.ok) {
     return (
@@ -41,6 +56,7 @@ export default async function NewJobPostingPage({ searchParams }: { searchParams
           Back to job postings
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">New job posting</h1>
+        <p className="text-sm text-muted-foreground">Details are prefilled from the requisition and its job description. Publish to get a shareable link.</p>
       </div>
 
       {requisitionsResult.data.length === 0 ? (
@@ -55,6 +71,7 @@ export default async function NewJobPostingPage({ searchParams }: { searchParams
               branches={branchesResult.ok ? branchesResult.data : []}
               actingEmployeeId={actingEmployeeId}
               defaultRequisitionId={requisitionId}
+              defaults={defaults}
               action={createJobPosting}
               submitLabel="Create job posting"
             />

@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { RecruitmentEmploymentType } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsBoolean, IsDate, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from "class-validator"
+import { IsArray, IsBoolean, IsDate, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from "class-validator"
 
 export class CreateJobPostingDto {
   @IsUUID()
@@ -44,4 +44,15 @@ export class CreateJobPostingDto {
   @IsString()
   @IsOptional()
   requiredExperience?: string
+
+  @ApiPropertyOptional({ description: "Defaults to the requisition's attached JD." })
+  @IsUUID()
+  @IsOptional()
+  jobDescriptionId?: string
+
+  @ApiPropertyOptional({ description: "Document types the candidate must upload besides the CV." })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  requiredDocuments?: string[]
 }

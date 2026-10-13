@@ -166,8 +166,30 @@ export class OnboardingService {
     ])
 
     await this.log(applicationId, "ONBOARDING_COMPLETED", dto.actingEmployeeId, employee.employeeNumber)
+    await this.markRequisitionFilledIfComplete(application.jobPostingId, dto.actingEmployeeId)
 
     return { employee, application: updatedApplication }
+  }
+
+  /** Once hires reach the requisition's vacancies the position is filled:
+   *  requisition -> FILLED and its published postings are closed. */
+  private async markRequisitionFilledIfComplete(jobPostingId: string, actorId: string) {
+    const posting = await this.prisma.jobPosting.findUnique({ where: { id: jobPostingId }, select: { requisitionId: true } })
+    if (!posting) return
+    const requisition = await this.prisma.jobRequisition.findUnique({
+      where: { id: posting.requisitionId },
+      select: { id: true, status: true, numberOfVacancies: true },
+    })
+    if (!requisition || requisition.status !== "APPROVED") return
+    const hired = await this.prisma.application.count({ where: { status: "HIRED", jobPosting: { requisitionId: requisition.id } } })
+    if (hired < requisition.numberOfVacancies) return
+    await this.prisma.$transaction([
+      this.prisma.jobRequisition.update({ where: { id: requisition.id }, data: { status: "FILLED" } }),
+      this.prisma.jobPosting.updateMany({ where: { requisitionId: requisition.id, status: "PUBLISHED" }, data: { status: "CLOSED", closedAt: new Date() } }),
+      this.prisma.recruitmentAuditLog.create({
+        data: { entityType: "JobRequisition", entityId: requisition.id, action: "FILLED", actorId, notes: `${hired}/${requisition.numberOfVacancies} hired` },
+      }),
+    ])
   }
 
   private async log(id: string, action: string, actorId: string | null, notes?: string) {

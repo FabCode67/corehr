@@ -33,6 +33,7 @@ import { WorkforcePlansModule } from "./modules/recruitment/workforce-plans/work
 import { RequisitionsModule } from "./modules/recruitment/requisitions/requisitions.module"
 import { JobDescriptionsModule } from "./modules/recruitment/job-descriptions/job-descriptions.module"
 import { JobPostingsModule } from "./modules/recruitment/job-postings/job-postings.module"
+import { PublicJobsModule } from "./modules/recruitment/public-jobs/public-jobs.module"
 import { CandidatesModule } from "./modules/recruitment/candidates/candidates.module"
 import { RecruitmentStageDefinitionsModule } from "./modules/recruitment/stage-definitions/recruitment-stage-definitions.module"
 import { RecruitmentWorkflowsModule } from "./modules/recruitment/workflows/recruitment-workflows.module"
@@ -116,6 +117,7 @@ import { EdwhReportModule } from "./modules/edwh-report/edwh-report.module"
     RequisitionsModule,
     JobDescriptionsModule,
     JobPostingsModule,
+    PublicJobsModule,
     CandidatesModule,
     RecruitmentStageDefinitionsModule,
     RecruitmentWorkflowsModule,

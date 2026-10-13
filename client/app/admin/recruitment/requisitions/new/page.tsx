@@ -1,44 +1,26 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchBands } from "@/lib/api/bands"
+import { Card, CardContent } from "@/components/ui/card"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments, fetchUnits } from "@/lib/api/departments"
 import { fetchPositionLevels, fetchPositions } from "@/lib/api/positions"
-import { fetchJobDescriptions, fetchWorkforcePlans } from "@/lib/api/recruitment"
 import { createRequisition } from "@/lib/api/recruitment-actions"
 import { getSession } from "@/lib/get-session"
 
 import { RequisitionForm } from "./requisition-form"
 
-export default async function NewRequisitionPage({ searchParams }: { searchParams: Promise<{ workforcePlanId?: string }> }) {
-  const { workforcePlanId } = await searchParams
+export default async function NewRequisitionPage() {
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [plansResult, positionsResult, departmentsResult, unitsResult, levelsResult, bandsResult, branchesResult, jobDescriptionsResult] =
-    await Promise.all([
-      fetchWorkforcePlans({ status: "APPROVED" }, actingEmployeeId),
-      fetchPositions(),
-      fetchDepartments(),
-      fetchUnits(),
-      fetchPositionLevels(),
-      fetchBands(),
-      fetchBranches(),
-      fetchJobDescriptions(),
-    ])
-
-  if (!plansResult.ok) {
-    return (
-      <Card className="max-w-3xl border-dashed border-destructive/40">
-        <CardHeader>
-          <CardTitle className="text-base">Can&apos;t reach the API</CardTitle>
-          <CardDescription>{plansResult.error}</CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
+  const [positionsResult, departmentsResult, unitsResult, levelsResult, branchesResult] = await Promise.all([
+    fetchPositions(),
+    fetchDepartments(),
+    fetchUnits(),
+    fetchPositionLevels(),
+    fetchBranches(),
+  ])
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -51,38 +33,25 @@ export default async function NewRequisitionPage({ searchParams }: { searchParam
           Back to requisitions
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">New job requisition</h1>
+        <p className="text-sm text-muted-foreground">
+          Pick a vacant position or propose a new one. HR reviews it, then the Managing Director gives final approval.
+        </p>
       </div>
 
-      {plansResult.data.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-6 text-sm text-muted-foreground">
-            No approved workforce plans yet.{" "}
-            <Link href="/admin/recruitment/workforce-plans/new" className="text-primary underline">
-              Create and approve one first
-            </Link>
-            .
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent>
-            <RequisitionForm
-              workforcePlans={plansResult.data}
-              positions={positionsResult.ok ? positionsResult.data : []}
-              departments={departmentsResult.ok ? departmentsResult.data : []}
-              units={unitsResult.ok ? unitsResult.data : []}
-              levels={levelsResult.ok ? levelsResult.data : []}
-              bands={bandsResult.ok ? bandsResult.data : []}
-              branches={branchesResult.ok ? branchesResult.data : []}
-              jobDescriptions={jobDescriptionsResult.ok ? jobDescriptionsResult.data : []}
-              actingEmployeeId={actingEmployeeId}
-              defaultWorkforcePlanId={workforcePlanId}
-              action={createRequisition}
-              submitLabel="Create requisition"
-            />
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent>
+          <RequisitionForm
+            positions={positionsResult.ok ? positionsResult.data : []}
+            departments={departmentsResult.ok ? departmentsResult.data : []}
+            units={unitsResult.ok ? unitsResult.data : []}
+            levels={levelsResult.ok ? levelsResult.data : []}
+            branches={branchesResult.ok ? branchesResult.data : []}
+            actingEmployeeId={actingEmployeeId}
+            action={createRequisition}
+            submitLabel="Save as draft"
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }

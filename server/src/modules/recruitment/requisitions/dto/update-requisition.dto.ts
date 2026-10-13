@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { ContractType, RecruitmentEmploymentType, RecruitmentPriority } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsDate, IsEnum, IsInt, IsOptional, IsUUID, Min } from "class-validator"
+import { IsDate, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from "class-validator"
 
 /** Fields that make sense to edit after creation. Position, workforce plan,
  *  and the department/unit/function snapshot derived from the position stay
@@ -45,4 +45,9 @@ export class UpdateRequisitionDto {
   @IsUUID()
   @IsOptional()
   jobDescriptionId?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  justification?: string
 }

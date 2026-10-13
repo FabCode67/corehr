@@ -4,12 +4,16 @@ import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchApplications, fetchCandidates, fetchJobPosting } from "@/lib/api/recruitment"
+import { fetchApplications, fetchCandidates, fetchJobPosting, fetchPostingSteps, fetchStageDefinitions } from "@/lib/api/recruitment"
 import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
+import { ShareJobPanel } from "@/components/share-job-panel"
 import { getSession } from "@/lib/get-session"
+import { getPublicBaseUrl } from "@/lib/public-url"
 
 import { AddApplicationForm } from "./add-application-form"
 import { PostingActions } from "./posting-actions"
+import { StepsEditor } from "./steps-editor"
+import { buttonVariants } from "@/components/ui/button"
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -25,10 +29,12 @@ export default async function JobPostingDetailPage({ params }: { params: Promise
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
-  const [postingResult, applicationsResult, candidatesResult] = await Promise.all([
+  const [postingResult, applicationsResult, candidatesResult, stepsResult, catalogResult] = await Promise.all([
     fetchJobPosting(id, actingEmployeeId),
     fetchApplications({ jobPostingId: id }, actingEmployeeId),
     fetchCandidates(),
+    fetchPostingSteps(id, actingEmployeeId),
+    fetchStageDefinitions(),
   ])
 
   if (!postingResult.ok) {
@@ -44,6 +50,7 @@ export default async function JobPostingDetailPage({ params }: { params: Promise
   }
 
   const posting = postingResult.data
+  const publicUrl = posting.shareSlug ? `${await getPublicBaseUrl()}/jobs/${posting.shareSlug}` : null
   const applications = applicationsResult.ok ? applicationsResult.data : []
   const candidates = candidatesResult.ok ? candidatesResult.data : []
 
@@ -88,6 +95,33 @@ export default async function JobPostingDetailPage({ params }: { params: Promise
           <PostingActions postingId={posting.id} actingEmployeeId={actingEmployeeId} status={posting.status} />
         </CardContent>
       </Card>
+
+      {posting.status === "PUBLISHED" && publicUrl ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Share this job</CardTitle>
+            <CardDescription>Anyone with this link can view the job and apply — no account needed.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ShareJobPanel url={publicUrl} title={posting.postingTitle} />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {stepsResult.ok && catalogResult.ok ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Hiring steps</CardTitle>
+            <CardDescription>The interviews, tests and checks every applicant goes through, in order.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <StepsEditor postingId={posting.id} actingEmployeeId={actingEmployeeId} initial={stepsResult.data} catalog={catalogResult.data} />
+            <Link href={`/admin/recruitment/job-postings/${posting.id}/board`} className={buttonVariants({ size: "sm", variant: "outline" }) + " self-start"}>
+              Open hiring board
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

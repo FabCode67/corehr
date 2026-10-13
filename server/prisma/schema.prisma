@@ -367,6 +367,7 @@ model Position {
   courseAssignments  CourseAssignment[]
   jobRequisitions        JobRequisition[] @relation("RequisitionPosition")
   requisitionsReportingTo JobRequisition[] @relation("RequisitionReportsTo")
+  jobDescriptions         JobDescription[] @relation("JobDescriptionPosition")
   jobDescriptionsReportingTo JobDescription[] @relation("JobDescriptionReportingManager")
   offers                 Offer[]
   exitClearanceFormTemplates ExitClearanceFormTemplate[]
@@ -2445,10 +2446,15 @@ enum HiringReason {
 
 enum RequisitionStatus {
   DRAFT
+  /// Legacy single-step approval; new requisitions use the two below.
   PENDING_APPROVAL
+  PENDING_HR_REVIEW
+  PENDING_MD_APPROVAL
   APPROVED
   REJECTED
   CLOSED
+  /// Every vacancy has been filled by a completed onboarding.
+  FILLED
 }
 
 /// Fixed set of trackable recruitment stages — see the module doc comment
@@ -2626,7 +2632,7 @@ model WorkforcePlan {
 /// requisition is created (see RequisitionsService.create).
 model JobRequisition {
   id              String @id @default(uuid()) @db.Uuid
-  workforcePlanId String @db.Uuid
+  workforcePlanId String? @db.Uuid
   positionId      String @db.Uuid
 
   // --- Snapshot of the position's org context at requisition time (see
@@ -2658,7 +2664,13 @@ model JobRequisition {
   approvedAt       DateTime?
   rejectionComment String?
 
-  workforcePlan WorkforcePlan  @relation(fields: [workforcePlanId], references: [id])
+  /// Why the Head of Department needs this hire (free text).
+  justification   String?
+  hrReviewedById  String?
+  hrReviewedAt    DateTime?
+  hrComment       String?
+
+  workforcePlan WorkforcePlan?  @relation(fields: [workforcePlanId], references: [id])
   position      Position       @relation("RequisitionPosition", fields: [positionId], references: [id])
   reportsToPosition Position?  @relation("RequisitionReportsTo", fields: [reportsToPositionId], references: [id])
   department    Department     @relation(fields: [departmentId], references: [id])
@@ -2712,15 +2724,26 @@ model JobDescription {
 
   isActive Boolean @default(true)
 
+  /// Structured JD in the NCBA master template layout (see
+  /// recruitment/job-descriptions/jd-content.ts). The flat fields above are
+  /// derived from it on save so postings and older screens keep working.
+  content    Json?
+  /// The position this JD was written for — drives "reuse the latest JD".
+  positionId String? @db.Uuid
+  createdById String?
+  position   Position? @relation("JobDescriptionPosition", fields: [positionId], references: [id])
+
   requiredLevel    PositionLevel? @relation(fields: [requiredLevelId], references: [id])
   requiredBand     Band?          @relation(fields: [requiredBandId], references: [id])
   reportingManagerPosition Position? @relation("JobDescriptionReportingManager", fields: [reportingManagerPositionId], references: [id])
 
   requisitions JobRequisition[]
+  jobPostings  JobPosting[] @relation("PostingJobDescription")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([positionId])
   @@map("job_descriptions")
 }
 
@@ -2769,8 +2792,17 @@ model JobPosting {
   publishedAt DateTime?
   closedAt    DateTime?
 
+  /// Unguessable token for the public share link /jobs/<shareSlug>.
+  shareSlug         String?  @unique
+  /// Document types candidates must upload (CV is always required) — see
+  /// recruitment/public-jobs/application-documents.ts.
+  requiredDocuments String[] @default([])
+  jobDescriptionId  String?  @db.Uuid
+
   requisition JobRequisition @relation(fields: [requisitionId], references: [id])
   branch      Branch         @relation(fields: [branchId], references: [id])
+  jobDescription JobDescription? @relation("PostingJobDescription", fields: [jobDescriptionId], references: [id])
+  steps          JobPostingStep[]
 
   applications Application[]
 
@@ -2800,6 +2832,9 @@ model Candidate {
   certifications String?
   skills         String?
   references     String?
+  linkedinUrl     String?
+  currentEmployer String?
+  currentPosition String?
 
   applications Application[]
 
@@ -2819,6 +2854,9 @@ model Application {
 
   status    ApplicationStatus @default(APPLIED)
   appliedAt DateTime          @default(now())
+  /// Free-text note from the candidate on the public apply form.
+  coverNote String?
+  documents ApplicationDocument[]
 
   /// Set once onboarding completes and the real Employee record is created
   /// (see RecruitmentOnboardingService.completeOnboarding) — links this
@@ -2924,6 +2962,7 @@ model RecruitmentStageDefinition {
   workflowStages         RecruitmentWorkflowStage[]
   scoringCriteria        RecruitmentScoringCriterion[]
   applicationStages      ApplicationStageInstance[]
+  postingSteps           JobPostingStep[]
   currentForApplications Application[]                 @relation("ApplicationCurrentStage")
 
   createdAt DateTime @default(now())
@@ -4367,4 +4406,38 @@ model AiAuditLog {
   @@index([employeeId, createdAt])
   @@index([eventType, createdAt])
   @@map("ai_audit_logs")
+}
+
+/// A file the candidate uploaded on the public apply form (CV, certificates, ...).
+model ApplicationDocument {
+  id            String @id @default(uuid()) @db.Uuid
+  applicationId String @db.Uuid
+  /// CV | COVER_LETTER | ID_DOCUMENT | ACADEMIC_CERTIFICATES | PROFESSIONAL_CERTIFICATES | REFERENCE_LETTERS | OTHER
+  type          String
+  url           String
+  fileName      String
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId])
+  @@map("application_documents")
+}
+
+/// HR-defined hiring step for ONE job posting (an ordered pick from the stage
+/// catalog). When a posting has any, new applications follow these instead of
+/// the band/contract-matched default workflow.
+model JobPostingStep {
+  id         String @id @default(uuid()) @db.Uuid
+  postingId  String @db.Uuid
+  stageId    String @db.Uuid
+  sequence   Int
+
+  posting JobPosting                 @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  stage   RecruitmentStageDefinition @relation(fields: [stageId], references: [id])
+
+  @@unique([postingId, stageId])
+  @@unique([postingId, sequence])
+  @@map("job_posting_steps")
 }

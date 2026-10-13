@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchEmployeeByNumber } from "@/lib/api/employees"
-import { fetchJobPostings, fetchRequisition, fetchRequisitionStages } from "@/lib/api/recruitment"
+import { fetchJobPostings, fetchLatestJobDescriptionForPosition, fetchRequisition, fetchRequisitionStages } from "@/lib/api/recruitment"
 import { fullName } from "@/lib/format-name"
 import { getSession } from "@/lib/get-session"
 
@@ -58,6 +58,8 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
   }
 
   const requisition = requisitionResult.data
+  const latestJdResult = requisition.status === "APPROVED" ? await fetchLatestJobDescriptionForPosition(requisition.positionId) : null
+  const latestJd = latestJdResult?.ok ? latestJdResult.data : null
   const postings = postingsResult.ok ? postingsResult.data : []
 
   return (
@@ -72,7 +74,7 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
         </Link>
         <div className="mt-2 flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-foreground">{requisition.position.title}</h1>
-          <Badge variant={requisition.status === "APPROVED" ? "success" : requisition.status === "REJECTED" ? "destructive" : "outline"}>
+          <Badge variant={requisition.status === "APPROVED" || requisition.status === "FILLED" ? "success" : requisition.status === "REJECTED" ? "destructive" : "outline"}>
             {requisition.status.replaceAll("_", " ")}
           </Badge>
         </div>
@@ -100,7 +102,9 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
           <Field label="Hiring manager" value={fullName(requisition.hiringManager)} />
           <Field label="Recruiter" value={fullName(requisition.recruiter)} />
           {requisition.jobDescription ? <Field label="Job description" value={requisition.jobDescription.jobTitle} /> : null}
-          {requisition.rejectionComment ? <Field label="Rejection reason" value={requisition.rejectionComment} /> : null}
+          {requisition.justification ? <Field label="Justification" value={requisition.justification} /> : null}
+          {requisition.hrComment && requisition.status !== "REJECTED" ? <Field label="HR comment" value={requisition.hrComment} /> : null}
+          {requisition.rejectionComment ? <Field label="Returned / rejected reason" value={requisition.rejectionComment} /> : null}
         </CardContent>
       </Card>
 
@@ -113,10 +117,58 @@ export default async function RequisitionDetailPage({ params }: { params: Promis
             requisitionId={requisition.id}
             actingEmployeeId={actingEmployeeId}
             status={requisition.status}
-            canApprove={session?.role === "admin" || isDirector}
+            canApprove={isDirector}
+            canReview={session?.role === "admin"}
           />
         </CardContent>
       </Card>
+
+      {requisition.status === "APPROVED" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Job description</CardTitle>
+            <CardDescription>
+              {requisition.jobDescription
+                ? "Attached to this requisition."
+                : "Approved by the MD — next step: prepare the job description."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            {requisition.jobDescription ? (
+              <>
+                <Link href={`/admin/recruitment/job-descriptions/${requisition.jobDescription.id}`} className={buttonVariants({ size: "sm" })}>
+                  View &quot;{requisition.jobDescription.jobTitle}&quot;
+                </Link>
+                <Link href={`/admin/recruitment/job-descriptions/${requisition.jobDescription.id}/edit`} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  Edit
+                </Link>
+                <a href={`/api/recruitment/job-descriptions/${requisition.jobDescription.id}/docx`} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  Download Word
+                </a>
+              </>
+            ) : session?.role === "admin" ? (
+              <>
+                {latestJd ? (
+                  <Link
+                    href={`/admin/recruitment/job-descriptions/new?requisitionId=${requisition.id}&reuse=1`}
+                    className={buttonVariants({ size: "sm" })}
+                  >
+                    Reuse latest JD for this position
+                  </Link>
+                ) : null}
+                <Link
+                  href={`/admin/recruitment/job-descriptions/new?requisitionId=${requisition.id}`}
+                  className={buttonVariants({ size: "sm", variant: latestJd ? "outline" : "default" })}
+                >
+                  Create new job description
+                </Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">HR will prepare the job description.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

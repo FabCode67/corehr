@@ -12,9 +12,12 @@ import { RecruitmentTabs } from "../recruitment-tabs"
 const STATUS_VARIANT: Record<RequisitionStatus, "outline" | "success" | "destructive"> = {
   DRAFT: "outline",
   PENDING_APPROVAL: "outline",
+  PENDING_HR_REVIEW: "outline",
+  PENDING_MD_APPROVAL: "outline",
   APPROVED: "success",
   REJECTED: "destructive",
   CLOSED: "outline",
+  FILLED: "success",
 }
 
 export default async function RequisitionsPage({

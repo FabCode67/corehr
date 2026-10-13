@@ -123,7 +123,6 @@ export async function createRequisition(
   formData: FormData
 ): Promise<RecruitmentActionState> {
   const actingEmployeeId = trimmedOrUndefined(formData.get("actingEmployeeId"))
-  const workforcePlanId = trimmedOrUndefined(formData.get("workforcePlanId"))
   const positionId = trimmedOrUndefined(formData.get("positionId"))
   const newPositionTitle = trimmedOrUndefined(formData.get("newPositionTitle"))
   const bandId = trimmedOrUndefined(formData.get("bandId"))
@@ -132,16 +131,12 @@ export async function createRequisition(
   const branchId = trimmedOrUndefined(formData.get("branchId"))
   const employmentType = trimmedOrUndefined(formData.get("employmentType"))
   const hiringReason = trimmedOrUndefined(formData.get("hiringReason"))
-  const requestedById = trimmedOrUndefined(formData.get("requestedById"))
+  const justification = trimmedOrUndefined(formData.get("justification"))
 
-  if (!actingEmployeeId || !workforcePlanId || !bandId || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason || !requestedById) {
+  if (!actingEmployeeId || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason || !justification) {
     return { error: "All required requisition fields must be filled in." }
   }
 
-  // Hiring manager is no longer collected on this form — default to
-  // whoever requested the position, same "who's handling this" default
-  // used on the Workforce Plan form.
-  const hiringManagerId = requestedById
   if (!positionId && !newPositionTitle) {
     return { error: "Select an existing position or provide a title for a new one." }
   }
@@ -165,7 +160,6 @@ export async function createRequisition(
     const requisition = await apiFetch<{ id: string }>(`/recruitment/requisitions?actingEmployeeId=${actingEmployeeId}`, {
       method: "POST",
       body: JSON.stringify({
-        workforcePlanId,
         positionId,
         newPosition,
         bandId,
@@ -174,8 +168,7 @@ export async function createRequisition(
         branchId,
         employmentType,
         hiringReason,
-        requestedById,
-        hiringManagerId,
+        justification,
         priority: trimmedOrUndefined(formData.get("priority")),
         targetStartDate: trimmedOrUndefined(formData.get("targetStartDate")),
         jobDescriptionId: trimmedOrUndefined(formData.get("jobDescriptionId")),
@@ -203,6 +196,7 @@ export async function updateRequisition(
   const priority = trimmedOrUndefined(formData.get("priority"))
   const targetStartDate = trimmedOrUndefined(formData.get("targetStartDate"))
   const jobDescriptionId = trimmedOrUndefined(formData.get("jobDescriptionId"))
+  const justification = trimmedOrUndefined(formData.get("justification"))
 
   try {
     await apiFetch(`/recruitment/requisitions/${id}?actingEmployeeId=${actingEmployeeId}`, {
@@ -215,6 +209,7 @@ export async function updateRequisition(
         priority,
         targetStartDate,
         jobDescriptionId,
+        justification,
       }),
     })
   } catch (error) {
@@ -239,6 +234,26 @@ export async function submitRequisition(id: string, actingEmployeeId: string): P
     await apiFetch(`/recruitment/requisitions/${id}/submit`, { method: "POST", body: JSON.stringify({ actingEmployeeId }) })
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to submit the requisition." }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
+export async function hrApproveRequisition(id: string, actingEmployeeId: string, comment?: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/requisitions/${id}/hr-approve`, { method: "POST", body: JSON.stringify({ actingEmployeeId, comment }) })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to forward the requisition." }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
+export async function hrRejectRequisition(id: string, actingEmployeeId: string, comment: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/requisitions/${id}/hr-reject`, { method: "POST", body: JSON.stringify({ actingEmployeeId, comment }) })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to return the requisition." }
   }
   revalidateRecruitmentPaths()
   return {}
@@ -347,6 +362,36 @@ export async function createJobDescription(
   redirect("/admin/recruitment/job-descriptions")
 }
 
+/** Saves a structured (NCBA-template) JD — creates one, or updates when
+ *  `id` is given. Content arrives as JSON in the hidden `content` field. */
+export async function saveJobDescriptionStructured(
+  id: string | null,
+  meta: { positionId?: string; requisitionId?: string; actingEmployeeId?: string },
+  _prevState: RecruitmentActionState | undefined,
+  formData: FormData
+): Promise<RecruitmentActionState> {
+  let content: unknown
+  try {
+    content = JSON.parse(String(formData.get("content") ?? ""))
+  } catch {
+    return { error: "Couldn't read the form content. Please try again." }
+  }
+
+  let savedId: string
+  try {
+    const saved = await apiFetch<{ id: string }>(
+      id ? `/recruitment/job-descriptions/${id}/structured` : "/recruitment/job-descriptions/structured",
+      { method: id ? "PATCH" : "POST", body: JSON.stringify({ content, ...meta }) }
+    )
+    savedId = saved.id
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save the job description." }
+  }
+
+  revalidateRecruitmentPaths()
+  redirect(`/admin/recruitment/job-descriptions/${savedId}`)
+}
+
 // ---- Job Postings --------------------------------------------------------------
 
 export async function createJobPosting(
@@ -383,6 +428,7 @@ export async function createJobPosting(
         branchId,
         employmentType,
         requiredExperience: trimmedOrUndefined(formData.get("requiredExperience")),
+        requiredDocuments: formData.getAll("requiredDocuments").map(String),
       }),
     })
     postingId = posting.id
@@ -909,5 +955,25 @@ export async function deactivateWorkflow(id: string, actingEmployeeId: string): 
     return { error: error instanceof ApiError ? error.message : "Failed to deactivate the workflow." }
   }
   revalidatePath("/admin/recruitment/workflows")
+  return {}
+}
+
+export async function setPostingSteps(postingId: string, actingEmployeeId: string, stageIds: string[]): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/job-postings/${postingId}/steps`, { method: "POST", body: JSON.stringify({ actingEmployeeId, stageIds }) })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to save the hiring steps." }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}
+
+export async function resetPostingSteps(postingId: string, actingEmployeeId: string): Promise<RecruitmentActionState> {
+  try {
+    await apiFetch(`/recruitment/job-postings/${postingId}/steps?actingEmployeeId=${actingEmployeeId}`, { method: "DELETE" })
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to reset the hiring steps." }
+  }
+  revalidateRecruitmentPaths()
   return {}
 }

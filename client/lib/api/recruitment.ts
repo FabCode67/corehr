@@ -1,3 +1,4 @@
+import type { JdContent } from "@/lib/jd-content"
 import { apiFetchSafe } from "./client"
 import type { ContractType } from "./employees"
 import type { PaginatedResult } from "./pagination"
@@ -8,7 +9,15 @@ export type RecruitmentEmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" |
 export type RecruitmentPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
 export type WorkforcePlanStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED"
 export type HiringReason = "NEW_POSITION" | "REPLACEMENT" | "EXPANSION" | "TEMPORARY_REQUIREMENT"
-export type RequisitionStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CLOSED"
+export type RequisitionStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "PENDING_HR_REVIEW"
+  | "PENDING_MD_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "CLOSED"
+  | "FILLED"
 export type RecruitmentStageName =
   | "WORKFORCE_PLANNING"
   | "JOB_REQUISITION"
@@ -149,7 +158,7 @@ export function fetchWorkforcePlan(id: string, actingEmployeeId: string) {
 
 export interface JobRequisition {
   id: string
-  workforcePlanId: string
+  workforcePlanId: string | null
   positionId: string
   departmentId: string
   unitId: string | null
@@ -171,7 +180,11 @@ export interface JobRequisition {
   approvedById: string | null
   approvedAt: string | null
   rejectionComment: string | null
-  workforcePlan: { id: string; title: string }
+  justification: string | null
+  hrReviewedById: string | null
+  hrReviewedAt: string | null
+  hrComment: string | null
+  workforcePlan: { id: string; title: string } | null
   position: TitledRef
   reportsToPosition: TitledRef | null
   department: NamedRef
@@ -260,6 +273,21 @@ export function fetchJobDescriptions(includeInactive = false) {
   return apiFetchSafe<JobDescription[]>(`/recruitment/job-descriptions${toQuery({ includeInactive })}`)
 }
 
+export type StructuredJobDescription = Omit<JobDescription, "createdAt"> & {
+  content: JdContent
+  positionId: string | null
+  createdAt: string
+}
+
+export function fetchJobDescriptionStructured(id: string) {
+  return apiFetchSafe<StructuredJobDescription>(`/recruitment/job-descriptions/${id}/structured`)
+}
+
+/** Most recent active JD written for a position (null when none) — "reuse". */
+export function fetchLatestJobDescriptionForPosition(positionId: string) {
+  return apiFetchSafe<StructuredJobDescription | null>(`/recruitment/job-descriptions/latest-for-position/${positionId}`)
+}
+
 export function fetchJobDescription(id: string) {
   return apiFetchSafe<JobDescription>(`/recruitment/job-descriptions/${id}`)
 }
@@ -279,6 +307,9 @@ export interface JobPosting {
   branchId: string
   employmentType: RecruitmentEmploymentType
   requiredExperience: string | null
+  shareSlug: string | null
+  requiredDocuments: string[]
+  jobDescriptionId: string | null
   status: JobPostingStatus
   publishedAt: string | null
   closedAt: string | null
@@ -323,6 +354,9 @@ export interface Candidate {
   certifications: string | null
   skills: string | null
   references: string | null
+  linkedinUrl: string | null
+  currentEmployer: string | null
+  currentPosition: string | null
   applications?: { id: string; status: ApplicationStatus; appliedAt: string; jobPosting: { id: string; postingTitle: string; status: JobPostingStatus } }[]
   createdAt: string
   updatedAt: string
@@ -355,6 +389,8 @@ export interface Application {
   workflowId: string | null
   currentStageId: string | null
   overallScore: number | null
+  coverNote: string | null
+  documents: { id: string; type: string; url: string; fileName: string }[]
   candidate: Candidate
   jobPosting: { id: string; postingTitle: string; requisition: { id: string; recruiterId: string; hiringManagerId: string; departmentId: string } }
   screening: { id: string; decision: ScreeningDecision; comments: string | null; screenedById: string; screenedAt: string; screenedBy: EmployeeRef } | null
@@ -577,6 +613,42 @@ export interface RecruitmentStageDefinition {
   isActive: boolean
   sortOrderHint: number
   scoringCriteria: ScoringCriterion[]
+}
+
+export interface PostingStep {
+  sequence: number
+  id: string
+  name: string
+  stageType: string
+  isScored: boolean
+}
+export interface PostingSteps {
+  custom: boolean
+  workflowName?: string
+  steps: PostingStep[]
+}
+export function fetchPostingSteps(postingId: string, actingEmployeeId: string) {
+  return apiFetchSafe<PostingSteps>(`/recruitment/job-postings/${postingId}/steps${toQuery({ actingEmployeeId })}`)
+}
+
+export interface PostingBoard {
+  vacancies: number
+  hired: number
+  requisitionStatus: RequisitionStatus | null
+  requisitionId: string
+  applications: {
+    id: string
+    status: ApplicationStatus
+    overallScore: number | null
+    appliedAt: string
+    currentStageId: string | null
+    hiredEmployeeNumber: string | null
+    candidate: { firstName: string; lastName: string; email: string }
+    stageInstances: { id: string; stageId: string; sequence: number; status: string; score: number | null; stage: { name: string } }[]
+  }[]
+}
+export function fetchPostingBoard(postingId: string, actingEmployeeId: string) {
+  return apiFetchSafe<PostingBoard>(`/recruitment/job-postings/${postingId}/board${toQuery({ actingEmployeeId })}`)
 }
 
 export function fetchStageDefinitions(includeInactive = false) {
