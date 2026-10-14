@@ -91,7 +91,7 @@ export default function LoginPage() {
               ) : null}
             </CardContent>
 
-            <CardFooter className="flex flex-col gap-3">
+            <CardFooter className="flex flex-col gap-3 pt-4">
               <Button type="submit" className="w-full" disabled={pending || Boolean(state?.redirectTo)}>
                 {pending || state?.redirectTo ? "Signing in…" : "Sign in"}
               </Button>
