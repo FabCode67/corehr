@@ -39,11 +39,16 @@ function buildDatasourceUrl(): string | undefined {
     return raw
   }
 
+  // A transaction-mode pooler (Neon "-pooler", PgBouncer, ...) multiplexes
+  // many client connections onto few real ones, so a larger client-side pool
+  // is safe and avoids P2024 "timed out fetching a connection" when a page
+  // fans out many requests over a high-latency link (e.g. local dev -> cloud DB).
+  const pooled = /pool/i.test(url.hostname)
   if (!url.searchParams.has("connection_limit")) {
-    url.searchParams.set("connection_limit", process.env.PRISMA_CONNECTION_LIMIT ?? "10")
+    url.searchParams.set("connection_limit", process.env.PRISMA_CONNECTION_LIMIT ?? (pooled ? "30" : "10"))
   }
   if (!url.searchParams.has("pool_timeout")) {
-    url.searchParams.set("pool_timeout", process.env.PRISMA_POOL_TIMEOUT ?? "10")
+    url.searchParams.set("pool_timeout", process.env.PRISMA_POOL_TIMEOUT ?? (pooled ? "30" : "10"))
   }
   if (!url.searchParams.has("pgbouncer") && /pool/i.test(url.hostname)) {
     url.searchParams.set("pgbouncer", "true")
