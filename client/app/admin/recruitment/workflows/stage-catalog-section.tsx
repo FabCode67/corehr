@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import {
+  addStagesToCatalog,
   createStageDefinition,
   updateStageDefinition,
   upsertStageCriterion,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api/recruitment-actions"
 import type { RecruitmentStageDefinition, RecruitmentStageType } from "@/lib/api/recruitment"
 import { STAGE_TYPE_LABELS } from "@/lib/api/recruitment-utils"
+import { COMMON_STAGES } from "@/lib/recruitment-presets"
 
 const STAGE_TYPES = Object.keys(STAGE_TYPE_LABELS) as RecruitmentStageType[]
 
@@ -186,6 +188,69 @@ function NewStageForm({ actingEmployeeId }: { actingEmployeeId: string }) {
   )
 }
 
+/** One-click picker of the stages most banks use — tick what you need, add them all at once. */
+function CommonStagesPicker({ stages, actingEmployeeId }: { stages: RecruitmentStageDefinition[]; actingEmployeeId: string }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const existing = new Set(stages.map((s) => s.key))
+  const missing = COMMON_STAGES.filter((c) => !existing.has(c.key))
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(missing.map((m) => m.key)))
+  const [error, setError] = useState<string | null>(null)
+
+  if (missing.length === 0) return null
+
+  const toggle = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  function add() {
+    setError(null)
+    startTransition(async () => {
+      const result = await addStagesToCatalog(actingEmployeeId, missing.filter((m) => selected.has(m.key)))
+      if (result?.error) return setError(result.error)
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-foreground">Common stages</p>
+        <div className="flex gap-2 text-xs">
+          <button type="button" className="text-primary hover:underline" onClick={() => setSelected(new Set(missing.map((m) => m.key)))}>
+            Select all
+          </button>
+          <button type="button" className="text-muted-foreground hover:underline" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">Tick the stages you want in your catalog — no typing needed.</p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {missing.map((m) => (
+          <label key={m.key} className="flex items-start gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+            <input type="checkbox" className="mt-0.5" checked={selected.has(m.key)} onChange={() => toggle(m.key)} />
+            <span>
+              <span className="font-medium text-foreground">{m.name}</span>
+              <span className="block text-muted-foreground">{STAGE_TYPE_LABELS[m.stageType]}{m.isScored ? " · scored" : ""}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" disabled={pending || selected.size === 0} onClick={add}>
+          {pending ? "Adding…" : `Add ${selected.size} stage${selected.size === 1 ? "" : "s"}`}
+        </Button>
+        {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      </div>
+    </div>
+  )
+}
+
 export function StageCatalogSection({ stages, actingEmployeeId }: { stages: RecruitmentStageDefinition[]; actingEmployeeId: string }) {
   return (
     <div className="flex flex-col gap-3">
@@ -198,7 +263,13 @@ export function StageCatalogSection({ stages, actingEmployeeId }: { stages: Recr
           ))}
         </ul>
       )}
-      <NewStageForm actingEmployeeId={actingEmployeeId} />
+      <CommonStagesPicker stages={stages} actingEmployeeId={actingEmployeeId} />
+      <details className="rounded-lg border border-border p-2">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Add a custom stage</summary>
+        <div className="mt-2">
+          <NewStageForm actingEmployeeId={actingEmployeeId} />
+        </div>
+      </details>
     </div>
   )
 }

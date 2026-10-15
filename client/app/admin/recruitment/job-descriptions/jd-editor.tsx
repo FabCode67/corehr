@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { RecruitmentActionState } from "@/lib/api/recruitment-actions"
 import type { JdCompetency, JdContent, JdHeader } from "@/lib/jd-content"
+import { ACADEMIC_OPTIONS, COMMON_BEHAVIOURAL, COMMON_TECHNICAL, DECISION_OPTIONS, EXPERIENCE_OPTIONS, PROFESSIONAL_OPTIONS, WORK_CYCLE_OPTIONS } from "@/lib/jd-presets"
 
 const HEADER_FIELDS: { key: keyof JdHeader; label: string }[] = [
   { key: "jobTitle", label: "Job title" },
@@ -24,7 +27,15 @@ const HEADER_FIELDS: { key: keyof JdHeader; label: string }[] = [
 
 const BULLET_HINT = "One item per line. Start a line with # to make it a bold sub-heading."
 
+export interface JdLookups {
+  positions: string[]
+  departments: string[]
+  units: string[]
+  bands: string[]
+}
+
 interface JdEditorProps {
+  lookups?: JdLookups
   initial: JdContent
   action: (prevState: RecruitmentActionState | undefined, formData: FormData) => Promise<RecruitmentActionState>
   submitLabel: string
@@ -44,17 +55,59 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
+/** "Add common…" dropdown — appends the chosen line to a multi-line text block. */
+function QuickAdd({ options, onPick, label }: { options: string[]; onPick: (line: string) => void; label: string }) {
+  return (
+    <Select
+      value=""
+      onChange={(e) => {
+        if (e.target.value) onPick(e.target.value)
+      }}
+      className="h-8 text-xs"
+    >
+      <option value="">{label}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o.length > 90 ? `${o.slice(0, 90)}…` : o}
+        </option>
+      ))}
+    </Select>
+  )
+}
+
+const appendLine = (text: string, line: string) => (text.trim() ? `${text.replace(/\n+$/, "")}\n${line}` : line)
+
 function CompetencyList({
   items,
   onChange,
   namePlaceholder,
+  common,
 }: {
   items: JdCompetency[]
   onChange: (items: JdCompetency[]) => void
   namePlaceholder: string
+  common: JdCompetency[]
 }) {
+  const unused = common.filter((c) => !items.some((i) => i.name === c.name))
   return (
     <>
+      <Select
+        value=""
+        onChange={(e) => {
+          const pick = common.find((c) => c.name === e.target.value)
+          if (!pick) return
+          const blank = items.findIndex((i) => !i.name.trim() && !i.description.trim())
+          onChange(blank >= 0 ? items.map((x, j) => (j === blank ? pick : x)) : [...items, pick])
+        }}
+        className="h-8 text-xs"
+      >
+        <option value="">Add a common competency…</option>
+        {unused.map((c) => (
+          <option key={c.name} value={c.name}>
+            {c.name}
+          </option>
+        ))}
+      </Select>
       {items.map((item, i) => (
         <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
           <Input
@@ -82,7 +135,7 @@ function CompetencyList({
   )
 }
 
-export function JdEditor({ initial, action, submitLabel, notice }: JdEditorProps) {
+export function JdEditor({ initial, action, submitLabel, notice, lookups = { positions: [], departments: [], units: [], bands: [] } }: JdEditorProps) {
   const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(action, undefined)
   const [c, setC] = useState<JdContent>(initial)
   const total = useMemo(() => c.kras.reduce((s, k) => s + (Number(k.weighting) || 0), 0), [c.kras])
@@ -95,17 +148,39 @@ export function JdEditor({ initial, action, submitLabel, notice }: JdEditorProps
 
       <Section title="Job details">
         <div className="grid gap-3 sm:grid-cols-2">
-          {HEADER_FIELDS.map((f) => (
-            <div key={f.key} className="flex flex-col gap-1.5">
-              <Label htmlFor={`h-${f.key}`}>{f.label}</Label>
-              <Input
-                id={`h-${f.key}`}
-                value={c.header[f.key]}
-                required={f.key === "jobTitle"}
-                onChange={(e) => set("header", { ...c.header, [f.key]: e.target.value })}
-              />
-            </div>
-          ))}
+          {HEADER_FIELDS.map((f) => {
+            const dropdown: Partial<Record<keyof JdHeader, string[]>> = {
+              reportsTo: lookups.positions,
+              supervisor: lookups.positions,
+              unit: lookups.units,
+              division: lookups.departments,
+              grade: lookups.bands,
+            }
+            const options = dropdown[f.key]
+            const current = c.header[f.key]
+            return (
+              <div key={f.key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`h-${f.key}`}>{f.label}</Label>
+                {options && options.length > 0 ? (
+                  <SearchableSelect
+                    options={[...new Set([...(current && !options.includes(current) ? [current] : []), ...options])].map((o) => ({ value: o, label: o }))}
+                    value={current}
+                    onValueChange={(v) => set("header", { ...c.header, [f.key]: v })}
+                    placeholder={`Select ${f.label.toLowerCase()}…`}
+                    searchPlaceholder="Search…"
+                  />
+                ) : (
+                  <Input
+                    id={`h-${f.key}`}
+                    value={current}
+                    required={f.key === "jobTitle"}
+                    type={f.key === "date" ? "date" : "text"}
+                    onChange={(e) => set("header", { ...c.header, [f.key]: e.target.value })}
+                  />
+                )}
+              </div>
+            )
+          })}
         </div>
       </Section>
 
@@ -117,11 +192,13 @@ export function JdEditor({ initial, action, submitLabel, notice }: JdEditorProps
         {c.kras.map((k, i) => (
           <div key={i} className="flex flex-col gap-2 rounded-lg border border-border p-3">
             <div className="grid gap-2 sm:grid-cols-[2fr_1fr_auto]">
-              <Input
-                value={k.perspective}
-                placeholder="Perspective"
-                onChange={(e) => set("kras", c.kras.map((x, j) => (j === i ? { ...x, perspective: e.target.value } : x)))}
-              />
+              <Select value={k.perspective} onChange={(e) => set("kras", c.kras.map((x, j) => (j === i ? { ...x, perspective: e.target.value } : x)))}>
+                {[...new Set([k.perspective, "Financial", "Customer", "Internal business processes", "Learning and growth"].filter(Boolean))].map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </Select>
               <div className="flex items-center gap-1">
                 <Input
                   type="number"
@@ -153,15 +230,22 @@ export function JdEditor({ initial, action, submitLabel, notice }: JdEditorProps
         </div>
       </Section>
 
+      <datalist id="jd-positions">
+        <option value="None" />
+        {lookups.positions.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+
       <Section title="Job dimensions">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label>Direct reports</Label>
-            <Input value={c.directReports} onChange={(e) => set("directReports", e.target.value)} />
+            <Input list="jd-positions" value={c.directReports} onChange={(e) => set("directReports", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Indirect reports</Label>
-            <Input value={c.indirectReports} onChange={(e) => set("indirectReports", e.target.value)} />
+            <Input list="jd-positions" value={c.indirectReports} onChange={(e) => set("indirectReports", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Internal stakeholders</Label>
@@ -174,24 +258,31 @@ export function JdEditor({ initial, action, submitLabel, notice }: JdEditorProps
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Decision making authority / mandates / constraints</Label>
+          <QuickAdd options={DECISION_OPTIONS} label="Add a common statement…" onPick={(l) => set("decisionAuthority", appendLine(c.decisionAuthority, l))} />
           <Textarea rows={4} value={c.decisionAuthority} placeholder="Operational: …" onChange={(e) => set("decisionAuthority", e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Work cycle and impact</Label>
+          <QuickAdd options={WORK_CYCLE_OPTIONS} label="Add a common statement…" onPick={(l) => set("workCycle", appendLine(c.workCycle, l))} />
           <Textarea rows={4} value={c.workCycle} placeholder="Daily/weekly: …" onChange={(e) => set("workCycle", e.target.value)} />
         </div>
       </Section>
 
       <Section title="Ideal job specifications" hint={BULLET_HINT}>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <QuickAdd options={ACADEMIC_OPTIONS} label="+ Academic…" onPick={(l) => set("specifications", appendLine(c.specifications, l))} />
+          <QuickAdd options={PROFESSIONAL_OPTIONS} label="+ Professional…" onPick={(l) => set("specifications", appendLine(c.specifications, l))} />
+          <QuickAdd options={EXPERIENCE_OPTIONS} label="+ Experience…" onPick={(l) => set("specifications", appendLine(c.specifications, l))} />
+        </div>
         <Textarea rows={9} value={c.specifications} onChange={(e) => set("specifications", e.target.value)} />
       </Section>
 
       <Section title="Technical competencies">
-        <CompetencyList items={c.technicalCompetencies} onChange={(v) => set("technicalCompetencies", v)} namePlaceholder="Competency" />
+        <CompetencyList items={c.technicalCompetencies} onChange={(v) => set("technicalCompetencies", v)} namePlaceholder="Competency" common={COMMON_TECHNICAL} />
       </Section>
 
       <Section title="Behavioural competencies">
-        <CompetencyList items={c.behaviouralCompetencies} onChange={(v) => set("behaviouralCompetencies", v)} namePlaceholder="Competency" />
+        <CompetencyList items={c.behaviouralCompetencies} onChange={(v) => set("behaviouralCompetencies", v)} namePlaceholder="Competency" common={COMMON_BEHAVIOURAL} />
       </Section>
 
       {state?.error ? (

@@ -6,6 +6,7 @@ import { fetchJobDescriptionStructured } from "@/lib/api/recruitment"
 import { saveJobDescriptionStructured } from "@/lib/api/recruitment-actions"
 
 import { JdEditor } from "../../jd-editor"
+import { fetchJdLookups } from "../../jd-lookups"
 
 export default async function EditJobDescriptionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,6 +15,8 @@ export default async function EditJobDescriptionPage({ params }: { params: Promi
     if (result.status === 404) notFound()
     return <p className="text-sm text-destructive">{result.error}</p>
   }
+
+  const lookups = await fetchJdLookups()
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -24,7 +27,7 @@ export default async function EditJobDescriptionPage({ params }: { params: Promi
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">Edit job description</h1>
       </div>
-      <JdEditor initial={result.data.content} submitLabel="Save changes" action={saveJobDescriptionStructured.bind(null, id, {})} />
+      <JdEditor lookups={lookups} initial={result.data.content} submitLabel="Save changes" action={saveJobDescriptionStructured.bind(null, id, {})} />
     </div>
   )
 }

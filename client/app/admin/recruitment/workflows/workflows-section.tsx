@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useMemo, useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowDown, ArrowUp } from "lucide-react"
 
@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { COMMON_WORKFLOWS } from "@/lib/recruitment-presets"
 import {
   createWorkflow,
   deactivateWorkflow,
   setWorkflowStages,
-  type RecruitmentActionState,
 } from "@/lib/api/recruitment-actions"
 import type { RecruitmentStageDefinition, RecruitmentWorkflow } from "@/lib/api/recruitment"
 import type { Band } from "@/lib/api/bands"
@@ -194,39 +195,114 @@ function WorkflowCard({
   )
 }
 
-function NewWorkflowForm({ actingEmployeeId, bands }: { actingEmployeeId: string; bands: Band[] }) {
-  const [state, formAction, pending] = useActionState<RecruitmentActionState | undefined, FormData>(createWorkflow, undefined)
-  const rankBounds = bands.length > 0 ? { min: Math.min(...bands.map((band) => band.rank)), max: Math.max(...bands.map((band) => band.rank)) } : null
+function NewWorkflowForm({ actingEmployeeId, bands, stages }: { actingEmployeeId: string; bands: Band[]; stages: RecruitmentStageDefinition[] }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [templateId, setTemplateId] = useState("")
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [minRank, setMinRank] = useState("")
+  const [maxRank, setMaxRank] = useState("")
+  const [contractTypes, setContractTypes] = useState<string[]>([])
+  const [isDefault, setIsDefault] = useState(false)
+  const [selectedStageIds, setSelectedStageIds] = useState<string[]>([])
+  const [note, setNote] = useState<string | null>(null)
+
+  const activeStages = stages.filter((s) => s.isActive)
+  const sortedBands = [...bands].sort((a, b) => a.rank - b.rank)
+
+  function applyTemplate(id: string) {
+    setTemplateId(id)
+    setNote(null)
+    const t = COMMON_WORKFLOWS.find((w) => w.id === id)
+    if (!t) return
+    setName(t.name)
+    setDescription(t.description)
+    setMinRank(t.minBandRank ? String(t.minBandRank) : "")
+    setMaxRank(t.maxBandRank ? String(t.maxBandRank) : "")
+    setContractTypes(t.contractTypes)
+    setIsDefault(Boolean(t.isDefault))
+    const byKey = new Map(activeStages.map((s) => [s.key, s.id]))
+    const ids = t.stageKeys.map((k) => byKey.get(k)).filter((x): x is string => Boolean(x))
+    setSelectedStageIds(ids)
+    if (ids.length < t.stageKeys.length) setNote(`${t.stageKeys.length - ids.length} stage(s) of this template aren't in your catalog yet — add them from “Common stages” on the left.`)
+  }
+
+  const toggleStage = (id: string) => setSelectedStageIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  const toggleContract = (v: string) => setContractTypes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError(null)
+    const fd = new FormData()
+    fd.set("actingEmployeeId", actingEmployeeId)
+    fd.set("name", name)
+    if (description) fd.set("description", description)
+    if (minRank) fd.set("minBandRank", minRank)
+    if (maxRank) fd.set("maxBandRank", maxRank)
+    for (const c of contractTypes) fd.append("contractTypes", c)
+    if (isDefault) fd.set("isDefault", "on")
+    startTransition(async () => {
+      const created = await createWorkflow(undefined, fd)
+      if (created.error) return setError(created.error)
+      if (created.id && selectedStageIds.length > 0) {
+        const staged = await setWorkflowStages(created.id, actingEmployeeId, selectedStageIds)
+        if (staged.error) return setError(staged.error)
+      }
+      setName("")
+      setDescription("")
+      setSelectedStageIds([])
+      setTemplateId("")
+      router.refresh()
+    })
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-3">
       <p className="text-xs font-medium text-muted-foreground">Create a workflow</p>
-      <input type="hidden" name="actingEmployeeId" value={actingEmployeeId} />
+
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs">Start from a common workflow</Label>
+        <Select value={templateId} onChange={(e) => applyTemplate(e.target.value)} className="h-8 text-xs">
+          <option value="">Choose a template (optional)…</option>
+          {COMMON_WORKFLOWS.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name} — {w.description}
+            </option>
+          ))}
+        </Select>
+        {note ? <p className="text-xs text-amber-600">{note}</p> : null}
+      </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label htmlFor="wf-name" className="text-xs">
             Name
           </Label>
-          <Input id="wf-name" name="name" required className="h-8 text-xs" />
+          <Input id="wf-name" value={name} onChange={(e) => setName(e.target.value)} required className="h-8 text-xs" />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="minBandRank" className="text-xs">
-            Min band rank {rankBounds ? `(${rankBounds.min}–${rankBounds.max})` : ""}
-          </Label>
-          <Input id="minBandRank" name="minBandRank" type="number" min={1} className="h-8 text-xs" />
+          <Label className="text-xs">Applies from band</Label>
+          <Select value={minRank} onChange={(e) => setMinRank(e.target.value)} className="h-8 text-xs">
+            <option value="">Any</option>
+            {sortedBands.map((b) => (
+              <option key={b.id} value={b.rank}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="maxBandRank" className="text-xs">
-            Max band rank
-          </Label>
-          <Input id="maxBandRank" name="maxBandRank" type="number" min={1} className="h-8 text-xs" />
-        </div>
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <Label htmlFor="wf-description" className="text-xs">
-            Description (optional)
-          </Label>
-          <Input id="wf-description" name="description" className="h-8 text-xs" />
+          <Label className="text-xs">…up to band</Label>
+          <Select value={maxRank} onChange={(e) => setMaxRank(e.target.value)} className="h-8 text-xs">
+            <option value="">Any</option>
+            {sortedBands.map((b) => (
+              <option key={b.id} value={b.rank}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
 
@@ -235,22 +311,47 @@ function NewWorkflowForm({ actingEmployeeId, bands }: { actingEmployeeId: string
         <div className="flex flex-wrap gap-3">
           {CONTRACT_TYPES.map((type) => (
             <label key={type.value} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <input type="checkbox" name="contractTypes" value={type.value} />
+              <input type="checkbox" checked={contractTypes.includes(type.value)} onChange={() => toggleContract(type.value)} />
               {type.label}
             </label>
           ))}
         </div>
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-muted-foreground">Stages, in order — click to add or remove</span>
+        {activeStages.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Add stages to the catalog first (see “Common stages”).</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {activeStages.map((s) => {
+              const index = selectedStageIds.indexOf(s.id)
+              const on = index >= 0
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleStage(s.id)}
+                  className={`rounded-full border px-2.5 py-1 text-xs ${on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted"}`}
+                >
+                  {on ? `${index + 1}. ` : "+ "}
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <input type="checkbox" name="isDefault" />
+        <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
         Use as the default workflow (fallback when nothing else matches)
       </label>
 
-      {state?.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
       <div>
-        <Button type="submit" size="sm" disabled={pending}>
+        <Button type="submit" size="sm" disabled={pending || !name.trim()}>
           {pending ? "Creating…" : "Create workflow"}
         </Button>
       </div>
@@ -280,7 +381,7 @@ export function WorkflowsSection({
           ))}
         </ul>
       )}
-      <NewWorkflowForm actingEmployeeId={actingEmployeeId} bands={bands} />
+      <NewWorkflowForm actingEmployeeId={actingEmployeeId} bands={bands} stages={stages} />
     </div>
   )
 }

@@ -7,6 +7,8 @@ import { apiFetch, ApiError } from "./client"
 
 export interface RecruitmentActionState {
   error?: string
+  /** Id of a record the action created (used to chain follow-up calls). */
+  id?: string
 }
 
 function trimmedOrUndefined(value: FormDataEntryValue | null) {
@@ -915,8 +917,9 @@ export async function createWorkflow(
   formData: FormData
 ): Promise<RecruitmentActionState> {
   const contractTypes = formData.getAll("contractTypes").map(String)
+  let createdId: string | undefined
   try {
-    await apiFetch("/recruitment/workflows", {
+    const created = await apiFetch<{ id: string }>("/recruitment/workflows", {
       method: "POST",
       body: JSON.stringify({
         name: trimmedOrUndefined(formData.get("name")),
@@ -928,11 +931,12 @@ export async function createWorkflow(
         actingEmployeeId: trimmedOrUndefined(formData.get("actingEmployeeId")),
       }),
     })
+    createdId = created.id
   } catch (error) {
     return { error: error instanceof ApiError ? error.message : "Failed to create the workflow." }
   }
   revalidatePath("/admin/recruitment/workflows")
-  return {}
+  return { id: createdId }
 }
 
 export async function setWorkflowStages(workflowId: string, actingEmployeeId: string, stageIds: string[]): Promise<RecruitmentActionState> {
@@ -975,5 +979,23 @@ export async function resetPostingSteps(postingId: string, actingEmployeeId: str
     return { error: error instanceof ApiError ? error.message : "Failed to reset the hiring steps." }
   }
   revalidateRecruitmentPaths()
+  return {}
+}
+
+/** Adds several stages to the catalog at once (the "common stages" picker). */
+export async function addStagesToCatalog(
+  actingEmployeeId: string,
+  stages: { key: string; name: string; stageType: string; isScored: boolean; description: string }[]
+): Promise<RecruitmentActionState> {
+  for (const stage of stages) {
+    try {
+      await apiFetch("/recruitment/stage-definitions", { method: "POST", body: JSON.stringify({ ...stage, actingEmployeeId }) })
+    } catch (error) {
+      // Already exists (same key) — skip silently; anything else is reported.
+      const message = error instanceof ApiError ? error.message : "Failed to add the stages."
+      if (!/already|exists|unique/i.test(message)) return { error: `${stage.name}: ${message}` }
+    }
+  }
+  revalidatePath("/admin/recruitment/workflows")
   return {}
 }

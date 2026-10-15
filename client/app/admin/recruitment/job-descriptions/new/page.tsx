@@ -7,6 +7,7 @@ import { getSession } from "@/lib/get-session"
 import { emptyJdContent, type JdContent } from "@/lib/jd-content"
 
 import { JdEditor } from "../jd-editor"
+import { fetchJdLookups } from "../jd-lookups"
 
 /** `?requisitionId=` prefills the header from the requisition's position and
  *  attaches the saved JD to it. `?reuse=1` starts from the latest JD written
@@ -48,6 +49,8 @@ export default async function NewJobDescriptionPage({
     notice = `Started from the existing JD "${source.data.jobTitle}". Customise anything you like — saving creates a new JD and leaves the original unchanged.`
   }
 
+  const lookups = await fetchJdLookups()
+
   return (
     <div className="flex max-w-4xl flex-col gap-6">
       <div>
@@ -62,6 +65,7 @@ export default async function NewJobDescriptionPage({
         <p className="text-sm text-muted-foreground">Every section follows the standard NCBA job description layout.</p>
       </div>
       <JdEditor
+        lookups={lookups}
         initial={initial}
         notice={notice}
         submitLabel="Save job description"
