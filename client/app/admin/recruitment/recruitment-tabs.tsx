@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils"
 
 const TABS = [
   { label: "Dashboard", href: "/admin/recruitment" },
-  { label: "Workforce Plans", href: "/admin/recruitment/workforce-plans" },
   { label: "Job Requisitions", href: "/admin/recruitment/requisitions" },
   { label: "Job Descriptions", href: "/admin/recruitment/job-descriptions" },
   { label: "Job Postings", href: "/admin/recruitment/job-postings" },

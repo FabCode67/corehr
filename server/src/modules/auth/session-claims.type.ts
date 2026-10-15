@@ -16,4 +16,6 @@ export interface SessionClaims {
   branch: string
   employeeId: string
   mustChangePassword: boolean
+  /** Director-level (MD) position holder — gets the MD dashboard/approvals. */
+  isDirector?: boolean
 }

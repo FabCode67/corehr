@@ -11,7 +11,7 @@ import type { SessionClaims } from "./session-claims.type"
 const SALT_ROUNDS = 10
 
 const LOGIN_INCLUDE = {
-  position: { include: { department: true } },
+  position: { include: { department: true, level: true } },
   branch: true,
 } as const
 
@@ -73,6 +73,7 @@ export class AuthService {
       department: employee.position?.department.name ?? "Not yet assigned",
       branch: employee.branch?.name ?? "Not assigned",
       mustChangePassword: employee.mustChangePassword,
+      isDirector: employee.position?.level?.code === "E1",
     }
     const accessToken = this.jwtService.sign(claims)
 

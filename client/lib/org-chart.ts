@@ -5,6 +5,8 @@
  * shape changes, TypeScript here won't catch it automatically, so update
  * both sides together.
  */
+import { authHeader } from "./api/client"
+
 export interface OrgChartEmployee {
   employeeNumber: string
   firstName: string
@@ -51,6 +53,8 @@ export async function fetchOrgChart(): Promise<OrgChartResult> {
   try {
     const response = await fetch(`${baseUrl}/organization/org-chart`, {
       cache: "no-store",
+      // The API requires the session token on every route (JwtAuthGuard).
+      headers: await authHeader(),
     })
 
     if (!response.ok) {

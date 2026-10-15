@@ -27,17 +27,16 @@ export async function createDepartmentRequisition(
   _prevState: DepartmentActionState | undefined,
   formData: FormData
 ): Promise<DepartmentActionState> {
-  const workforcePlanId = trimmedOrUndefined(formData.get("workforcePlanId"))
+  const justification = trimmedOrUndefined(formData.get("justification"))
   const positionId = trimmedOrUndefined(formData.get("positionId"))
   const newPositionTitle = trimmedOrUndefined(formData.get("newPositionTitle"))
-  const bandId = trimmedOrUndefined(formData.get("bandId"))
   const numberOfVacancies = trimmedOrUndefined(formData.get("numberOfVacancies"))
   const contractType = trimmedOrUndefined(formData.get("contractType"))
   const branchId = trimmedOrUndefined(formData.get("branchId"))
   const employmentType = trimmedOrUndefined(formData.get("employmentType"))
   const hiringReason = trimmedOrUndefined(formData.get("hiringReason"))
 
-  if (!workforcePlanId || !bandId || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason) {
+  if (!justification || !numberOfVacancies || !contractType || !branchId || !employmentType || !hiringReason) {
     return { error: "All required requisition fields must be filled in." }
   }
   if (!positionId && !newPositionTitle) {
@@ -65,10 +64,9 @@ export async function createDepartmentRequisition(
       {
         method: "POST",
         body: JSON.stringify({
-          workforcePlanId,
+          justification,
           positionId,
           newPosition,
-          bandId,
           numberOfVacancies: Number(numberOfVacancies),
           contractType,
           branchId,

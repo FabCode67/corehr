@@ -123,7 +123,7 @@ export class RequisitionsService {
 
   /** Raised by a Head of Department (or HR admin) from an existing/vacant
    *  position or a brand-new one. Creates a DRAFT; submit() sends it to HR. */
-  async create(dto: CreateRequisitionDto, actingEmployeeId: string) {
+  async create(dto: CreateRequisitionDto, actingEmployeeId: string, options: { trustedScope?: boolean } = {}) {
     if (!dto.positionId && !dto.newPosition) {
       throw new BadRequestException("Provide either an existing positionId or a newPosition to create.")
     }
@@ -132,14 +132,15 @@ export class RequisitionsService {
     }
 
     const scope = await this.accessService.resolveScope(actingEmployeeId)
-    if (!scope.allowAll && scope.departmentIds.length === 0) {
+    const trusted = options.trustedScope === true // caller (department dashboard) already verified head-of-department access
+    if (!trusted && !scope.allowAll && scope.departmentIds.length === 0) {
       throw new ForbiddenException("Only a Head of Department or an HR administrator can raise a job requisition.")
     }
 
     const targetDepartmentId = dto.positionId
       ? (await this.prisma.position.findUnique({ where: { id: dto.positionId }, select: { departmentId: true } }))?.departmentId
       : dto.newPosition!.departmentId
-    if (!scope.allowAll && targetDepartmentId && !scope.departmentIds.includes(targetDepartmentId)) {
+    if (!trusted && !scope.allowAll && targetDepartmentId && !scope.departmentIds.includes(targetDepartmentId)) {
       throw new ForbiddenException("You can only raise requisitions for positions in the department you head.")
     }
 
@@ -264,7 +265,11 @@ export class RequisitionsService {
   /** HoD (requester / dept head) or admin sends a DRAFT (or a returned
    *  REJECTED one, after edits) to HR for review. */
   async submit(id: string, dto: ActingEmployeeDto) {
-    const requisition = await this.findOne(id, dto.actingEmployeeId)
+    const own = await this.prisma.jobRequisition.findUnique({ where: { id }, select: { requestedById: true } })
+    // The requester can always submit their own requisition; anyone else needs normal access.
+    const requisition = own?.requestedById === dto.actingEmployeeId
+      ? await this.prisma.jobRequisition.findUniqueOrThrow({ where: { id } })
+      : await this.findOne(id, dto.actingEmployeeId)
     if (requisition.status !== "DRAFT" && requisition.status !== "REJECTED") {
       throw new BadRequestException("Only a draft or returned requisition can be submitted for HR review.")
     }
@@ -274,6 +279,7 @@ export class RequisitionsService {
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "SUBMITTED", dto.actingEmployeeId)
+    await this.notifyHr(updated, dto.actingEmployeeId)
     return updated
   }
 
@@ -297,6 +303,8 @@ export class RequisitionsService {
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "HR_APPROVED", dto.actingEmployeeId, dto.comment)
+    await this.notifyMd(updated)
+    await this.notifyRequester(updated, "Requisition forwarded to the MD", `HR approved your requisition for ${updated.position.title} and forwarded it to the MD.`)
     return updated
   }
 
@@ -321,6 +329,7 @@ export class RequisitionsService {
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "HR_REJECTED", dto.actingEmployeeId, dto.comment)
+    await this.notifyRequester(updated, "Requisition returned by HR", `Your requisition for ${updated.position.title} was returned: ${dto.comment}`)
     return updated
   }
 
@@ -340,6 +349,7 @@ export class RequisitionsService {
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "APPROVED", dto.actingEmployeeId)
+    await this.notifyDecision(updated, `The MD approved the requisition for ${updated.position.title}.`, "Requisition approved by the MD")
     return updated
   }
 
@@ -358,6 +368,7 @@ export class RequisitionsService {
       include: REQUISITION_INCLUDE,
     })
     await this.log(id, "REJECTED", dto.actingEmployeeId, dto.rejectionComment)
+    await this.notifyDecision(updated, `The MD rejected the requisition for ${updated.position.title}: ${dto.rejectionComment}`, "Requisition rejected by the MD")
     return updated
   }
 
@@ -420,6 +431,63 @@ export class RequisitionsService {
     if (!band) {
       throw new NotFoundException(`Band ${bandId} not found`)
     }
+  }
+
+  // ---- Notifications ----------------------------------------------------
+  private async notify(recipientIds: string[], title: string, message: string, actionUrl: string, type: "REQUISITION_SUBMITTED" | "REQUISITION_FORWARDED" | "REQUISITION_DECISION") {
+    const ids = [...new Set(recipientIds)].filter(Boolean)
+    if (ids.length === 0) return
+    try {
+      await this.prisma.notification.createMany({
+        data: ids.map((recipientEmployeeId) => ({ recipientEmployeeId, type, title, message, actionUrl })),
+      })
+    } catch {
+      // A notification failure must never block the approval workflow.
+    }
+  }
+
+  private async hrAdminIds() {
+    const admins = await this.prisma.employee.findMany({ where: { isAdmin: true, isActive: true }, select: { employeeNumber: true } })
+    return admins.map((a) => a.employeeNumber)
+  }
+
+  private async mdIds() {
+    const mds = await this.prisma.employee.findMany({
+      where: { isActive: true, position: { level: { code: DIRECTOR_LEVEL_CODE } } },
+      select: { employeeNumber: true },
+    })
+    return mds.map((m) => m.employeeNumber)
+  }
+
+  private async notifyHr(r: { id: string; position: { title: string }; department: { name: string }; requestedBy: { firstName: string; lastName: string } }, actorId: string) {
+    const hr = (await this.hrAdminIds()).filter((id) => id !== actorId)
+    await this.notify(
+      hr,
+      "Requisition awaiting HR review",
+      `${r.requestedBy.firstName} ${r.requestedBy.lastName} (${r.department.name}) requested a hire for ${r.position.title}.`,
+      `/admin/recruitment/requisitions/${r.id}`,
+      "REQUISITION_SUBMITTED"
+    )
+  }
+
+  private async notifyMd(r: { id: string; position: { title: string }; department: { name: string } }) {
+    await this.notify(
+      await this.mdIds(),
+      "Requisition awaiting your approval",
+      `HR approved a requisition for ${r.position.title} (${r.department.name}) and forwarded it for your approval.`,
+      `/staff/md/requisitions/${r.id}`,
+      "REQUISITION_FORWARDED"
+    )
+  }
+
+  private async notifyRequester(r: { id: string; requestedById: string }, title: string, message: string) {
+    await this.notify([r.requestedById], title, message, `/staff/department-dashboard/requisitions`, "REQUISITION_DECISION")
+  }
+
+  /** MD decision → the requester (HoD) and the HR owner. */
+  private async notifyDecision(r: { id: string; requestedById: string; recruiterId: string }, message: string, title: string) {
+    await this.notify([r.requestedById], title, message, `/staff/department-dashboard/requisitions`, "REQUISITION_DECISION")
+    await this.notify([r.recruiterId], title, message, `/admin/recruitment/requisitions/${r.id}`, "REQUISITION_DECISION")
   }
 
   private async assertIsHr(actingEmployeeId: string) {

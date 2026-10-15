@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 import {
+  fetchRequisitions,
   fetchOfferStats,
   fetchRecruitmentFunnel,
   fetchRecruitmentOverview,
@@ -57,6 +58,9 @@ export default async function RecruitmentDashboardPage() {
   const session = await getSession()
   const actingEmployeeId = session?.employeeId ?? ""
 
+  const pendingReviewResult = await fetchRequisitions({ status: "PENDING_HR_REVIEW" }, actingEmployeeId)
+  const pendingReview = pendingReviewResult.ok ? pendingReviewResult.data : []
+
   const [overviewResult, funnelResult, offerStatsResult, timeToHireResult, vacanciesResult] = await Promise.all([
     fetchRecruitmentOverview(actingEmployeeId),
     fetchRecruitmentFunnel(actingEmployeeId),
@@ -83,15 +87,37 @@ export default async function RecruitmentDashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Recruitment Management</h1>
           <p className="text-sm text-muted-foreground">
-            Workforce planning through onboarding — the full hiring pipeline, from vacancy to new hire.
+            From requisition to onboarding — the full hiring pipeline, from vacancy to new hire.
           </p>
         </div>
-        <Link href="/admin/recruitment/workforce-plans/new" className={buttonVariants({ size: "sm" })}>
-          New workforce plan
+        <Link href="/admin/recruitment/requisitions/new" className={buttonVariants({ size: "sm" })}>
+          New requisition
         </Link>
       </div>
 
       <RecruitmentTabs />
+
+      {pendingReview.length > 0 ? (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              {pendingReview.length} requisition{pendingReview.length === 1 ? "" : "s"} awaiting your review
+            </CardTitle>
+            <CardDescription>Review, approve and forward to the MD — or return to the Head of Department.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1.5">
+            {pendingReview.map((r) => (
+              <Link key={r.id} href={`/admin/recruitment/requisitions/${r.id}`} className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted/40">
+                <span>
+                  <span className="font-medium text-foreground">{r.position.title}</span>
+                  <span className="text-muted-foreground"> · {r.department.name} · {r.numberOfVacancies} vacanc{r.numberOfVacancies === 1 ? "y" : "ies"}</span>
+                </span>
+                <span className="text-xs font-medium text-primary">Review →</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {overviewResult.ok ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">

@@ -36,13 +36,16 @@ export function RequisitionActions({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [active, setActive] = useState<string | null>(null)
   const [showReject, setShowReject] = useState(false)
   const [comment, setComment] = useState("")
 
-  function run(action: () => Promise<{ error?: string }>) {
+  function run(key: string, action: () => Promise<{ error?: string }>) {
     setError(null)
+    setActive(key)
     startTransition(async () => {
       const result = await action()
+      setActive(null)
       if (result?.error) {
         setError(result.error)
         return
@@ -62,7 +65,7 @@ export function RequisitionActions({
 
   function handleDelete() {
     if (!window.confirm("Delete this draft requisition? This can't be undone.")) return
-    run(() => deleteRequisition(requisitionId, actingEmployeeId))
+    run("delete", () => deleteRequisition(requisitionId, actingEmployeeId))
   }
 
   if (!canSubmit && !canHrReview && !canDecide && !canClose && !canReopen && !canEdit && !canDelete) return null
@@ -76,14 +79,14 @@ export function RequisitionActions({
           </Link>
         ) : null}
         {canSubmit ? (
-          <Button type="button" size="sm" disabled={pending} onClick={() => run(() => submitRequisition(requisitionId, actingEmployeeId))}>
-            {pending ? "Submitting…" : status === "REJECTED" ? "Resubmit to HR" : "Submit to HR"}
+          <Button type="button" size="sm" disabled={pending} onClick={() => run("submit", () => submitRequisition(requisitionId, actingEmployeeId))}>
+            {active === "submit" ? "Submitting…" : status === "REJECTED" ? "Resubmit to HR" : "Submit to HR"}
           </Button>
         ) : null}
         {canHrReview ? (
           <>
-            <Button type="button" size="sm" disabled={pending} onClick={() => run(() => hrApproveRequisition(requisitionId, actingEmployeeId, comment.trim() || undefined))}>
-              {pending ? "Forwarding…" : "Approve & forward to MD"}
+            <Button type="button" size="sm" disabled={pending} onClick={() => run("hrApprove", () => hrApproveRequisition(requisitionId, actingEmployeeId, comment.trim() || undefined))}>
+              {active === "hrApprove" ? "Forwarding…" : "Approve & forward to MD"}
             </Button>
             <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setShowReject((value) => !value)}>
               Return to HoD
@@ -92,8 +95,8 @@ export function RequisitionActions({
         ) : null}
         {canDecide ? (
           <>
-            <Button type="button" size="sm" disabled={pending} onClick={() => run(() => approveRequisition(requisitionId, actingEmployeeId))}>
-              {pending ? "Approving…" : "Approve"}
+            <Button type="button" size="sm" disabled={pending} onClick={() => run("approve", () => approveRequisition(requisitionId, actingEmployeeId))}>
+              {active === "approve" ? "Approving…" : "Approve"}
             </Button>
             <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setShowReject((value) => !value)}>
               Reject
@@ -101,18 +104,18 @@ export function RequisitionActions({
           </>
         ) : null}
         {canClose ? (
-          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => closeRequisition(requisitionId, actingEmployeeId))}>
-            {pending ? "Closing…" : "Close requisition"}
+          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run("close", () => closeRequisition(requisitionId, actingEmployeeId))}>
+            {active === "close" ? "Closing…" : "Close requisition"}
           </Button>
         ) : null}
         {canReopen ? (
-          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => reopenRequisition(requisitionId, actingEmployeeId))}>
-            {pending ? "Reopening…" : "Reopen requisition"}
+          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run("reopen", () => reopenRequisition(requisitionId, actingEmployeeId))}>
+            {active === "reopen" ? "Reopening…" : "Reopen requisition"}
           </Button>
         ) : null}
         {canDelete ? (
           <Button type="button" size="sm" variant="destructive" disabled={pending} onClick={handleDelete}>
-            {pending ? "Deleting…" : "Delete requisition"}
+            {active === "delete" ? "Deleting…" : "Delete requisition"}
           </Button>
         ) : null}
       </div>
@@ -127,14 +130,14 @@ export function RequisitionActions({
               variant="destructive"
               disabled={pending || comment.trim().length === 0}
               onClick={() =>
-                run(() =>
+                run("reject", () =>
                   canHrReview
                     ? hrRejectRequisition(requisitionId, actingEmployeeId, comment.trim())
                     : rejectRequisition(requisitionId, actingEmployeeId, comment.trim())
                 )
               }
             >
-              {pending ? "Saving…" : canHrReview ? "Confirm return" : "Confirm rejection"}
+              {active === "reject" ? "Saving…" : canHrReview ? "Confirm return" : "Confirm rejection"}
             </Button>
           </div>
         </div>

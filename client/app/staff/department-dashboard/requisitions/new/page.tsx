@@ -2,13 +2,11 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { createDepartmentRequisition } from "@/lib/api/department-dashboard-actions"
-import { fetchDepartmentPositions, fetchEligibleWorkforcePlans } from "@/lib/api/department-dashboard"
+import { fetchDepartmentPositions } from "@/lib/api/department-dashboard"
 import { fetchUnits } from "@/lib/api/departments"
 import { fetchPositionLevels } from "@/lib/api/positions"
-import { fetchJobDescriptions } from "@/lib/api/recruitment"
 
 import { DepartmentApiError, DepartmentEmptyState, resolveDepartmentContext } from "../../shared"
 import { DepartmentRequisitionForm } from "./requisition-form"
@@ -33,7 +31,7 @@ export default async function NewDepartmentRequisitionPage({
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">New job requisition</h1>
         <p className="text-sm text-muted-foreground">
-          Routed through the standard recruitment approval workflow — HR reviews and approves before it goes live.
+          Fill in the key details. HR reviews it and forwards it to the MD for final approval.
         </p>
       </div>
 
@@ -48,25 +46,19 @@ export default async function NewDepartmentRequisitionPage({
 }
 
 async function RequisitionFormCard({ departmentId, actingEmployeeId }: { departmentId: string; actingEmployeeId: string }) {
-  const [workforcePlansResult, positionsResult, unitsResult, levelsResult, bandsResult, branchesResult, jobDescriptionsResult] =
+  const [positionsResult, unitsResult, levelsResult, branchesResult] =
     await Promise.all([
-      fetchEligibleWorkforcePlans(departmentId, actingEmployeeId),
       fetchDepartmentPositions(departmentId, actingEmployeeId),
       fetchUnits(),
       fetchPositionLevels(),
-      fetchBands(),
       fetchBranches(),
-      fetchJobDescriptions(),
     ])
 
-  if (!workforcePlansResult.ok) return <DepartmentApiError message={workforcePlansResult.error} />
   if (!positionsResult.ok) return <DepartmentApiError message={positionsResult.error} />
 
   const units = unitsResult.ok ? unitsResult.data.filter((unit) => unit.department.id === departmentId) : []
   const levels = levelsResult.ok ? levelsResult.data : []
-  const bands = bandsResult.ok ? bandsResult.data : []
   const branches = branchesResult.ok ? branchesResult.data : []
-  const jobDescriptions = jobDescriptionsResult.ok ? jobDescriptionsResult.data : []
 
   return (
     <Card>
@@ -76,13 +68,10 @@ async function RequisitionFormCard({ departmentId, actingEmployeeId }: { departm
       </CardHeader>
       <CardContent>
         <DepartmentRequisitionForm
-          workforcePlans={workforcePlansResult.data}
           positions={positionsResult.data}
           units={units}
           levels={levels}
-          bands={bands}
           branches={branches}
-          jobDescriptions={jobDescriptions}
           action={createDepartmentRequisition.bind(null, departmentId, actingEmployeeId)}
         />
       </CardContent>

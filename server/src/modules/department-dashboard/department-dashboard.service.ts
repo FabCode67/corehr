@@ -449,11 +449,6 @@ export class DepartmentDashboardService {
     await this.assertAccess(departmentId, actingEmployeeId)
     const departmentIds = await resolveDepartmentFilterIds(this.prisma, departmentId)
 
-    const plan = await this.prisma.workforcePlan.findUnique({ where: { id: dto.workforcePlanId } })
-    if (!plan || !departmentIds.includes(plan.departmentId)) {
-      throw new ForbiddenException("That workforce plan isn't scoped to your department.")
-    }
-
     if (dto.positionId) {
       const position = await this.prisma.position.findUnique({ where: { id: dto.positionId } })
       if (!position || !departmentIds.includes(position.departmentId)) {
@@ -465,8 +460,10 @@ export class DepartmentDashboardService {
       }
     }
 
-    const scopedDto: CreateRequisitionDto = { ...dto, requestedById: actingEmployeeId, hiringManagerId: actingEmployeeId }
-    return this.requisitionsService.create(scopedDto, actingEmployeeId)
+    const scopedDto: CreateRequisitionDto = { ...dto, workforcePlanId: undefined, requestedById: actingEmployeeId, hiringManagerId: actingEmployeeId }
+    // The head's access was verified above; the requisition goes straight to HR for review.
+    const created = await this.requisitionsService.create(scopedDto, actingEmployeeId, { trustedScope: true })
+    return this.requisitionsService.submit(created.id, { actingEmployeeId })
   }
 
   // ---------------------------------------------------------------------

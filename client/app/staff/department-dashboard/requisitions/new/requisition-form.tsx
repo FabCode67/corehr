@@ -7,62 +7,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import type { Band } from "@/lib/api/bands"
+import { Textarea } from "@/components/ui/textarea"
 import type { Branch } from "@/lib/api/branches"
 import type { DepartmentActionState } from "@/lib/api/department-dashboard-actions"
-import type { DepartmentPosition, EligibleWorkforcePlan } from "@/lib/api/department-dashboard"
-import type { JobDescription } from "@/lib/api/recruitment"
+import type { DepartmentPosition } from "@/lib/api/department-dashboard"
 import type { PositionLevel } from "@/lib/api/positions"
 import type { UnitWithDepartment } from "@/lib/api/departments"
 
 interface DepartmentRequisitionFormProps {
-  workforcePlans: EligibleWorkforcePlan[]
   positions: DepartmentPosition[]
   units: UnitWithDepartment[]
   levels: PositionLevel[]
-  bands: Band[]
   branches: Branch[]
-  jobDescriptions: JobDescription[]
   action: (prevState: DepartmentActionState | undefined, formData: FormData) => Promise<DepartmentActionState>
 }
 
 export function DepartmentRequisitionForm({
-  workforcePlans,
   positions,
   units,
   levels,
-  bands,
   branches,
-  jobDescriptions,
   action,
 }: DepartmentRequisitionFormProps) {
   const [state, formAction, pending] = useActionState<DepartmentActionState | undefined, FormData>(action, undefined)
   const [positionMode, setPositionMode] = useState<"existing" | "new">("existing")
 
-  if (workforcePlans.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No approved workforce plan exists yet for your department — ask HR to approve one before a requisition can be
-        created against it.
-      </p>
-    )
-  }
-
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label>Workforce plan</Label>
-        <SearchableSelect
-          options={workforcePlans.map((plan) => ({ value: plan.id, label: plan.title }))}
-          name="workforcePlanId"
-          defaultValue=""
-          required
-          clearable={false}
-          placeholder="Select an approved plan…"
-          searchPlaceholder="Search plans…"
-        />
-      </div>
-
       <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
         <p className="text-xs font-medium text-muted-foreground">Position</p>
         <div className="flex gap-4 text-sm">
@@ -138,19 +109,6 @@ export function DepartmentRequisitionForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label>Band</Label>
-          <SearchableSelect
-            options={bands.map((band) => ({ value: band.id, label: band.name }))}
-            name="bandId"
-            defaultValue=""
-            required
-            clearable={false}
-            placeholder="Select…"
-            searchPlaceholder="Search bands…"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
           <Label htmlFor="numberOfVacancies">Number of vacancies</Label>
           <Input id="numberOfVacancies" name="numberOfVacancies" type="number" min={1} defaultValue={1} required />
         </div>
@@ -223,14 +181,8 @@ export function DepartmentRequisitionForm({
         </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label>Job description template (optional)</Label>
-          <SearchableSelect
-            options={jobDescriptions.map((jobDescription) => ({ value: jobDescription.id, label: jobDescription.jobTitle }))}
-            name="jobDescriptionId"
-            defaultValue=""
-            placeholder="None yet"
-            searchPlaceholder="Search job descriptions…"
-          />
+          <Label htmlFor="justification">Justification</Label>
+          <Textarea id="justification" name="justification" required placeholder="Why is this hire needed? Workload, replacement, new project…" />
         </div>
       </div>
 
@@ -242,7 +194,7 @@ export function DepartmentRequisitionForm({
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Submitting…" : "Create requisition"}
+          {pending ? "Submitting…" : "Submit to HR"}
         </Button>
       </div>
     </form>

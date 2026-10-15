@@ -1168,6 +1168,10 @@ enum ApprovalDecision {
 }
 
 enum NotificationType {
+  /// Recruitment: requisition submitted to HR / forwarded to the MD / decided.
+  REQUISITION_SUBMITTED
+  REQUISITION_FORWARDED
+  REQUISITION_DECISION
   LEAVE_SUBMITTED
   LEAVE_APPROVED
   LEAVE_REJECTED

@@ -36,6 +36,8 @@ export interface SessionUser {
    *  temporary password. middleware.ts redirects anywhere in /staff or
    *  /admin to /change-password while this is true. */
   mustChangePassword: boolean
+  /** Director-level (MD) position holder. */
+  isDirector?: boolean
 }
 
 export const SESSION_COOKIE = "ps_session"
@@ -70,7 +72,7 @@ export async function decodeSession(token: string | undefined | null): Promise<S
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     if (!isSessionUserShape(payload)) return null
-    return { ...payload, mustChangePassword: Boolean(payload.mustChangePassword) } as SessionUser
+    return { ...payload, mustChangePassword: Boolean(payload.mustChangePassword), isDirector: Boolean(payload.isDirector) } as SessionUser
   } catch {
     return null
   }
