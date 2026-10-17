@@ -19,6 +19,8 @@ import { APPLICATION_STATUS_LABELS } from "@/lib/api/recruitment-utils"
 import { APPLICATION_DOCUMENT_LABELS } from "@/lib/application-documents"
 import { getSession } from "@/lib/get-session"
 
+import { SectionBoundary } from "@/components/section-boundary"
+import { AdvanceBar } from "./advance-bar"
 import { AssessmentsSection } from "./assessments-section"
 import { BackgroundChecksSection } from "./background-checks-section"
 import { InterviewsSection } from "./interviews-section"
@@ -63,6 +65,11 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
       fetchApplicationPipeline(id, actingEmployeeId),
     ])
 
+  const pipeline = pipelineResult.ok ? [...(pipelineResult.data ?? [])].sort((a, b) => a.sequence - b.sequence) : []
+  const currentIdx = pipeline.findIndex((st) => st.status === "IN_PROGRESS" || st.status === "ON_HOLD")
+  const currentStep = currentIdx >= 0 ? pipeline[currentIdx].stage?.name ?? null : null
+  const nextStep = currentIdx >= 0 ? pipeline[currentIdx + 1]?.stage?.name ?? null : null
+
   const isTerminal = application.status === "HIRED" || application.status === "REJECTED" || application.status === "WITHDRAWN"
 
   const hasAcceptedOffer = offersResult.ok && offersResult.data.some((offer) => offer.status === "ACCEPTED")
@@ -90,7 +97,11 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
         </div>
       </div>
 
-      <Card>
+      {!isTerminal ? (
+        <AdvanceBar applicationId={application.id} actingEmployeeId={actingEmployeeId} currentStep={currentStep} nextStep={nextStep} />
+      ) : null}
+
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Recruitment Pipeline</CardTitle>
           <CardDescription>The candidate&apos;s progress through this position&apos;s configured interview workflow.</CardDescription>
@@ -103,10 +114,10 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             isTerminal={isTerminal}
           />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
       {documents.length > 0 ? (
-        <Card>
+        <SectionBoundary><Card>
           <CardHeader>
             <CardTitle className="text-base">Submitted documents</CardTitle>
             <CardDescription>Files the candidate uploaded with their application.</CardDescription>
@@ -126,10 +137,10 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
               ))}
             </ul>
           </CardContent>
-        </Card>
+        </Card></SectionBoundary>
       ) : null}
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Candidate profile</CardTitle>
         </CardHeader>
@@ -185,18 +196,18 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             </div>
           ) : null}
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Screening</CardTitle>
         </CardHeader>
         <CardContent>
           <ScreeningSection application={application} actingEmployeeId={actingEmployeeId} />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Assessments</CardTitle>
         </CardHeader>
@@ -207,9 +218,9 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             assessments={assessmentsResult.ok ? assessmentsResult.data : []}
           />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Interviews</CardTitle>
         </CardHeader>
@@ -221,9 +232,9 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             employees={employeesResult.ok ? employeesResult.data : []}
           />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Background checks</CardTitle>
         </CardHeader>
@@ -234,9 +245,9 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             checks={checksResult.ok ? checksResult.data : []}
           />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
-      <Card>
+      <SectionBoundary><Card>
         <CardHeader>
           <CardTitle className="text-base">Offer</CardTitle>
         </CardHeader>
@@ -248,7 +259,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
             bands={bandsResult.ok ? bandsResult.data : []}
           />
         </CardContent>
-      </Card>
+      </Card></SectionBoundary>
 
       {hasAcceptedOffer || application.hiredEmployeeNumber ? (
         <Card>
