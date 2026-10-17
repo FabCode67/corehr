@@ -48,6 +48,8 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
   }
 
   const application = applicationResult.data
+  // Older API deployments (before the public-apply migration) don't return documents.
+  const documents = application.documents ?? []
 
   const [assessmentsResult, interviewsResult, checksResult, offersResult, onboardingResult, employeesResult, bandsResult, pipelineResult] =
     await Promise.all([
@@ -103,7 +105,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
         </CardContent>
       </Card>
 
-      {application.documents.length > 0 ? (
+      {documents.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Submitted documents</CardTitle>
@@ -111,7 +113,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-2">
-              {application.documents.map((doc) => (
+              {documents.map((doc) => (
                 <li key={doc.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
                   <span>
                     <span className="font-medium text-foreground">{APPLICATION_DOCUMENT_LABELS[doc.type] ?? doc.type}</span>
@@ -174,7 +176,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
               </div>
             ) : null
           )}
-          {application.candidate.cvUrl && application.documents.length === 0 ? (
+          {application.candidate.cvUrl && documents.length === 0 ? (
             <div>
               <p className="text-xs text-muted-foreground">CV</p>
               <a href={application.candidate.cvUrl} className="text-sm text-primary hover:underline">

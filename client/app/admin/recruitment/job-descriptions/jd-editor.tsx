@@ -55,23 +55,63 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-/** "Add common…" dropdown — appends the chosen line to a multi-line text block. */
+const CUSTOM = "__custom__"
+
+/** "Add common…" dropdown — appends the chosen line to a multi-line text block.
+ *  The last option lets the user type their own line instead. */
 function QuickAdd({ options, onPick, label }: { options: string[]; onPick: (line: string) => void; label: string }) {
+  const [custom, setCustom] = useState(false)
+  const [text, setText] = useState("")
+
+  function addCustom() {
+    if (!text.trim()) return
+    onPick(text.trim())
+    setText("")
+    setCustom(false)
+  }
+
   return (
-    <Select
-      value=""
-      onChange={(e) => {
-        if (e.target.value) onPick(e.target.value)
-      }}
-      className="h-8 text-xs"
-    >
-      <option value="">{label}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o.length > 90 ? `${o.slice(0, 90)}…` : o}
-        </option>
-      ))}
-    </Select>
+    <div className="flex flex-col gap-1.5">
+      <Select
+        value=""
+        onChange={(e) => {
+          if (e.target.value === CUSTOM) setCustom(true)
+          else if (e.target.value) onPick(e.target.value)
+        }}
+        className="h-8 text-xs"
+      >
+        <option value="">{label}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o.length > 90 ? `${o.slice(0, 90)}…` : o}
+          </option>
+        ))}
+        <option value={CUSTOM}>✎ Write my own…</option>
+      </Select>
+      {custom ? (
+        <div className="flex gap-1.5">
+          <Input
+            autoFocus
+            value={text}
+            placeholder="Type your own line and press Add"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                addCustom()
+              }
+            }}
+            className="h-8 text-xs"
+          />
+          <Button type="button" size="sm" disabled={!text.trim()} onClick={addCustom}>
+            Add
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => { setCustom(false); setText("") }}>
+            Cancel
+          </Button>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -94,7 +134,7 @@ function CompetencyList({
       <Select
         value=""
         onChange={(e) => {
-          const pick = common.find((c) => c.name === e.target.value)
+          const pick = e.target.value === CUSTOM ? { name: "", description: "" } : common.find((c) => c.name === e.target.value)
           if (!pick) return
           const blank = items.findIndex((i) => !i.name.trim() && !i.description.trim())
           onChange(blank >= 0 ? items.map((x, j) => (j === blank ? pick : x)) : [...items, pick])
@@ -107,6 +147,7 @@ function CompetencyList({
             {c.name}
           </option>
         ))}
+        <option value={CUSTOM}>✎ Write my own…</option>
       </Select>
       {items.map((item, i) => (
         <div key={i} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
