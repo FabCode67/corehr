@@ -30,6 +30,10 @@ import { PipelineSection } from "./pipeline-section"
 import { ScreeningSection } from "./screening-section"
 import { StatusSelect } from "./status-select"
 
+function isTerminalStatus(status: string) {
+  return status === "HIRED" || status === "REJECTED" || status === "WITHDRAWN"
+}
+
 export default async function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getSession()
@@ -69,6 +73,11 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
   const currentIdx = pipeline.findIndex((st) => st.status === "IN_PROGRESS" || st.status === "ON_HOLD")
   const currentStep = currentIdx >= 0 ? pipeline[currentIdx].stage?.name ?? null : null
   const nextStep = currentIdx >= 0 ? pipeline[currentIdx + 1]?.stage?.name ?? null : null
+  const currentType = currentIdx >= 0 ? pipeline[currentIdx].stage?.stageType : undefined
+  const nextType = currentIdx >= 0 ? pipeline[currentIdx + 1]?.stage?.stageType : undefined
+  // The onboarding ("ADMIN") step or the end of the pipeline hands over to the hire form.
+  const atHireStep = currentType === "ADMIN" || (currentIdx < 0 && pipeline.length > 0 && !isTerminalStatus(application.status))
+  const goToHireAfter = currentIdx >= 0 && (nextStep === null || nextType === "ADMIN")
 
   const isTerminal = application.status === "HIRED" || application.status === "REJECTED" || application.status === "WITHDRAWN"
 
@@ -98,7 +107,7 @@ export default async function ApplicationDetailPage({ params }: { params: Promis
       </div>
 
       {!isTerminal ? (
-        <AdvanceBar applicationId={application.id} actingEmployeeId={actingEmployeeId} currentStep={currentStep} nextStep={nextStep} />
+        <AdvanceBar applicationId={application.id} actingEmployeeId={actingEmployeeId} currentStep={currentStep} nextStep={nextStep} goToHireAfter={goToHireAfter} atHireStep={atHireStep} />
       ) : null}
 
       <SectionBoundary><Card>

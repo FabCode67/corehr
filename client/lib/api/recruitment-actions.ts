@@ -999,3 +999,56 @@ export async function addStagesToCatalog(
   revalidatePath("/admin/recruitment/workflows")
   return {}
 }
+
+/** One-step hire: creates the employee from a selected candidate, then opens their profile. */
+export async function quickHireCandidate(
+  applicationId: string,
+  actingEmployeeId: string,
+  _prevState: RecruitmentActionState | undefined,
+  formData: FormData
+): Promise<RecruitmentActionState> {
+  const gender = trimmedOrUndefined(formData.get("gender"))
+  const dateOfBirth = trimmedOrUndefined(formData.get("dateOfBirth"))
+  const nationalIdNumber = trimmedOrUndefined(formData.get("nationalIdNumber"))
+  const maritalStatus = trimmedOrUndefined(formData.get("maritalStatus"))
+  const employmentStartDate = trimmedOrUndefined(formData.get("employmentStartDate"))
+  if (!gender || !dateOfBirth || !nationalIdNumber || !maritalStatus || !employmentStartDate) {
+    return { error: "Gender, date of birth, national ID, marital status and start date are required." }
+  }
+
+  let employeeNumber: string
+  try {
+    const result = await apiFetch<{ employee: { employeeNumber: string } }>(`/recruitment/applications/${applicationId}/onboarding/quick-hire`, {
+      method: "POST",
+      body: JSON.stringify({
+        actingEmployeeId,
+        gender,
+        dateOfBirth,
+        nationalIdNumber,
+        maritalStatus,
+        employmentStartDate,
+        probationEndDate: trimmedOrUndefined(formData.get("probationEndDate")),
+        contractEndDate: trimmedOrUndefined(formData.get("contractEndDate")),
+      }),
+    })
+    employeeNumber = result.employee.employeeNumber
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "Failed to create the employee." }
+  }
+  revalidateRecruitmentPaths()
+  redirect(`/admin/employees/${employeeNumber}`)
+}
+
+/** Moves several candidates to their next step in one go (the hiring board's bulk action). */
+export async function advanceApplications(applicationIds: string[], actingEmployeeId: string): Promise<RecruitmentActionState> {
+  for (const id of applicationIds) {
+    try {
+      await apiFetch(`/recruitment/applications/${id}/pipeline/advance`, { method: "POST", body: JSON.stringify({ actingEmployeeId }) })
+    } catch (error) {
+      revalidateRecruitmentPaths()
+      return { error: error instanceof ApiError ? error.message : "Failed to move the candidates." }
+    }
+  }
+  revalidateRecruitmentPaths()
+  return {}
+}

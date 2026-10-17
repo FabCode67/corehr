@@ -15,6 +15,7 @@ export function BoardCard({
   score,
   stepName,
   isLastStep,
+  hireAfter,
   onHold,
 }: {
   applicationId: string
@@ -23,17 +24,20 @@ export function BoardCard({
   score: number | null
   stepName: string
   isLastStep: boolean
+  /** Moving on ends the pipeline or lands on onboarding → open the hire form. */
+  hireAfter: boolean
   onHold: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  function run(action: () => Promise<{ error?: string }>) {
+  function run(action: () => Promise<{ error?: string }>, then?: () => void) {
     setError(null)
     startTransition(async () => {
       const result = await action()
       if (result?.error) return setError(result.error)
+      if (then) return then()
       router.refresh()
     })
   }
@@ -54,8 +58,14 @@ export function BoardCard({
       </div>
       {onHold ? <span className="text-xs text-amber-600">On hold</span> : null}
       <div className="flex flex-wrap gap-1.5">
-        <Button type="button" size="sm" disabled={pending} onClick={() => run(() => advanceApplicationStage(applicationId, actingEmployeeId))}>
-          {isLastStep ? "Select" : "Shortlist"}
+        <Button type="button" size="sm" disabled={pending} onClick={() =>
+            run(
+              () => advanceApplicationStage(applicationId, actingEmployeeId),
+              hireAfter || isLastStep ? () => router.push(`/admin/recruitment/applications/${applicationId}/hire`) : undefined
+            )
+          }
+        >
+          {hireAfter || isLastStep ? "Select & hire" : "Shortlist"}
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => run(() => holdApplicationStage(applicationId, actingEmployeeId))}>
           Hold

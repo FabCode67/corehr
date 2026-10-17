@@ -3,6 +3,7 @@ import { ApiTags } from "@nestjs/swagger"
 
 import { OnboardingTaskType } from "@prisma/client"
 
+import { QuickHireDto } from "./dto/quick-hire.dto"
 import { CompleteOnboardingDto } from "./dto/complete-onboarding.dto"
 import { UpdateOnboardingTaskDto } from "./dto/update-onboarding-task.dto"
 import { OnboardingService } from "./onboarding.service"
@@ -24,6 +25,11 @@ export class OnboardingController {
     @Body() dto: UpdateOnboardingTaskDto
   ) {
     return this.onboardingService.updateTask(applicationId, taskType, dto)
+  }
+
+  @Post("quick-hire")
+  quickHire(@Param("applicationId", ParseUUIDPipe) applicationId: string, @Body() dto: QuickHireDto) {
+    return this.onboardingService.quickHire(applicationId, dto)
   }
 
   @Post("complete")

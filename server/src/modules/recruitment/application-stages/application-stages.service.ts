@@ -122,7 +122,7 @@ export class ApplicationStagesService {
 
     let statusUpdate: ApplicationStatus | undefined
     if (current.stage.stageType === "OFFER") statusUpdate = "OFFER"
-    if (current.stage.stageType === "ADMIN") statusUpdate = "HIRED"
+    // HIRED is set only when the employee record is actually created (quick hire / onboarding).
 
     if (next) {
       await this.prisma.applicationStageInstance.update({ where: { id: next.id }, data: { status: "IN_PROGRESS", startedAt: new Date() } })

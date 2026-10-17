@@ -6,8 +6,21 @@ import { EmployeesService } from "../../employees/employees.service"
 import { RecruitmentAccessService } from "../access/recruitment-access.service"
 import { PrismaService } from "../../../prisma/prisma.service"
 
+import { QuickHireDto } from "./dto/quick-hire.dto"
 import { CompleteOnboardingDto } from "./dto/complete-onboarding.dto"
 import { UpdateOnboardingTaskDto } from "./dto/update-onboarding-task.dto"
+
+const ALL_TASK_TYPES: OnboardingTaskType[] = [
+  "EMPLOYEE_NUMBER_CREATED",
+  "SYSTEM_ACCOUNTS_CREATED",
+  "ID_CARD_ISSUED",
+  "LAPTOP_ASSIGNED",
+  "WORKSPACE_ASSIGNED",
+  "MANDATORY_AML_TRAINING_ASSIGNED",
+  "HR_ORIENTATION_SCHEDULED",
+  "MANAGER_ORIENTATION_SCHEDULED",
+  "DOCUMENTS_SIGNED",
+]
 
 const APPLICATION_ACCESS_INCLUDE = {
   jobPosting: {
@@ -81,6 +94,70 @@ export class OnboardingService {
   }
 
   /**
+   * One-step hire: from a selected candidate straight to a created employee.
+   * If no accepted offer exists yet, one is recorded as accepted using the
+   * requisition's position/band/branch/contract, then the employee is created
+   * through completeOnboarding. The physical checklist (laptop, ID card, ...)
+   * is NOT auto-ticked — those tasks stay open for HR/IT to complete later.
+   */
+  async quickHire(applicationId: string, dto: QuickHireDto) {
+    await this.findApplicationOrThrow(applicationId, dto.actingEmployeeId)
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: {
+        offers: { where: { status: "ACCEPTED" }, take: 1 },
+        jobPosting: { select: { requisition: { select: { positionId: true, departmentId: true, branchId: true, bandId: true, contractType: true } } } },
+      },
+    })
+    if (!application) throw new NotFoundException(`Application ${applicationId} not found`)
+    if (application.hiredEmployeeNumber) throw new BadRequestException("This candidate has already been hired.")
+    if (["REJECTED", "WITHDRAWN"].includes(application.status)) throw new BadRequestException("A rejected or withdrawn candidate can't be hired.")
+
+    if (application.offers.length === 0) {
+      const r = application.jobPosting.requisition
+      const now = new Date()
+      await this.prisma.$transaction([
+        this.prisma.offer.create({
+          data: {
+            applicationId,
+            positionId: r.positionId,
+            departmentId: r.departmentId,
+            branchId: r.branchId,
+            contractType: r.contractType,
+            bandId: r.bandId,
+            proposedStartDate: dto.employmentStartDate,
+            expiryDate: dto.employmentStartDate,
+            status: "ACCEPTED",
+            sentAt: now,
+            respondedAt: now,
+            createdById: dto.actingEmployeeId,
+          },
+        }),
+        this.prisma.onboardingTask.createMany({
+          data: ALL_TASK_TYPES.map((taskType) => ({ applicationId, taskType })),
+          skipDuplicates: true,
+        }),
+      ])
+      await this.log(applicationId, "OFFER_RECORDED_QUICK_HIRE", dto.actingEmployeeId)
+    }
+
+    return this.completeOnboarding(
+      applicationId,
+      {
+        actingEmployeeId: dto.actingEmployeeId,
+        gender: dto.gender,
+        dateOfBirth: dto.dateOfBirth,
+        nationalIdNumber: dto.nationalIdNumber,
+        maritalStatus: dto.maritalStatus,
+        employmentStartDate: dto.employmentStartDate,
+        probationEndDate: dto.probationEndDate,
+        contractEndDate: dto.contractEndDate,
+      },
+      { skipChecklist: true }
+    )
+  }
+
+  /**
    * The final onboarding action. Requires: an ACCEPTED offer, every
    * checklist item other than EMPLOYEE_NUMBER_CREATED complete, and no
    * prior hire recorded against this application. Creates the real
@@ -90,7 +167,7 @@ export class OnboardingService {
    * assignment as a side effect of setting employmentStartDate — see
    * module doc comment.
    */
-  async completeOnboarding(applicationId: string, dto: CompleteOnboardingDto) {
+  async completeOnboarding(applicationId: string, dto: CompleteOnboardingDto, options: { skipChecklist?: boolean } = {}) {
     await this.findApplicationOrThrow(applicationId, dto.actingEmployeeId)
 
     const application = await this.prisma.application.findUnique({
@@ -116,7 +193,7 @@ export class OnboardingService {
     const outstanding = application.onboardingTasks.filter(
       (task) => task.taskType !== "EMPLOYEE_NUMBER_CREATED" && !task.isCompleted
     )
-    if (outstanding.length > 0) {
+    if (!options.skipChecklist && outstanding.length > 0) {
       throw new BadRequestException(
         `The onboarding checklist isn't complete yet: ${outstanding.map((task) => task.taskType).join(", ")}`
       )

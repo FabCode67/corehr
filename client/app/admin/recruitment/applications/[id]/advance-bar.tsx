@@ -12,24 +12,31 @@ export function AdvanceBar({
   actingEmployeeId,
   currentStep,
   nextStep,
+  goToHireAfter,
+  atHireStep,
 }: {
   applicationId: string
   actingEmployeeId: string
   currentStep: string | null
   nextStep: string | null
+  /** Moving on lands on the onboarding step or finishes the pipeline → open the hire form. */
+  goToHireAfter: boolean
+  /** Already on the onboarding/last step. */
+  atHireStep: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [active, setActive] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  function run(key: string, action: () => Promise<{ error?: string }>) {
+  function run(key: string, action: () => Promise<{ error?: string }>, then?: () => void) {
     setError(null)
     setActive(key)
     startTransition(async () => {
       const result = await action()
       setActive(null)
       if (result?.error) return setError(result.error)
+      if (then) return then()
       router.refresh()
     })
   }
@@ -47,10 +54,27 @@ export function AdvanceBar({
         <p className="text-xs text-muted-foreground">{nextStep ? `Next: ${nextStep}` : currentStep ? "This is the final step — moving on selects the candidate." : ""}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" disabled={pending || !currentStep} onClick={() => run("advance", () => advanceApplicationStage(applicationId, actingEmployeeId))}>
-          {active === "advance" ? "Moving…" : nextStep ? "Move to next step" : "Select candidate"}
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={pending || !currentStep} onClick={() => run("hold", () => holdApplicationStage(applicationId, actingEmployeeId))}>
+        {atHireStep ? (
+          <Button type="button" size="sm" onClick={() => router.push(`/admin/recruitment/applications/${applicationId}/hire`)}>
+            Hire &amp; create employee
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending || !currentStep}
+            onClick={() =>
+              run(
+                "advance",
+                () => advanceApplicationStage(applicationId, actingEmployeeId),
+                goToHireAfter ? () => router.push(`/admin/recruitment/applications/${applicationId}/hire`) : undefined
+              )
+            }
+          >
+            {active === "advance" ? "Moving…" : goToHireAfter ? (nextStep ? `Move to ${nextStep} & hire` : "Select & hire") : "Move to next step"}
+          </Button>
+        )}
+        <Button type="button" size="sm" variant="outline" disabled={pending || !currentStep || atHireStep} onClick={() => run("hold", () => holdApplicationStage(applicationId, actingEmployeeId))}>
           {active === "hold" ? "Holding…" : "Hold"}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={reject}>

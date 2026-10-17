@@ -3,11 +3,12 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { fetchJobPosting, fetchPostingBoard, fetchPostingSteps } from "@/lib/api/recruitment"
 import { getSession } from "@/lib/get-session"
 
-import { BoardCard } from "./board-card"
+import { BoardColumns } from "./board-columns"
 
 export default async function HiringBoardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -56,35 +57,22 @@ export default async function HiringBoardPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {steps.map((step, index) => {
-          const column = apps.filter((a) => a.currentStageId === step.id && !terminal.includes(a.status))
-          return (
-            <Card key={step.id} className="w-64 shrink-0 bg-muted/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  {index + 1}. {step.name}
-                </CardTitle>
-                <CardDescription>{column.length} candidate(s)</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {column.map((a) => (
-                  <BoardCard
-                    key={a.id}
-                    applicationId={a.id}
-                    actingEmployeeId={actingEmployeeId}
-                    name={name(a)}
-                    score={a.overallScore}
-                    stepName={step.name}
-                    isLastStep={index === steps.length - 1}
-                    onHold={a.stageInstances.find((s) => s.stageId === step.id)?.status === "ON_HOLD"}
-                  />
-                ))}
-              </CardContent>
-            </Card>
-          )
-        })}
+      <div className="flex flex-col gap-4">
+        <BoardColumns
+          actingEmployeeId={actingEmployeeId}
+          columns={steps.map((step, index) => ({
+            stepId: step.id,
+            name: step.name,
+            index,
+            isLast: index === steps.length - 1,
+            hireAfter: index === steps.length - 1 || steps[index + 1]?.stageType === "ADMIN",
+            apps: apps
+              .filter((a) => a.currentStageId === step.id && !terminal.includes(a.status))
+              .map((a) => ({ id: a.id, name: name(a), score: a.overallScore, onHold: a.stageInstances.find((s) => s.stageId === step.id)?.status === "ON_HOLD" })),
+          }))}
+        />
 
+        <div className="flex gap-4 overflow-x-auto pb-2">
         <Card className="w-64 shrink-0 border-primary/40 bg-primary/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Final selection</CardTitle>
@@ -92,10 +80,14 @@ export default async function HiringBoardPage({ params }: { params: Promise<{ id
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {selected.map((a) => (
-              <Link key={a.id} href={`/admin/recruitment/applications/${a.id}`} className="rounded-lg border border-border bg-background p-2.5 text-sm hover:bg-muted/40">
-                <span className="font-medium">{name(a)}</span>
-                <span className="block text-xs text-muted-foreground">{a.status === "OFFER" ? "Offer stage" : "Selected"} → offer &amp; onboarding</span>
-              </Link>
+              <div key={a.id} className="flex flex-col gap-2 rounded-lg border border-border bg-background p-2.5 text-sm">
+                <Link href={`/admin/recruitment/applications/${a.id}`} className="font-medium hover:underline">
+                  {name(a)}
+                </Link>
+                <Link href={`/admin/recruitment/applications/${a.id}/hire`} className={buttonVariants({ size: "sm" })}>
+                  Hire &amp; create employee
+                </Link>
+              </div>
             ))}
           </CardContent>
         </Card>
@@ -116,6 +108,7 @@ export default async function HiringBoardPage({ params }: { params: Promise<{ id
             ))}
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {rejected.length > 0 ? (
