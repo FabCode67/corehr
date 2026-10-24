@@ -115,3 +115,20 @@ export function buildEmployeeDimensionWhere(filters: HrAnalyticsFilters): Prisma
 
   return dimensionWhere
 }
+
+/** Headcount population for a filter set. With no date filter this is simply
+ *  "currently ACTIVE". With a year/month/quarter/range it is the roster as of the
+ *  END of that period: started on or before it and not yet exited by then — so
+ *  picking a period actually changes headcount, band, age, gender and
+ *  department figures instead of only joiners/exits. */
+export function headcountWhere(dimensionWhere: Prisma.EmployeeWhereInput, filters: HrAnalyticsFilters): Prisma.EmployeeWhereInput {
+  const { to } = resolveDateRange(filters)
+  if (!to) return { AND: [dimensionWhere, { employmentStatus: "ACTIVE" }] }
+  return {
+    AND: [
+      dimensionWhere,
+      { OR: [{ employmentStartDate: null }, { employmentStartDate: { lte: to } }] },
+      { OR: [{ employmentStatus: "ACTIVE", exitDate: null }, { exitDate: { gt: to } }, { employmentStatus: "ACTIVE", exitDate: { gt: to } }] },
+    ],
+  }
+}

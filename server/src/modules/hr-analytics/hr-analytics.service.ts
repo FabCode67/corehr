@@ -3,7 +3,7 @@ import { ContractType } from "@prisma/client"
 
 import { PrismaService } from "../../prisma/prisma.service"
 
-import { buildEmployeeDimensionWhere, resolveDateRange, type HrAnalyticsFilters } from "./hr-analytics-filters.util"
+import { buildEmployeeDimensionWhere, headcountWhere, resolveDateRange, type HrAnalyticsFilters } from "./hr-analytics-filters.util"
 
 const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25
 
@@ -49,7 +49,7 @@ export class HrAnalyticsService {
     const asOfLastYear = new Date(Date.UTC(referenceYear, 0, 1))
 
     const [activeCount, newJoined, exited, activeCountLastYear] = await Promise.all([
-      this.prisma.employee.count({ where: { ...dimensionWhere, employmentStatus: "ACTIVE" } }),
+      this.prisma.employee.count({ where: headcountWhere(dimensionWhere, filters) }),
       this.prisma.employee.count({
         where: { ...dimensionWhere, ...(from || to ? { employmentStartDate: { gte: from, lte: to } } : { employmentStartDate: undefined }) },
       }),
@@ -90,8 +90,11 @@ export class HrAnalyticsService {
       },
     })
 
-    const activeNow = employees.filter((e) => e.employmentStatus === "ACTIVE")
-    const overall = activeNow.length === 0 ? null : round1(activeNow.reduce((sum, e) => sum + ageInYears(e.dateOfBirth), 0) / activeNow.length)
+    const { to: periodEnd } = resolveDateRange(filters)
+    const activeNow = periodEnd
+      ? employees.filter((e) => (!e.employmentStartDate || e.employmentStartDate <= periodEnd) && (!e.exitDate || e.exitDate > periodEnd))
+      : employees.filter((e) => e.employmentStatus === "ACTIVE")
+    const overall = activeNow.length === 0 ? null : round1(activeNow.reduce((sum, e) => sum + ageInYears(e.dateOfBirth, periodEnd), 0) / activeNow.length)
 
     const byDeptTotals = new Map<string, { name: string; sum: number; count: number }>()
     for (const e of activeNow) {
@@ -133,7 +136,7 @@ export class HrAnalyticsService {
       this.prisma.band.findMany({ where: { isActive: true }, orderBy: { rank: "asc" } }),
       this.prisma.employee.groupBy({
         by: ["bandId"],
-        where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
+        where: headcountWhere(dimensionWhere, filters),
         _count: { _all: true },
       }),
     ])
@@ -390,7 +393,7 @@ export class HrAnalyticsService {
   async employeeDistributionByDepartment(filters: HrAnalyticsFilters) {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
     const employees = await this.prisma.employee.findMany({
-      where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
+      where: headcountWhere(dimensionWhere, filters),
       select: { position: { select: { department: { select: { id: true, name: true } } } } },
     })
 
@@ -488,7 +491,7 @@ export class HrAnalyticsService {
    *  much smaller concern than the counts used to be. */
   async employeeDemographics(filters: HrAnalyticsFilters) {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
-    const activeWhere = { ...dimensionWhere, employmentStatus: "ACTIVE" as const }
+    const activeWhere = headcountWhere(dimensionWhere, filters)
 
     const [dobRows, genderGroups, contractGroups, totalActive] = await Promise.all([
       this.prisma.employee.findMany({ where: activeWhere, select: { dateOfBirth: true } }),
@@ -527,7 +530,7 @@ export class HrAnalyticsService {
     const dimensionWhere = buildEmployeeDimensionWhere(filters)
     const [employeesByFunction, employeesByDepartment, employeesByUnit, positions] = await Promise.all([
       this.prisma.employee.findMany({
-        where: { ...dimensionWhere, employmentStatus: "ACTIVE" },
+        where: headcountWhere(dimensionWhere, filters),
         select: { position: { select: { department: { select: { functionId: true, function: { select: { name: true } } } } } } },
       }),
       this.employeeDistributionByDepartment(filters),
