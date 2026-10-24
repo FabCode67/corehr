@@ -5,9 +5,9 @@ import { Download } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { LiveSearchInput } from "@/components/live-search-input"
 import { Pagination } from "@/components/ui/pagination"
-import { SearchableSelect } from "@/components/ui/searchable-select"
+import { LiveFilterSelect } from "@/components/live-filter-select"
 import { fetchBands } from "@/lib/api/bands"
 import { fetchBranches } from "@/lib/api/branches"
 import { fetchDepartments } from "@/lib/api/departments"
@@ -105,18 +105,13 @@ export default async function AdminEmployeesPage({
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Search</label>
-              <Input
-                name="search"
-                placeholder="Name, Staff ID, or email…"
-                defaultValue={search ?? ""}
-                className="w-56"
-              />
+              <LiveSearchInput placeholder="Name, Staff ID, or email…" defaultValue={search ?? ""} className="w-56" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Location</label>
-              <SearchableSelect
+              <LiveFilterSelect
                 options={branches.map((b) => ({ value: b.id, label: b.name }))}
-                name="branchId"
+                param="branchId"
                 defaultValue={branchId ?? ""}
                 placeholder="All locations"
                 searchPlaceholder="Search locations…"
@@ -125,9 +120,9 @@ export default async function AdminEmployeesPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Department</label>
-              <SearchableSelect
+              <LiveFilterSelect
                 options={departments.map((department) => ({ value: department.id, label: department.name }))}
-                name="departmentId"
+                param="departmentId"
                 defaultValue={departmentId ?? ""}
                 placeholder="All departments"
                 searchPlaceholder="Search departments…"
@@ -136,9 +131,9 @@ export default async function AdminEmployeesPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Position</label>
-              <SearchableSelect
+              <LiveFilterSelect
                 options={positions.map((position) => ({ value: position.id, label: position.title }))}
-                name="positionId"
+                param="positionId"
                 defaultValue={positionId ?? ""}
                 placeholder="All positions"
                 searchPlaceholder="Search positions…"
@@ -147,9 +142,9 @@ export default async function AdminEmployeesPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Level</label>
-              <SearchableSelect
+              <LiveFilterSelect
                 options={levels.map((level) => ({ value: level.id, label: level.name }))}
-                name="levelId"
+                param="levelId"
                 defaultValue={levelId ?? ""}
                 placeholder="All levels"
                 searchPlaceholder="Search levels…"
@@ -158,18 +153,15 @@ export default async function AdminEmployeesPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Band</label>
-              <SearchableSelect
+              <LiveFilterSelect
                 options={bands.map((band) => ({ value: band.id, label: band.name }))}
-                name="bandId"
+                param="bandId"
                 defaultValue={bandId ?? ""}
                 placeholder="All bands"
                 searchPlaceholder="Search bands…"
                 className="w-36"
               />
             </div>
-            <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
-              Apply
-            </button>
             {hasFilters ? (
               <Link href="/admin/employees" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
                 Reset

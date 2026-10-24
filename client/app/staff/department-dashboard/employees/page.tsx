@@ -1,9 +1,8 @@
 import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { LiveSearchInput } from "@/components/live-search-input"
 import { fetchDepartmentEmployees } from "@/lib/api/department-dashboard"
 import { fetchEmployeeExportColumns } from "@/lib/api/employees"
 import { fullName } from "@/lib/format-name"
@@ -84,19 +83,9 @@ async function EmployeesTable({
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <form method="get" className="flex max-w-md items-end gap-2">
-          <Input
-            type="search"
-            name="search"
-            placeholder="Search by name, staff ID, or email…"
-            defaultValue={search ?? ""}
-            className="flex-1"
-          />
-          <input type="hidden" name="dept" value={departmentId} />
-          <Button type="submit" variant="outline" size="sm">
-            Search
-          </Button>
-        </form>
+        <div className="max-w-md">
+          <LiveSearchInput placeholder="Search by name, staff ID, or email…" defaultValue={search ?? ""} className="w-full" />
+        </div>
 
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="w-full text-sm">

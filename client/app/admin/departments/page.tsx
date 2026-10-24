@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { LiveSearchInput } from "@/components/live-search-input"
 import { fetchDepartments, type Department } from "@/lib/api/departments"
 import { getSession } from "@/lib/get-session"
 
@@ -127,11 +127,8 @@ export default async function AdminDepartmentsPage({
           <form method="get" className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">Search</label>
-              <Input name="search" placeholder="Department name…" defaultValue={search ?? ""} className="w-56" />
+              <LiveSearchInput placeholder="Department name…" defaultValue={search ?? ""} className="w-56" />
             </div>
-            <button type="submit" className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
-              Apply
-            </button>
             {search ? (
               <Link href="/admin/departments" className="h-9 rounded-lg border border-border px-3 text-sm font-medium text-foreground leading-9 hover:bg-muted">
                 Reset

@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { LiveSearchInput } from "@/components/live-search-input"
 import { fetchCandidates } from "@/lib/api/recruitment"
 
 import { RecruitmentTabs } from "../recruitment-tabs"
@@ -26,12 +26,9 @@ export default async function CandidatesPage({ searchParams }: { searchParams: P
 
       <RecruitmentTabs />
 
-      <form method="get" className="flex max-w-sm gap-2">
-        <Input name="search" placeholder="Search by name or email…" defaultValue={search ?? ""} />
-        <button type="submit" className="h-9 shrink-0 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80">
-          Search
-        </button>
-      </form>
+      <div className="max-w-sm">
+        <LiveSearchInput placeholder="Search by name or email…" defaultValue={search ?? ""} />
+      </div>
 
       {!result.ok ? (
         <Card className="border-dashed border-destructive/40">
