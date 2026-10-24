@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CollapsibleFilters, type FilterChip } from "@/components/collapsible-filters"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select } from "@/components/ui/select"
 import { fetchBands } from "@/lib/api/bands"
@@ -53,13 +53,27 @@ export async function AnalyticsFilters({
   const currentYear = new Date().getUTCFullYear()
   const yearOptions = [currentYear - 3, currentYear - 2, currentYear - 1, currentYear, currentYear + 1]
 
+  const monthName = (m: string) => new Date(Date.UTC(2000, Number(m) - 1, 1)).toLocaleString("en-GB", { month: "long" })
+  const chipDefs: [string, string, string | undefined][] = [
+    ["Year", "year", raw.year],
+    ["Quarter", "quarter", raw.quarter ? `Q${raw.quarter}` : undefined],
+    ["Month", "month", raw.month ? monthName(raw.month) : undefined],
+    ["Function", "functionId", functions.find((f) => f.id === raw.functionId)?.name],
+    ["Department", "departmentId", departments.find((d) => d.id === raw.departmentId)?.name],
+    ["Unit", "unitId", units.find((u) => u.id === raw.unitId)?.name],
+    ["Branch", "branchId", branches.find((b) => b.id === raw.branchId)?.name],
+    ["Position", "positionId", positions.find((p) => p.id === raw.positionId)?.title],
+    ["Level", "levelId", levels.find((l) => l.id === raw.levelId)?.name],
+    ["Band", "bandId", bands.find((b) => b.id === raw.bandId)?.name],
+    ["Contract", "contractType", raw.contractType ? formatEnumLabel(raw.contractType) : undefined],
+    ["Gender", "gender", raw.gender ? formatEnumLabel(raw.gender) : undefined],
+    ["Status", "employmentStatus", raw.employmentStatus ? formatEnumLabel(raw.employmentStatus) : undefined],
+  ]
+  const chips: FilterChip[] = chipDefs.filter(([, , v]) => Boolean(v)).map(([label, , v]) => ({ label, value: v as string }))
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Filters</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <CollapsibleFilters chips={chips} resetHref={basePath} description={description}>
+      <div className="flex flex-col gap-4">
         <form method="get" className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-muted-foreground">Year</label>
@@ -207,7 +221,7 @@ export async function AnalyticsFilters({
         </form>
 
         <SavedViewsPanel views={savedViews} currentQuery={currentQuery} actingEmployeeId={actingEmployeeId} />
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleFilters>
   )
 }
