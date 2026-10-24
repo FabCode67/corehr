@@ -18,4 +18,6 @@ export interface SessionClaims {
   mustChangePassword: boolean
   /** Director-level (MD) position holder — gets the MD dashboard/approvals. */
   isDirector?: boolean
+  /** Deputy Director (COO) — gets the COO dashboard. */
+  isDeputyDirector?: boolean
 }

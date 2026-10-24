@@ -178,4 +178,65 @@ export class ExecutiveDashboardService {
 
     return { employees, recruitment, learning, performance, leave, employeeRelations, onboarding, compliance, generatedAt: new Date() }
   }
+
+  /**
+   * One row per department combining the metrics an operations head reviews:
+   * headcount, open vacancies, average performance rating, mandatory-training
+   * compliance, leave days used this year and exits in the last 12 months.
+   * Composed from the existing analytics services plus two small queries.
+   */
+  async getDepartmentScorecards() {
+    const year = new Date().getFullYear()
+    const twelveMonthsAgo = new Date(Date.now() - 365 * DAY_MS)
+
+    const [departments, activeStaff, exits, performance, training, leave, vacancies] = await Promise.all([
+      this.prisma.department.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      this.prisma.employee.findMany({ where: { employmentStatus: "ACTIVE" }, select: { position: { select: { departmentId: true } } } }),
+      this.prisma.employee.findMany({ where: { exitDate: { gte: twelveMonthsAgo } }, select: { position: { select: { departmentId: true } } } }),
+      this.performanceAnalyticsService.byDepartment({}),
+      this.learningAnalyticsService.mandatoryComplianceByDepartment({}),
+      this.leaveAnalyticsService.utilizationByDepartment({ year }),
+      this.prisma.jobRequisition.groupBy({
+        by: ["departmentId"],
+        where: { status: "APPROVED" },
+        _sum: { numberOfVacancies: true },
+      }),
+    ])
+
+    const count = (rows: { position: { departmentId: string } | null }[]) => {
+      const map = new Map<string, number>()
+      for (const r of rows) {
+        const id = r.position?.departmentId
+        if (id) map.set(id, (map.get(id) ?? 0) + 1)
+      }
+      return map
+    }
+    const headcount = count(activeStaff)
+    const exitCount = count(exits)
+    const perfById = new Map(performance.map((p) => [p.departmentId, p]))
+    const trainingById = new Map(training.map((t) => [t.id, t]))
+    const trainingByName = new Map(training.map((t) => [t.name, t]))
+    const leaveById = new Map(leave.map((l) => [l.departmentId, l]))
+    const vacancyById = new Map(vacancies.map((v) => [v.departmentId, v._sum.numberOfVacancies ?? 0]))
+
+    const rows = departments
+      .map((d) => {
+        const t = trainingById.get(d.id) ?? trainingByName.get(d.name)
+        return {
+          departmentId: d.id,
+          departmentName: d.name,
+          headcount: headcount.get(d.id) ?? 0,
+          openVacancies: vacancyById.get(d.id) ?? 0,
+          averageRating: perfById.get(d.id)?.averageRating ?? null,
+          ratedReviews: perfById.get(d.id)?.reviews ?? 0,
+          trainingCompliancePercent: t && t.totalMandatory > 0 ? t.compliancePercent : null,
+          leaveDaysYtd: leaveById.get(d.id)?.days ?? 0,
+          exitsLast12Months: exitCount.get(d.id) ?? 0,
+        }
+      })
+      .filter((r) => r.headcount > 0 || r.openVacancies > 0 || r.exitsLast12Months > 0)
+      .sort((a, b) => b.headcount - a.headcount)
+
+    return { year, rows, generatedAt: new Date() }
+  }
 }

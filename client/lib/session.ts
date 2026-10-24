@@ -38,6 +38,8 @@ export interface SessionUser {
   mustChangePassword: boolean
   /** Director-level (MD) position holder. */
   isDirector?: boolean
+  /** Deputy Director (COO). */
+  isDeputyDirector?: boolean
 }
 
 export const SESSION_COOKIE = "ps_session"
@@ -72,7 +74,7 @@ export async function decodeSession(token: string | undefined | null): Promise<S
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     if (!isSessionUserShape(payload)) return null
-    return { ...payload, mustChangePassword: Boolean(payload.mustChangePassword), isDirector: Boolean(payload.isDirector) } as SessionUser
+    return { ...payload, mustChangePassword: Boolean(payload.mustChangePassword), isDirector: Boolean(payload.isDirector), isDeputyDirector: Boolean(payload.isDeputyDirector) } as SessionUser
   } catch {
     return null
   }

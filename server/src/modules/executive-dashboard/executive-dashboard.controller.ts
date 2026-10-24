@@ -15,6 +15,11 @@ export class ExecutiveDashboardController {
     return this.executiveDashboardService.getOverview(actingEmployeeId)
   }
 
+  @Get("department-scorecards")
+  getDepartmentScorecards() {
+    return this.executiveDashboardService.getDepartmentScorecards()
+  }
+
   @Get("pdf")
   @Header("Content-Type", "application/pdf")
   async downloadPdf(@Query("actingEmployeeId") actingEmployeeId: string) {

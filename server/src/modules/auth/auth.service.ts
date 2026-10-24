@@ -74,6 +74,7 @@ export class AuthService {
       branch: employee.branch?.name ?? "Not assigned",
       mustChangePassword: employee.mustChangePassword,
       isDirector: employee.position?.level?.code === "E1",
+      isDeputyDirector: employee.position?.level?.name?.trim().toLowerCase() === "deputy director",
     }
     const accessToken = this.jwtService.sign(claims)
 

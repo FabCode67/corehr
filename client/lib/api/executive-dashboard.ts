@@ -137,3 +137,25 @@ export function fetchExecutiveDashboardOverview(actingEmployeeId: string) {
   )
 }
 
+
+export interface DepartmentScorecardRow {
+  departmentId: string
+  departmentName: string
+  headcount: number
+  openVacancies: number
+  averageRating: number | null
+  ratedReviews: number
+  trainingCompliancePercent: number | null
+  leaveDaysYtd: number
+  exitsLast12Months: number
+}
+
+export interface DepartmentScorecards {
+  year: number
+  rows: DepartmentScorecardRow[]
+  generatedAt: string
+}
+
+export function fetchDepartmentScorecards() {
+  return apiFetchSafe<DepartmentScorecards>("/executive-dashboard/department-scorecards")
+}

@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   FileText,
   GraduationCap,
+  BarChart3,
   Crown,
   LayoutDashboard,
   LogOut,
@@ -53,6 +54,8 @@ const STAFF_NAV: PortalNavItem[] = [
   { label: "Employee Relations", href: "/staff/employee-relations", icon: Scale },
 ]
 
+const COO_NAV: PortalNavItem = { label: "COO Dashboard", href: "/staff/coo", icon: BarChart3 }
+
 const MD_NAV: PortalNavItem = { label: "MD Dashboard", href: "/staff/md", icon: Crown }
 
 export function StaffShell({
@@ -63,7 +66,7 @@ export function StaffShell({
   children: React.ReactNode
 }) {
   return (
-    <PortalShell user={user} portalLabel="Staff Portal" nav={user.isDirector ? [STAFF_NAV[0], MD_NAV, ...STAFF_NAV.slice(1)] : STAFF_NAV} logoutAction={logout}>
+    <PortalShell user={user} portalLabel="Staff Portal" nav={[STAFF_NAV[0], ...(user.isDirector ? [MD_NAV, COO_NAV] : user.isDeputyDirector ? [COO_NAV] : []), ...STAFF_NAV.slice(1)]} logoutAction={logout}>
       {children}
     </PortalShell>
   )
