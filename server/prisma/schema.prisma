@@ -773,6 +773,7 @@ model Employee {
   @@index([employmentStatus])
   @@index([isActive])
   @@map("employees")
+  passwordResetTokens PasswordResetToken[]
 }
 
 /// Step 4 (Family Information): unlimited children per employee, added
@@ -4444,4 +4445,20 @@ model JobPostingStep {
   @@unique([postingId, stageId])
   @@unique([postingId, sequence])
   @@map("job_posting_steps")
+}
+
+
+/// Single-use "forgot password" token. Only the SHA-256 hash is stored — the
+/// raw token exists only in the emailed link.
+model PasswordResetToken {
+  id             String    @id @default(cuid())
+  employeeNumber String
+  employee       Employee  @relation(fields: [employeeNumber], references: [employeeNumber], onDelete: Cascade)
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([employeeNumber])
+  @@map("password_reset_tokens")
 }

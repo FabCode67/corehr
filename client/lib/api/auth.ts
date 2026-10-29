@@ -33,3 +33,17 @@ export function acceptTermsRequest(employeeId: string) {
     body: JSON.stringify({ employeeId }),
   })
 }
+
+export function forgotPasswordRequest(email: string) {
+  return apiFetch<{ success: boolean }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  })
+}
+
+export function resetPasswordRequest(token: string, newPassword: string) {
+  return apiFetch<{ success: boolean }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  })
+}

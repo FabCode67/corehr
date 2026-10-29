@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common"
 import { APP_GUARD } from "@nestjs/core"
 import { JwtModule } from "@nestjs/jwt"
 
+import { EmailModule } from "../email/email.module"
+
 import { AuthController } from "./auth.controller"
 import { AuthService } from "./auth.service"
 import { JWT_EXPIRES_IN_SECONDS, JWT_SECRET } from "./jwt.constants"
@@ -9,6 +11,7 @@ import { JwtAuthGuard } from "./jwt-auth.guard"
 
 @Module({
   imports: [
+    EmailModule,
     // `global: true` so JwtService is injectable anywhere (JwtAuthGuard
     // lives here, but every module's controllers now sit behind it).
     JwtModule.register({ global: true, secret: JWT_SECRET, signOptions: { expiresIn: JWT_EXPIRES_IN_SECONDS } }),

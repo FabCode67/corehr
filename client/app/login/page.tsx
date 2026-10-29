@@ -82,6 +82,9 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                 />
+                <Link href="/forgot-password" className="self-end text-xs text-primary hover:underline">
+                  Forgot password?
+                </Link>
               </div>
 
               {state?.error ? (

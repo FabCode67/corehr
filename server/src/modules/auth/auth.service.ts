@@ -1,14 +1,21 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import * as bcrypt from "bcryptjs"
+import { createHash, randomBytes } from "crypto"
 
+import { buildClientUrl } from "../../common/client-url.util"
 import { PrismaService } from "../../prisma/prisma.service"
+import { MailerService } from "../email/mailer.service"
 
 import { ChangePasswordDto } from "./dto/change-password.dto"
+import { ForgotPasswordDto, ResetPasswordDto } from "./dto/forgot-password.dto"
 import { LoginDto } from "./dto/login.dto"
 import type { SessionClaims } from "./session-claims.type"
 
 const SALT_ROUNDS = 10
+const RESET_TOKEN_MINUTES = 30
+
+const hashToken = (token: string) => createHash("sha256").update(token).digest("hex")
 
 const LOGIN_INCLUDE = {
   position: { include: { department: true, level: true } },
@@ -28,7 +35,8 @@ const LOGIN_INCLUDE = {
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly mailer: MailerService
   ) {}
 
   async login(dto: LoginDto) {
@@ -108,6 +116,65 @@ export class AuthService {
       data: { passwordHash, mustChangePassword: false, temporaryPasswordExpiresAt: null },
     })
 
+    return { success: true }
+  }
+
+  /**
+   * Starts a password reset: emails a single-use link valid for 30 minutes.
+   * Always reports success, whether or not the email matches an account, so
+   * the endpoint can't be used to discover who has one.
+   */
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const generic = { success: true }
+    const employee = await this.prisma.employee.findUnique({ where: { email: dto.email.trim().toLowerCase() } })
+    if (!employee || !employee.isActive) return generic
+
+    const token = randomBytes(32).toString("hex")
+    await this.prisma.$transaction([
+      // Only the newest link works.
+      this.prisma.passwordResetToken.deleteMany({ where: { employeeNumber: employee.employeeNumber } }),
+      this.prisma.passwordResetToken.create({
+        data: {
+          employeeNumber: employee.employeeNumber,
+          tokenHash: hashToken(token),
+          expiresAt: new Date(Date.now() + RESET_TOKEN_MINUTES * 60_000),
+        },
+      }),
+    ])
+
+    const link = buildClientUrl(`/reset-password?token=${token}`)
+    const firstName = employee.firstName ?? "there"
+    try {
+      await this.mailer.send({
+        to: employee.email,
+        subject: "Reset your NCBA Rwanda PeopleSuite password",
+        html: `<p>Hello ${firstName},</p>
+<p>We received a request to reset your PeopleSuite password. Use the button below within ${RESET_TOKEN_MINUTES} minutes:</p>
+<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#b8860b;color:#fff;text-decoration:none;border-radius:6px">Reset password</a></p>
+<p>Or paste this link into your browser:<br>${link}</p>
+<p>If you didn't ask for this, you can ignore this email — your password stays the same.</p>`,
+      })
+    } catch {
+      // Never reveal delivery problems to the requester; the link can't be
+      // used by anyone who doesn't receive it. Check the server logs / SMTP settings.
+    }
+    return generic
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: hashToken(dto.token) } })
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException("This reset link is invalid or has expired. Please request a new one.")
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS)
+    await this.prisma.$transaction([
+      this.prisma.employee.update({
+        where: { employeeNumber: record.employeeNumber },
+        data: { passwordHash, mustChangePassword: false, temporaryPasswordExpiresAt: null },
+      }),
+      this.prisma.passwordResetToken.deleteMany({ where: { employeeNumber: record.employeeNumber } }),
+    ])
     return { success: true }
   }
 
