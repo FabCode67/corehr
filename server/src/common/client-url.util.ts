@@ -7,7 +7,8 @@
  */
 export function getClientBaseUrl(): string {
   const raw = process.env.CLIENT_APP_URL ?? process.env.CORS_ORIGIN ?? "http://localhost:3000"
-  return raw.split(",")[0].trim().replace(/\/$/, "")
+  // Tolerate values saved with surrounding quotes (CLIENT_APP_URL="http://…").
+  return raw.split(",")[0].trim().replace(/^["']+|["']+$/g, "").replace(/\/$/, "")
 }
 
 export function buildClientUrl(path: string): string {
